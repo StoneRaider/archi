@@ -1,0 +1,40 @@
+{
+ "nom": "vision_video",
+ "description": "MODE D EMPLOI : REGARDER et ECOUTER une video en entier (images + son, en local) et ranger une fiche dans la Bibliotheque (montre, dit, etapes, moments a revoir, 6 captures). parametres = {\"action\":\"analyser\", \"source\":\"lien YouTube ou chemin du fichier\", \"question\":\"...\"} ; 30 min max, sinon debut/fin. Arriere-plan, previent a la fin. action etat = ou j'en suis. Repete phrase_pour_utilisateur.",
+ "script": "vision_video.py",
+ "parametres": [
+  {
+   "nom": "action",
+   "description": "analyser (regarder une video) ou etat (ou en est l'analyse)"
+  },
+  {
+   "nom": "source",
+   "description": "lien YouTube (ou autre site video) ou chemin d'un fichier video sur le PC"
+  },
+  {
+   "nom": "question",
+   "description": "facultatif : ce que J cherche dans la video (ex. le reglage de la buse)"
+  },
+  {
+   "nom": "debut",
+   "description": "facultatif : debut du passage a regarder, ex. 2:00 (obligatoire si la video depasse 30 min)"
+  },
+  {
+   "nom": "fin",
+   "description": "facultatif : fin du passage, ex. 32:00 (30 min max entre debut et fin)"
+  },
+  {
+   "nom": "images_max",
+   "description": "facultatif : nombre d'images a regarder, 5 a 60 (60 par defaut)"
+  }
+ ],
+ "timeout_s": 180,
+ "touche": [
+  "internet (YouTube seulement)",
+  "LM Studio local (Gemma, gpt-oss)",
+  "Whisper local",
+  "memoire/bibliotheque",
+  "panneau Archi (une capture)"
+ ],
+ "sensible": false
+}

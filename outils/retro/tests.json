@@ -1,0 +1,5 @@
+{
+ "ok": true,
+ "date": "2026-11-04",
+ "resume": "Triage teste sur une vraie cible de J (Archi.apk) : type APK detecte, signature v2/v3, 4 dex, mission expert generee. Refus correct d'un fichier sensible (database.sqlite). action liste OK (filtre les caches de build). URL/hotes releves sans jetons ni secrets. Detection couverte : PE/.NET/PyInstaller, ELF, Mach-O, DEX, APK/AAB/JAR, WASM, SQLite, GGUF, PDF, pcap, ASAR, ZIP. Moteurs REA pre-remplis par type. Tourne sur Python du venv (pefile optionnel pour les .exe)."
+}

@@ -1,0 +1,23 @@
+{
+ "nom": "transmettre_document",
+ "description": "MODE D EMPLOI : donne a J sur Telegram un PDF deja range sur le PC dans documents (lettre a imprimer, note, fiche). action=donner, nom = un bout du nom du PDF ou de son dossier (ex. facture, ou contrats). Un PDF par appel : si plusieurs correspondent, l outil les liste, redemande avec un nom plus precis. action=liste (mot facultatif) : les PDF disponibles, du plus recent au plus ancien.",
+ "script": "transmettre_document.py",
+ "parametres": [
+  {
+   "nom": "action",
+   "description": "donner ou liste"
+  },
+  {
+   "nom": "nom",
+   "description": "donner : un bout du nom du PDF ou du dossier"
+  },
+  {
+   "nom": "mot",
+   "description": "liste : filtre facultatif"
+  }
+ ],
+ "timeout_s": 60,
+ "touche": [
+  "fichiers (lecture seule)"
+ ]
+}

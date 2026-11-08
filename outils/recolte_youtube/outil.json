@@ -1,0 +1,21 @@
+{
+ "nom": "recolte_youtube",
+ "description": "MODE D EMPLOI : recolte les videos d'une ou plusieurs chaines YouTube vers la BIBLIOTHEQUE du chateau (une fiche par video, faite par le modele local a partir des sous-titres), en arriere-plan. cible = noms EXACTS de chaines ou liens (virgules) ; ou etat ; arreter ; suivies ; retirer: nom1, nom2. question = nombre de mois (6 par defaut, 120 max) ou tout. Les chaines recoltees sont suivies chaque jour.",
+ "script": "recolte_lancer.py",
+ "parametres": [
+  {
+   "nom": "cible",
+   "description": "noms de chaines ou liens, ou etat / arreter / suivies / retirer: ..."
+  },
+  {
+   "nom": "question",
+   "description": "nombre de mois (6 par defaut) ou tout"
+  }
+ ],
+ "timeout_s": 300,
+ "touche": [
+  "bibliotheque du chateau",
+  "YouTube (lecture des sous-titres)",
+  "modele local"
+ ]
+}

@@ -1,0 +1,5 @@
+{
+ "ok": true,
+ "date": "2026-11-02",
+ "resume": "Tests sur deux PDF fictifs (« facture_exemple.pdf », « contrats/bail_exemple.pdf ») : recherche par bout de nom ou de dossier, plusieurs resultats, rien trouve, fichier trop gros."
+}

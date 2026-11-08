@@ -1,0 +1,73 @@
+{
+ "nom": "telephone",
+ "description": "MODE D EMPLOI : les MAINS d'Archi sur le telephone de J (appli Archi). parametres = {\"action\":..., ...}. Actions : whatsapp (a=contact, texte=message) : WhatsApp s'ouvre avec le texte pret, J choisit le contact et appuie sur Envoyer (tu ne lis pas WhatsApp) ; sms (a, texte) : confirmation a l'ecran ; youtube (recherche) ; musique (commande=lire|pause|suivant|precedent, ou recherche=titre) ; appel (a=nom ou numero) : il faut appuyer sur « Appeler » ; secours (numero=112|15|17|18, message) : composeur ouvert, J appuie ; lampe (etat=on|off) ; alarme (heure=7:30, libelle) ; minuteur (minutes ou secondes, libelle) ; navigation (destination, mode=voiture|pied|velo|transports) ; ouvrir (appli) ; volume (niveau=0-100|plus|moins|muet) ; web (url ou requete) ; agenda (titre, debut=AAAA-MM-JJTHH:MM, duree_min, lieu) ; reglages (panneau=wifi|bluetooth|son|batterie|ecran) ; photo ; arreter. Depuis Telegram il ne se passe rien. Repete la phrase_pour_utilisateur.",
+ "script": "telephone.py",
+ "parametres": [
+  {
+   "nom": "action",
+   "description": "whatsapp, sms, youtube, musique, appel, secours, lampe, alarme, minuteur, navigation, ouvrir, volume, web, agenda, reglages, photo, arreter"
+  },
+  {
+   "nom": "a",
+   "description": "whatsapp/sms/appel : nom du contact ou numero"
+  },
+  {
+   "nom": "texte",
+   "description": "whatsapp/sms : le message exact valide par J"
+  },
+  {
+   "nom": "recherche",
+   "description": "youtube/musique : ce qu'il faut chercher"
+  },
+  {
+   "nom": "commande",
+   "description": "musique : lire, pause, suivant, precedent"
+  },
+  {
+   "nom": "numero",
+   "description": "secours : 112 (defaut), 15, 17, 18"
+  },
+  {
+   "nom": "etat",
+   "description": "lampe : on ou off"
+  },
+  {
+   "nom": "heure",
+   "description": "alarme : 7:30"
+  },
+  {
+   "nom": "minutes",
+   "description": "minuteur : duree en minutes"
+  },
+  {
+   "nom": "destination",
+   "description": "navigation : ou aller"
+  },
+  {
+   "nom": "appli",
+   "description": "ouvrir : nom de l'appli (Spotify, WhatsApp...)"
+  },
+  {
+   "nom": "niveau",
+   "description": "volume : 0-100, plus, moins, muet"
+  },
+  {
+   "nom": "requete",
+   "description": "web : recherche ; ou url"
+  },
+  {
+   "nom": "titre",
+   "description": "agenda : titre ; debut=AAAA-MM-JJTHH:MM, duree_min, lieu"
+  },
+  {
+   "nom": "panneau",
+   "description": "reglages : wifi, bluetooth, son, batterie, ecran"
+  }
+ ],
+ "timeout_s": 40,
+ "touche": [
+  "dossier pc\\telephone\\actions (ordres pour l'appli)",
+  "internet (yt-dlp pour trouver la video YouTube)"
+ ],
+ "sensible": false
+}

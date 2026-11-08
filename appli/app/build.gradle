@@ -1,0 +1,21 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace = 'fr.archi.telephone'
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId = 'fr.archi.telephone'
+        minSdk = 26
+        targetSdk = 36
+        versionCode = 12
+        versionName = '5.4'
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}

@@ -1,0 +1,27 @@
+LA PORTE DE L'OEIL : l'oeil (globe gods-eye-view) depuis le telephone
+
+Pourquoi : l'appli Archi ouvre l'oeil (« montre-moi l'avion le plus proche de Lyon »).
+Le globe tourne sur le PC (Docker, 127.0.0.1:4173). Pour que le telephone le voie depuis Internet, il faut :
+  1. la PORTE (ce dossier) : un petit relais Node qui n'ouvre qu'avec un billet signe (30 min), pose un cookie
+     signe qui expire (30 jours), retire les en-tetes de proxy que le globe refuse, et se presente au globe
+     comme 127.0.0.1:4173 ;
+  2. un TUNNEL Cloudflare (facultatif) : https://oeil.ton-domaine -> porte:4175.
+
+Reglages : tout est dans le fichier .env a la racine du depot (section 6), jamais ailleurs.
+  ARCHI_CLE_OEIL          : la cle (32 caracteres aleatoires ou plus). oeil.py s'en sert pour signer les billets
+                            d'entree ; la porte la verifie. Ne la colle nulle part ailleurs.
+  ARCHI_OEIL_URL_PUBLIQUE : l'adresse que l'appli recevra, ex. https://oeil.ton-domaine
+  TUNNEL_TOKEN            : le jeton du tunnel Cloudflare (jamais sur Telegram ni dans un mail)
+
+Mise en route (une fois)
+  a) Cloudflare > Zero Trust > Networks > Tunnels > Create a tunnel > Cloudflared > nom « archi-oeil ».
+     Copier le jeton (la longue chaine apres --token) dans TUNNEL_TOKEN du .env.
+  b) Onglet « Public Hostname » du tunnel : sous-domaine oeil, ton domaine, type HTTP, URL  porte:4175
+     (le nom du service dans Docker). Enregistrer (Cloudflare cree le DNS).
+  c) lancer_archi.bat (ou, dans boite_outils :  docker compose --env-file ..\.env --profile oeil --profile tunnel up -d --build).
+     Au premier demarrage, le globe est compile : 1 a 2 minutes avant d'etre pret.
+  d) Verifier : https://oeil.ton-domaine/sante doit repondre « ok » ; https://oeil.ton-domaine/ doit
+     repondre « Rien ici. » (pas de cookie = porte fermee).
+
+Changer la cle : nouvelle valeur de ARCHI_CLE_OEIL dans le .env, puis  docker compose --env-file ..\.env --profile oeil up -d porte
+  (tous les cookies deviennent invalides ; l'appli en reprend un au prochain « montre-moi »).

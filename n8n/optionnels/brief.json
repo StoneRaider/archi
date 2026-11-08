@@ -1,0 +1,118 @@
+{
+ "id": "ArchiBrief000001",
+ "name": "Archi - Brief du jour",
+ "nodes": [
+  {
+   "id": "b1",
+   "name": "Chaque jour",
+   "type": "n8n-nodes-base.scheduleTrigger",
+   "typeVersion": 1.2,
+   "position": [
+    0,
+    0
+   ],
+   "parameters": {
+    "rule": {
+     "interval": [
+      {
+       "field": "cronExpression",
+       "expression": "={{ $env.ARCHI_BRIEF_CRON || '0 8 * * *' }}"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "b2",
+   "name": "Preparer le brief",
+   "type": "n8n-nodes-base.executeCommand",
+   "typeVersion": 1,
+   "position": [
+    220,
+    80
+   ],
+   "parameters": {
+    "command": "=cd /d \"{{ $env.ARCHI_DEPOT }}\\serveur\" && set PYTHONIOENCODING=utf-8&& \"{{ $env.ARCHI_SERVEUR_PY || ($env.ARCHI_DEPOT + '\\\\serveur\\\\venv\\\\Scripts\\\\python.exe') }}\" brief.py"
+   }
+  },
+  {
+   "id": "b3",
+   "name": "Lire le brief",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    440,
+    80
+   ],
+   "parameters": {
+    "jsCode": "const o = String($input.first().json.stdout || '').trim().split(/\\r?\\n/).pop();\nlet r;\ntry { r = JSON.parse(o); } catch (e) { r = { ok: false, texte: 'Le brief a planté : ' + (o || String($input.first().json.stderr || '')).slice(0, 300) }; }\n// echappement HTML pour Telegram (le Markdown casse sur les tirets bas des adresses mail)\nr.texte = String(r.texte || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').slice(0, 4000).replace(/&[a-z#0-9]*$/i, '');   // coupe APRES l'echappement : Telegram refuse au-dela de 4096\nreturn [{ json: r }];"
+   }
+  },
+  {
+   "id": "b4",
+   "name": "Envoyer le brief",
+   "type": "n8n-nodes-base.telegram",
+   "typeVersion": 1.2,
+   "position": [
+    660,
+    80
+   ],
+   "credentials": {
+    "telegramApi": {
+     "id": "ArchiTelegram001",
+     "name": "Bot Telegram Archi"
+    }
+   },
+   "retryOnFail": true,
+   "maxTries": 3,
+   "parameters": {
+    "chatId": "={{ $env.ARCHI_TELEGRAM_CHAT_ID.split(',')[0] }}",
+    "text": "={{ $json.texte }}",
+    "additionalFields": {
+     "appendAttribution": false,
+     "disable_web_page_preview": true,
+     "parse_mode": "HTML"
+    }
+   }
+  }
+ ],
+ "connections": {
+  "Preparer le brief": {
+   "main": [
+    [
+     {
+      "node": "Lire le brief",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Lire le brief": {
+   "main": [
+    [
+     {
+      "node": "Envoyer le brief",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Chaque jour": {
+   "main": [
+    [
+     {
+      "node": "Preparer le brief",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "active": false,
+ "settings": {
+  "executionOrder": "v1"
+ }
+}

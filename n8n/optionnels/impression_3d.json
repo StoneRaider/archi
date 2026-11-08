@@ -1,0 +1,563 @@
+{
+ "name": "Archi - Impression 3D",
+ "nodes": [
+  {
+   "parameters": {
+    "workflowInputs": {
+     "values": [
+      {
+       "name": "description"
+      },
+      {
+       "name": "cotes"
+      },
+      {
+       "name": "nom_fichier"
+      },
+      {
+       "name": "mode"
+      },
+      {
+       "name": "concevoir_directement"
+      }
+     ]
+    }
+   },
+   "id": "8c72672e-8c1a-40c0-b9c5-c1c5090d965a",
+   "name": "Execute Workflow Trigger",
+   "type": "n8n-nodes-base.executeWorkflowTrigger",
+   "typeVersion": 1.1,
+   "position": [
+    544,
+    48
+   ],
+   "notes": "Declencheur du sous-workflow : description, cotes, nom_fichier."
+  },
+  {
+   "parameters": {
+    "command": "if not exist \"%ARCHI_BASE%\\impression3d\\fichiers\" mkdir \"%ARCHI_BASE%\\impression3d\\fichiers\""
+   },
+   "id": "15e98d05-6eec-4d88-8a04-83ba2486bcbf",
+   "name": "Préparer dossier",
+   "type": "n8n-nodes-base.executeCommand",
+   "typeVersion": 1,
+   "position": [
+    784,
+    48
+   ],
+   "onError": "continueRegularOutput"
+  },
+  {
+   "parameters": {
+    "assignments": {
+     "assignments": [
+      {
+       "id": "a1",
+       "name": "description",
+       "type": "string",
+       "value": "={{ $('Execute Workflow Trigger').first().json.description }}"
+      },
+      {
+       "id": "a2",
+       "name": "cotes",
+       "type": "string",
+       "value": "={{ $('Execute Workflow Trigger').first().json.cotes }}"
+      },
+      {
+       "id": "a3",
+       "name": "nom_base",
+       "type": "string",
+       "value": "={{ ($('Execute Workflow Trigger').first().json.nom_fichier || 'modele').toString().replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80) }}"
+      },
+      {
+       "id": "a4",
+       "name": "chemin_scad",
+       "type": "string",
+       "value": "={{ $env.ARCHI_BASE }}/impression3d/fichiers/{{ ($('Execute Workflow Trigger').first().json.nom_fichier || 'modele').toString().replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80) }}.scad"
+      },
+      {
+       "id": "a5",
+       "name": "chemin_stl",
+       "type": "string",
+       "value": "={{ $env.ARCHI_BASE }}/impression3d/fichiers/{{ ($('Execute Workflow Trigger').first().json.nom_fichier || 'modele').toString().replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80) }}.stl"
+      }
+     ]
+    },
+    "options": {}
+   },
+   "id": "68dd87e9-fe06-4957-8d8b-0b062d103652",
+   "name": "Nom fichier",
+   "type": "n8n-nodes-base.set",
+   "typeVersion": 3.4,
+   "position": [
+    1008,
+    48
+   ]
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "={{ $env.ARCHI_LM_URL }}/chat/completions",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({\n  model: $env.ARCHI_MODELE_3D || $env.ARCHI_MODELE || 'openai/gpt-oss-20b',\n  temperature: 0,\n  max_tokens: 6000,\n  stream: false,\n  ttl: 300,\n  messages: [\n    { role: 'system', content: `Tu es un concepteur de pièces imprimées en 3D pour la construction, la charpente et la mécanique. Tu réponds UNIQUEMENT par un objet JSON, sans texte autour, sans balise.\n\nToutes les cotes sont en millimètres. Choisis la forme du catalogue qui correspond à la demande.\n\nCONSTRUCTION ET CHARPENTE :\n- equerre : a (longueur de l'aile au sol), b (hauteur de l'aile verticale), l (largeur de l'aile verticale), ep (épaisseur), trou (diamètre), n (trous par aile, 0 = aucun trou), renfort (true ou false), l_sol (largeur de l'aile au sol côté angle, 0 = même que l), l_bout (largeur de l'aile au sol à son extrémité, 0 = même que l_sol ; si l_bout est plus grand, l'aile au sol s'élargit en trapèze)\n- sabot : w (largeur de la poutre reçue), h (hauteur), p (profondeur), ep, a (largeur des ailes de fixation), trou, n (trous par aile)\n- plaque : L (longueur), l (largeur), ep, trou, nx et ny (nombre de trous en longueur et en largeur), marge (distance trou-bord)\n- gousset : a, b (côtés de l'angle droit), ep, trou\n- cale : l (longueur), w (largeur), h1 (épaisseur bout fin), h2 (épaisseur bout épais)\n- entretoise : d_ext, d_int, h\n- etrier : w et h (dimensions intérieures du U), l (largeur de la bande), ep, a (longueur des pattes), trou\n- equerre_tige : équerre dont l'aile verticale b est PROLONGÉE dans son axe par une tige qui part du centre du bout de l'aile. Paramètres de l'équerre (a, b, l, ep, trou, n, renfort, l_sol, l_bout) + tige (le diamètre, clé exactement \\\"tige\\\" : 6 pour M6, 8 pour M8), tige_l (longueur de la tige seule, au-delà de l'aile). ATTENTION : b est la hauteur de l'aile SANS la tige. Si on te donne une longueur totale aile + tige, b = total - tige_l, pas (1 pour M6, 1.25 pour M8, 0.8 pour M5), filet (true = filetage modélisé, false = tige lisse). À utiliser dès qu'on parle d'équerre avec une tige, un goujon ou une tige filetée qui prolonge une branche.\n\nASSEMBLAGE ET MAISON :\n- plaque_t : plaque plate en T pour assembler des bois. L (longueur de la barre du T), H (hauteur totale du T), l (largeur des bandes), ep, trou, n (trous par branche)\n- plaque_l : plaque plate en L (équerre à plat). a et b (longueurs des branches), l (largeur des bandes), ep, trou, n (trous par branche)\n- crochet : crochet mural. H (hauteur de la plaque fixée au mur), l (largeur), ep, saillie (distance du mur au bout), pointe (hauteur du bout relevé), trou, n (trous de fixation)\n- support_tube : pontet ou demi-collier à visser qui plaque un tube contre un mur. d_tube (diamètre du tube), ep, l (largeur), aile (longueur des pattes), trou\n- clip_tube : clip ouvert où le tube se clipse, avec patte à visser. d_tube, ep, l, aile, trou\n- chape : chape en U avec axe traversant. e (écartement intérieur), h (hauteur des flasques), l (largeur), ep, d_axe (trou de l'axe : 6.5 pour un axe de 6), trou (fixation au fond)\n- pied_reglable : pied rond avec écrou prisonnier pour tige filetée. d (diamètre), h (hauteur), vis (diamètre de la tige : 5, 6, 8 ou 10)\n- boite : boîte ouverte. L, l, h (dimensions extérieures), ep (parois), fond (épaisseur du fond)\n- couvercle : couvercle à lèvre qui s'emboîte dans la boîte. L, l (mêmes que la boîte), ep (paroi de la boîte), ep_c (épaisseur du couvercle), levre (hauteur de la lèvre), jeu (0.3)\n- Une boîte et son couvercle sont deux pièces : deux demandes séparées.\n\nMÉCANIQUE :\n- palier : d_roul et h_roul (diamètre et épaisseur du roulement, 608 = 22 et 7), d_arbre, L et l (semelle), ep (fond), trou\n- support_moteur : cote (42.3 pour NEMA 17), entraxe (31 pour NEMA 17), d_centre (23), ep, base, trou_m (3.4 pour vis M3), trou\n- collier : d_arbre, d_ext, h, vis (2.8 pour visser directement une M3 dans le plastique)\n- poulie : d (diamètre), h (épaisseur), d_arbre, gorge (diamètre de la corde + 1)\n- engrenage : m (module, identique pour deux pignons qui s'engrènent), z (nombre de dents), h, d_arbre\n\nFormat de réponse :\n{\"forme\":\"equerre\",\"nom\":\"equerre_40\",\"hypotheses\":\"aucune cote manquante\",\"params\":{\"a\":40,\"b\":40,\"l\":20,\"ep\":3,\"trou\":4.5,\"n\":2,\"renfort\":false} }\n\nRègles :\n- Utilise les cotes données. Si une cote manque, choisis une valeur raisonnable et écris-la dans hypotheses.\n- Le nom est en minuscules, sans espace ni accent (exemple : palier_608).\n- Pour une vis de diamètre D, mets trou = D + 0.5 (vis de 4 mm : trou 4.5).\n- Épaisseur minimale 2 mm pour une pièce qui travaille.\n- Chaque paramètre est UN seul nombre, jamais une liste.\n\nMODE LIBRE, seulement si aucune forme du catalogue ne convient, même avec ses options (l_sol, l_bout, tige, renfort...) :\n{\"forme\":\"libre\",\"nom\":\"support_l\",\"hypotheses\":\"...\",\"volumes\":[{\"type\":\"box\",\"op\":\"add\",\"size\":[40,20,3],\"pos\":[0,0,0]},{\"type\":\"box\",\"op\":\"add\",\"size\":[3,20,30],\"pos\":[0,0,2.5]},{\"type\":\"cylinder\",\"op\":\"cut\",\"d\":4.5,\"h\":5,\"pos\":[20,10,-1]}]}\n- box : size = [x,y,z], pos = coin inférieur (x, y et z les plus petits).\n- cylinder : d (diamètre), h (hauteur), pos = centre de la base. Optionnel : d2 = diamètre du haut pour un cône.\n- sphere : d (diamètre), pos = centre.\n- prism : points = [[x,y],[x,y],...] contour vu de dessus (3 points ou plus), h = épaisseur extrudée vers le haut, pos = décalage [x,y,z]. Pour les trapèzes, triangles, pointes, formes évasées.\n- AUCUN autre type n'existe : n'invente jamais un type de volume.\n- rot (optionnel, tous types) = [rx,ry,rz] en degrés, rotation autour de pos.\n- op \"add\" ajoute de la matière, op \"cut\" perce ou creuse.\nRÈGLES DU MODE LIBRE (très importantes) :\n- Deux volumes \"add\" qui doivent tenir ensemble se CHEVAUCHENT d'au moins 0.5 mm. S'ils se touchent juste par une face, la pièce sort en morceaux. Dans l'exemple, la paroi commence à z = 2.5 alors que la semelle finit à z = 3.\n- Un perçage \"cut\" dépasse d'1 mm de chaque côté de la matière (il commence 1 mm avant la face et il est 2 mm plus long que l'épaisseur).\n- La pièce repose sur z = 0 : aucun volume \"add\" ne descend sous z = 0.` },\n    { role: 'user', content: String($json.demande || $json.output || $json.chatInput || $json.text || JSON.stringify($json)) }\n  ]\n}) }}",
+    "options": {
+     "timeout": 1400000
+    }
+   },
+   "id": "cdddfed0-f51d-4bb2-af10-47a981bd1419",
+   "name": "Concepteur IA",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    1560,
+    -160
+   ],
+   "executeOnce": false
+  },
+  {
+   "parameters": {
+    "operation": "toText",
+    "sourceProperty": "code",
+    "options": {
+     "encoding": "utf8",
+     "fileName": "={{ $('Nom fichier').item.json.nom_base }}.scad"
+    }
+   },
+   "id": "d22b9f7c-6965-4e45-98a8-fe8dee87a1af",
+   "name": "Convert to File",
+   "type": "n8n-nodes-base.convertToFile",
+   "typeVersion": 1.1,
+   "position": [
+    2000,
+    -160
+   ]
+  },
+  {
+   "parameters": {
+    "operation": "write",
+    "fileName": "={{ $('Nom fichier').first().json.chemin_scad }}",
+    "options": {}
+   },
+   "id": "3d7d5d00-0b39-4d48-876f-2bc55538bb1f",
+   "name": "Ecrire fichier SCAD",
+   "type": "n8n-nodes-base.readWriteFile",
+   "typeVersion": 1,
+   "position": [
+    2220,
+    -160
+   ]
+  },
+  {
+   "parameters": {
+    "command": "=\"{{ $env.ARCHI_OPENSCAD || 'openscad' }}\" -o \"{{ $('Lire plan').first().json.chemin_stl }}\" \"{{ $('Lire plan').first().json.chemin_scad }}\""
+   },
+   "id": "0ef09a2d-b25a-4c8a-8acc-df7401256e37",
+   "name": "Convertir en STL",
+   "type": "n8n-nodes-base.executeCommand",
+   "typeVersion": 1,
+   "position": [
+    1560,
+    260
+   ],
+   "onError": "continueRegularOutput"
+  },
+  {
+   "parameters": {
+    "jsCode": "// Reponse pour Archi : basee sur le VRAI resultat de l'audit\nconst audit = $('Lire audit').first().json.audit || {};\nconst plan = $('Lire plan').first().json;\nconst ok = audit.ok === true;\nconst problemes = (audit.problemes || []).slice();\nif (audit.erreur) problemes.push(audit.erreur);\nconst d = audit.dimensions_mm;\nconst dims = d ? `${d.x} sur ${d.y} sur ${d.z} millimètres` : 'inconnu';\nconst hyp = String(plan.hypotheses || '').trim();\n\nconst phrase = ok\n  ? `C'est fait BOSS, la pièce ${plan.nom_base} est générée et enregistrée. Encombrement : ${dims}.` + (hyp ? ` Hypothèses : ${hyp}` : '')\n  : `Attention BOSS, la pièce ${plan.nom_base} est enregistrée mais le contrôle a trouvé un problème : ${problemes.join(' ; ') || 'résultat illisible'}. Ne l'imprime pas telle quelle.`;\n\n// Fiche ecrite envoyee avec l'apercu sur Telegram\nconst NOMS = { a:'aile au sol', b:'aile verticale', l:'largeur', ep:'épaisseur', trou:'perçages', n:'trous par aile', renfort:'renfort',\n  tige:'diamètre de tige', tige_l:'longueur de tige', pas:'pas', filet:'filetage', w:'largeur intérieure', h:'hauteur', p:'profondeur',\n  L:'longueur', nx:'trous en longueur', ny:'trous en largeur', marge:'marge', h1:'bout fin', h2:'bout épais', d_ext:'diamètre extérieur',\n  d_int:'diamètre intérieur', d_roul:'diamètre roulement', h_roul:'épaisseur roulement', d_arbre:'diamètre arbre', cote:'côté moteur',\n  entraxe:'entraxe', d_centre:'diamètre centrage', base:'base', trou_m:'trous moteur', vis:'trou de vis', d:'diamètre', gorge:'gorge', m:'module', z:'dents' };\nconst SANS_MM = ['n', 'nx', 'ny', 'z', 'm'];\nconst val = (k, v) => typeof v === 'boolean' || v === 'true' || v === 'false' ? ((v === true || v === 'true') ? 'oui' : 'non') : v + (SANS_MM.includes(k) ? '' : ' mm');\nconst compris = plan.params\n  ? Object.entries(plan.params).map(([k, v]) => (NOMS[k] || k) + ' ' + val(k, v)).join(', ')\n  : 'assemblage libre de volumes';\nconst fmt3 = o => o ? `${o.x} x ${o.y} x ${o.z} mm` : '?';\nconst fiche = [\n  `Pièce : ${plan.nom_base} (${plan.forme})`,\n  `J'ai compris : ${compris}`,\n  `Attendu : ${fmt3(audit.attendu_mm)}  |  Obtenu : ${fmt3(audit.dimensions_mm)}`,\n  `Contrôle : ${ok ? 'OK' : 'À VÉRIFIER - ' + problemes.join(' ; ')}`,\n  hyp ? `Hypothèses : ${hyp}` : ''\n].filter(Boolean).join('\\n').slice(0, 1000);\n\nreturn [{ json: {\n  statut: ok ? 'OK' : 'A_VERIFIER',\n  phrase_pour_utilisateur: phrase,\n  fiche,\n  fichier: plan.nom_base,\n  forme: plan.forme,\n  hypotheses: hyp,\n  audit\n} }];\n"
+   },
+   "id": "c07384ca-631d-4983-9378-0cfb7225a95e",
+   "name": "Reponse pour Archi",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    2220,
+    260
+   ]
+  },
+  {
+   "parameters": {
+    "command": "=\"{{ $env.ARCHI_PY || 'python' }}\" \"{{ $env.ARCHI_BASE }}\\impression3d\\audit_stl.py\" \"{{ $('Lire plan').first().json.chemin_stl }}\""
+   },
+   "name": "Audit STL",
+   "type": "n8n-nodes-base.executeCommand",
+   "typeVersion": 1,
+   "position": [
+    1780,
+    260
+   ],
+   "executeOnce": true,
+   "id": "f063b0e4-0682-4feb-81fe-9858934161ef",
+   "onError": "continueRegularOutput"
+  },
+  {
+   "parameters": {
+    "jsCode": "const brut = ($input.first().json.stdout || '').trim();\nlet audit;\ntry {\n  audit = JSON.parse(brut);\n} catch (e) {\n  audit = { ok: false, erreur: 'sortie illisible : ' + brut + ' / ' + ($input.first().json.stderr || '') };\n}\n\n// Comparaison avec l'encombrement attendu d'apres le plan\nconst att = $('Lire plan').first().json.attendu;\nif (att && audit.dimensions_mm) {\n  const obt = [audit.dimensions_mm.x, audit.dimensions_mm.y, audit.dimensions_mm.z];\n  audit.attendu_mm = { x: +att[0].toFixed(2), y: +att[1].toFixed(2), z: +att[2].toFixed(2) };\n  audit.problemes = audit.problemes || [];\n  'XYZ'.split('').forEach((axe, i) => {\n    const tol = Math.max(0.6, att[i] * 0.02);\n    if (Math.abs(obt[i] - att[i]) > tol) {\n      audit.problemes.push('cote en ' + axe + ' : attendu ' + att[i].toFixed(1) + ' mm, obtenu ' + obt[i] + ' mm');\n    }\n  });\n  audit.ok = audit.ok && audit.problemes.length === 0;\n}\nreturn [{ json: { audit } }];\n"
+   },
+   "name": "Lire audit",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    2000,
+    260
+   ],
+   "id": "d01ae761-2487-48e8-911b-0511093afa3d"
+  },
+  {
+   "parameters": {
+    "jsCode": "// ============================================\n//  ASSEMBLER SCAD - catalogue construction + mécanique\n// ============================================\n\n// 1. Lire le JSON renvoyé par le Concepteur IA\nconst brut = $input.first().json.choices[0].message.content;\nconst m = brut.match(/\\{[\\s\\S]*\\}/);\nif (!m) throw new Error('Le concepteur n a pas renvoye de JSON');\nconst plan = JSON.parse(m[0]);\n\nconst forme = (plan.forme || 'libre').toLowerCase();\nlet hyp = plan.hypotheses || '';\n\n// 2. Bibliothèque de formes (OpenSCAD)\nconst LIB = `\n// ---------- CONSTRUCTION / CHARPENTE ----------\n\nmodule equerre(a,b,l,ep,trou,n,renfort,l_sol=0,l_bout=0){\n  ls = l_sol > 0 ? l_sol : l;\n  lb = l_bout > 0 ? l_bout : ls;\n  ys = renfort ? [l/4, 3*l/4] : [l/2];\n  g = min(a,b)*0.6;\n  difference(){\n    union(){\n      linear_extrude(ep) polygon([[0,l/2-ls/2],[a,l/2-lb/2],[a,l/2+lb/2],[0,l/2+ls/2]]);\n      cube([ep,l,b]);\n      if (renfort)\n        translate([0,(l+ep)/2,0]) rotate([90,0,0])\n          linear_extrude(ep) polygon([[0,0],[g,0],[0,g]]);\n    }\n    if (n > 0) for (y=ys) for (i=[1:n])\n      translate([ep+(a-ep)*i/(n+1), y, -1]) cylinder(d=trou, h=ep+2);\n    if (n > 0) for (y=ys) for (i=[1:n])\n      translate([-1, y, ep+(b-ep)*i/(n+1)]) rotate([0,90,0]) cylinder(d=trou, h=ep+2);\n  }\n}\n\nmodule sabot(w,h,p,ep,a,trou,n){\n  difference(){\n    union(){\n      translate([-w/2-ep,0,0]) cube([w+2*ep,p,ep]);\n      translate([-w/2-ep,0,0]) cube([ep,p,h]);\n      translate([w/2,0,0]) cube([ep,p,h]);\n      translate([-w/2-ep-a,0,0]) cube([a+ep,ep,h]);\n      translate([w/2,0,0]) cube([a+ep,ep,h]);\n    }\n    for (s=[-1,1]) for (i=[1:n])\n      translate([s*(w/2+ep+a/2), -1, h*i/(n+1)]) rotate([-90,0,0]) cylinder(d=trou, h=ep+2);\n  }\n}\n\nmodule plaque(L,l,ep,trou,nx,ny,marge){\n  difference(){\n    cube([L,l,ep]);\n    for (i=[0:nx-1]) for (j=[0:ny-1])\n      translate([\n        nx>1 ? marge+i*(L-2*marge)/(nx-1) : L/2,\n        ny>1 ? marge+j*(l-2*marge)/(ny-1) : l/2,\n        -1]) cylinder(d=trou, h=ep+2);\n  }\n}\n\nmodule gousset(a,b,ep,trou){\n  difference(){\n    linear_extrude(ep) polygon([[0,0],[a,0],[0,b]]);\n    for (pt=[[a*0.5,b*0.15],[a*0.15,b*0.5],[a*0.15,b*0.15]])\n      translate([pt[0],pt[1],-1]) cylinder(d=trou, h=ep+2);\n  }\n}\n\nmodule cale(l,w,h1,h2){\n  translate([0,w,0]) rotate([90,0,0])\n    linear_extrude(w) polygon([[0,0],[l,0],[l,h2],[0,h1]]);\n}\n\nmodule entretoise(d_ext,d_int,h){\n  difference(){\n    cylinder(d=d_ext, h=h);\n    translate([0,0,-1]) cylinder(d=d_int, h=h+2);\n  }\n}\n\nmodule etrier(w,h,l,ep,a,trou){\n  difference(){\n    translate([0,l,0]) rotate([90,0,0]) linear_extrude(l) union(){\n      translate([-w/2-ep-a,0]) square([a,ep]);\n      translate([w/2+ep,0]) square([a,ep]);\n      translate([-w/2-ep,0]) square([ep,h+ep]);\n      translate([w/2,0]) square([ep,h+ep]);\n      translate([-w/2-ep,h]) square([w+2*ep,ep]);\n    }\n    for (s=[-1,1])\n      translate([s*(w/2+ep+a/2), l/2, -1]) cylinder(d=trou, h=ep+2);\n  }\n}\n\nfunction _prof_filet(t, rmin, rmax) =\n  t < 1/8  ? rmin :\n  t < 7/16 ? rmin + (rmax-rmin)*(t-1/8)/(5/16) :\n  t < 9/16 ? rmax :\n  t < 7/8  ? rmax - (rmax-rmin)*(t-9/16)/(5/16) : rmin;\n\n// Filetage ISO exterieur (pas a droite), jeu de 0.2 mm pour l'impression\nmodule filet_ext(d, pas, h){\n  nf = 48;\n  rmax = d/2 - 0.1;\n  rmin = rmax - 0.625*0.866*pas;\n  pts = [for (i=[0:nf-1]) let(an=i*360/nf, r=_prof_filet(i/nf, rmin, rmax)) [r*cos(an), r*sin(an)]];\n  intersection(){\n    linear_extrude(height=h, twist=-360*h/pas, slices=ceil(h/pas)*16) polygon(pts);\n    union(){\n      cylinder(r=rmax+1, h=h-pas*0.6);\n      translate([0,0,h-pas*0.6]) cylinder(r1=rmax, r2=rmin, h=pas*0.6);\n    }\n  }\n}\n\n// Equerre dont l'aile verticale est prolongee par une tige (filetee ou lisse)\nmodule equerre_tige(a,b,l,ep,trou,n,renfort,tige,tige_l,pas,filet,l_sol=0,l_bout=0){\n  tr = max(tige, ep);\n  lt = max(tige_l - tr + 0.5, pas*2);\n  union(){\n    equerre(a,b,l,ep,trou,n,renfort,l_sol,l_bout);\n    hull(){\n      translate([0,0,b-0.5]) cube([ep,l,0.5]);\n      translate([ep/2,l/2,b+tr-0.01]) cylinder(d=tige, h=0.01);\n    }\n    translate([ep/2,l/2,b+tr-0.5])\n      if (filet) filet_ext(tige, pas, lt);\n      else cylinder(d=tige-0.2, h=lt);\n  }\n}\n\n// ---------- ASSEMBLAGE ET MAISON ----------\n\nmodule plaque_t(L,H,l,ep,trou,n){\n  difference(){\n    union(){\n      translate([0,H-l,0]) cube([L,l,ep]);\n      translate([L/2-l/2,0,0]) cube([l,H,ep]);\n    }\n    translate([L/2,H-l/2,-1]) cylinder(d=trou, h=ep+2);\n    if (n > 0) for (i=[1:2*n]) translate([L*i/(2*n+1), H-l/2, -1]) cylinder(d=trou, h=ep+2);\n    if (n > 0) for (i=[1:n]) translate([L/2, (H-l)*i/(n+1), -1]) cylinder(d=trou, h=ep+2);\n  }\n}\n\nmodule plaque_l(a,b,l,ep,trou,n){\n  difference(){\n    union(){\n      cube([a,l,ep]);\n      cube([l,b,ep]);\n    }\n    translate([l/2,l/2,-1]) cylinder(d=trou, h=ep+2);\n    if (n > 0) for (i=[1:n]) translate([l+(a-l)*i/(n+1), l/2, -1]) cylinder(d=trou, h=ep+2);\n    if (n > 0) for (i=[1:n]) translate([l/2, l+(b-l)*i/(n+1), -1]) cylinder(d=trou, h=ep+2);\n  }\n}\n\n// Crochet mural, modelise couche sur le cote (meilleure solidite a l'impression)\nmodule crochet(H,l,ep,saillie,pointe,trou,n){\n  difference(){\n    linear_extrude(l) union(){\n      square([ep,H]);\n      square([ep+saillie,ep]);\n      translate([saillie,0]) square([ep,max(pointe,ep)]);\n      polygon([[ep-0.01,ep-0.01],[ep+ep*1.5,ep-0.01],[ep-0.01,ep+ep*1.5]]);\n    }\n    if (n > 0) for (i=[1:n])\n      translate([-1, ep+(H-ep)*i/(n+1), l/2]) rotate([0,90,0]) cylinder(d=trou, h=ep+2);\n  }\n}\n\n// Pontet / demi-collier a visser pour tube\nmodule support_tube(d_tube,ep,l,aile,trou){\n  dt = d_tube + 0.4;\n  R = dt/2 + ep;\n  difference(){\n    translate([0,l,0]) rotate([90,0,0]) linear_extrude(l) intersection(){\n      translate([-R-aile-1,0]) square([2*R+2*aile+2, dt+2*ep]);\n      difference(){\n      union(){\n        translate([0,dt/2]) circle(r=R);\n        translate([-R,0]) square([2*R, dt/2]);\n        translate([-R-aile,0]) square([2*R+2*aile, ep]);\n      }\n      translate([0,dt/2]) circle(d=dt);\n      translate([-dt/2,-1]) square([dt, dt/2+1]);\n      }\n    }\n    for (s=[-1,1]) translate([s*(R+aile/2), l/2, -1]) cylinder(d=trou, h=ep+2);\n  }\n}\n\n// Chape en U avec axe traversant\nmodule chape(e,h,l,ep,d_axe,trou){\n  difference(){\n    union(){\n      cube([e+2*ep, l, ep]);\n      for (x=[0, e+ep]) translate([x,0,0]) rotate([90,0,90]) linear_extrude(ep)\n        hull(){ square([l,0.01]); translate([l/2,h-l/2]) circle(d=l); }\n    }\n    translate([-1, l/2, h-l/2]) rotate([0,90,0]) cylinder(d=d_axe, h=e+2*ep+2);\n    translate([(e+2*ep)/2, l/2, -1]) cylinder(d=trou, h=ep+2);\n  }\n}\n\n// Pied reglable : semelle avec ecrou prisonnier (ecrou insere par le dessus)\nmodule pied_reglable(d,h,vis){\n  s = vis==5 ? 8 : vis==6 ? 10 : vis==8 ? 13 : vis==10 ? 17 : vis*1.6+0.4;\n  e_nut = vis*0.8 + 0.4;\n  difference(){\n    cylinder(d1=d, d2=d*0.8, h=h);\n    translate([0,0,h-e_nut]) cylinder(d=(s+0.4)/cos(30), h=e_nut+1, $fn=6);\n    translate([0,0,1.5]) cylinder(d=vis+0.5, h=h);\n  }\n}\n\n// Boite ouverte (le couvercle est une piece a part)\nmodule boite(L,l,h,ep,fond){\n  difference(){\n    cube([L,l,h]);\n    translate([ep,ep,fond]) cube([L-2*ep, l-2*ep, h]);\n  }\n}\n\n// Couvercle de la boite, imprime a l'envers (levre vers le haut)\nmodule couvercle(L,l,ep,ep_c,levre,jeu){\n  union(){\n    cube([L,l,ep_c]);\n    translate([ep+jeu, ep+jeu, ep_c-0.01]) difference(){\n      cube([L-2*ep-2*jeu, l-2*ep-2*jeu, levre]);\n      translate([ep,ep,-1]) cube([L-4*ep-2*jeu, l-4*ep-2*jeu, levre+2]);\n    }\n  }\n}\n\n// Clip pour tube, ouvert sur le dessus, avec patte a visser\nmodule clip_tube(d_tube,ep,l,aile,trou){\n  dt = d_tube + 0.3;\n  R = dt/2 + ep;\n  difference(){\n    translate([0,l,0]) rotate([90,0,0]) linear_extrude(l) difference(){\n      union(){\n        translate([0,R]) circle(r=R);\n        translate([-R-aile,0]) square([2*R+2*aile, ep]);\n      }\n      translate([0,R]) circle(d=dt);\n      translate([0,R]) polygon([[0,0],[-(R+1)*tan(55),R+1],[(R+1)*tan(55),R+1]]);\n    }\n    for (s=[-1,1]) translate([s*(R+aile/2), l/2, -1]) cylinder(d=trou, h=ep+2);\n  }\n}\n\n// ---------- MÉCANIQUE ----------\n\nmodule palier(d_roul,h_roul,d_arbre,L,l,ep,trou){\n  h = h_roul + ep;\n  difference(){\n    translate([-L/2,-l/2,0]) cube([L,l,h]);\n    translate([0,0,ep]) cylinder(d=d_roul+0.2, h=h_roul+1);\n    translate([0,0,-1]) cylinder(d=d_arbre+2, h=h+2);\n    for (x=[-1,1]) translate([x*(L/2-trou*1.5),0,-1]) cylinder(d=trou, h=h+2);\n  }\n}\n\nmodule support_moteur(cote,entraxe,d_centre,ep,base,trou_m,trou){\n  difference(){\n    union(){\n      translate([-cote/2,0,0]) cube([cote,base,ep]);\n      translate([-cote/2,0,0]) cube([cote,ep,cote+ep]);\n    }\n    translate([0,-1,ep+cote/2]) rotate([-90,0,0]) cylinder(d=d_centre, h=ep+2);\n    for (x=[-1,1]) for (z=[-1,1])\n      translate([x*entraxe/2,-1,ep+cote/2+z*entraxe/2]) rotate([-90,0,0]) cylinder(d=trou_m, h=ep+2);\n    for (x=[-1,1]) translate([x*cote/4, ep+(base-ep)/2, -1]) cylinder(d=trou, h=ep+2);\n  }\n}\n\nmodule collier(d_arbre,d_ext,h,vis){\n  difference(){\n    cylinder(d=d_ext, h=h);\n    translate([0,0,-1]) cylinder(d=d_arbre+0.2, h=h+2);\n    translate([0,0,h/2]) rotate([0,90,0]) cylinder(d=vis, h=d_ext);\n  }\n}\n\nmodule poulie(d,h,d_arbre,gorge){\n  difference(){\n    cylinder(d=d, h=h);\n    translate([0,0,-1]) cylinder(d=d_arbre+0.2, h=h+2);\n    translate([0,0,h/2]) rotate_extrude() translate([d/2,0]) circle(d=gorge);\n  }\n}\n\nmodule engrenage(m,z,h,d_arbre){\n  rp = m*z/2; ra = rp+m; rf = rp-1.25*m;\n  t1 = PI*m/4*1.3; t2 = PI*m/4*0.5;\n  difference(){\n    linear_extrude(h) union(){\n      circle(r=rf);\n      for (i=[0:z-1]) rotate(i*360/z)\n        polygon([[rf-0.5,-t1],[ra,-t2],[ra,t2],[rf-0.5,t1]]);\n    }\n    translate([0,0,-1]) cylinder(d=d_arbre+0.2, h=h+2);\n  }\n}\n`;\n\n// 3. Valeurs par défaut (utilisées si le Concepteur oublie une cote)\nconst DEF = {\n  equerre:        { a:40, b:40, l:20, ep:3, trou:4.5, n:2, renfort:false, l_sol:0, l_bout:0 },\n  sabot:          { w:45, h:90, p:40, ep:2.5, a:25, trou:4.5, n:3 },\n  plaque:         { L:100, l:50, ep:3, trou:4.5, nx:3, ny:2, marge:8 },\n  gousset:        { a:60, b:60, ep:3, trou:4.5 },\n  cale:           { l:60, w:30, h1:1, h2:8 },\n  entretoise:     { d_ext:12, d_int:4.5, h:10 },\n  etrier:         { w:22, h:22, l:15, ep:2.5, a:15, trou:4.5 },\n  equerre_tige:   { a:50, b:50, l:20, ep:4, trou:4.5, n:1, renfort:false, tige:6, tige_l:50, pas:1, filet:true, l_sol:0, l_bout:0 },\n  plaque_t:       { L:100, H:100, l:20, ep:3, trou:4.5, n:2 },\n  plaque_l:       { a:100, b:100, l:20, ep:3, trou:4.5, n:2 },\n  crochet:        { H:60, l:20, ep:5, saillie:30, pointe:15, trou:4.5, n:2 },\n  support_tube:   { d_tube:20, ep:3, l:20, aile:12, trou:4.5 },\n  clip_tube:      { d_tube:20, ep:3, l:15, aile:10, trou:4.5 },\n  chape:          { e:20, h:40, l:20, ep:4, d_axe:6.5, trou:4.5 },\n  pied_reglable:  { d:40, h:15, vis:8 },\n  boite:          { L:80, l:60, h:40, ep:2, fond:2 },\n  couvercle:      { L:80, l:60, ep:2, ep_c:2, levre:5, jeu:0.3 },\n  palier:         { d_roul:22, h_roul:7, d_arbre:8, L:50, l:28, ep:3, trou:4.5 },\n  support_moteur: { cote:42.3, entraxe:31, d_centre:23, ep:4, base:40, trou_m:3.4, trou:4.5 },\n  collier:        { d_arbre:8, d_ext:22, h:10, vis:2.8 },\n  poulie:         { d:40, h:10, d_arbre:8, gorge:5 },\n  engrenage:      { m:2, z:20, h:8, d_arbre:5 }\n};\n\n// Petite fonction : met une valeur au bon format OpenSCAD\nfunction fmt(v, defaut) {\n  if (Array.isArray(v)) v = v[0];            // une liste -> on garde la 1re valeur\n  if (typeof defaut === 'boolean') {\n    return (v === true || v === 'true') ? 'true' : 'false';\n  }\n  const n = Number(v);\n  return isNaN(n) ? String(defaut) : String(n);\n}\n\n// 6. Encombrement attendu (x, y, z en mm), calcule a partir du plan\nfunction encombrement(forme, p, vols) {\n  const n = k => Number(p[k]);\n  const larg = () => { const ls = n('l_sol') > 0 ? n('l_sol') : n('l'); const lb = n('l_bout') > 0 ? n('l_bout') : ls; return Math.max(n('l'), ls, lb); };\n  switch (forme) {\n    case 'equerre':        return [n('a'), larg(), n('b')];\n    case 'equerre_tige': {\n      const x0 = Math.min(0, n('ep')/2 - n('tige')/2);\n      const x1 = Math.max(n('a'), n('ep')/2 + n('tige')/2);\n      return [x1 - x0, larg(), n('b') + Math.max(n('tige_l'), Math.max(n('tige'), n('ep')) - 0.5 + 2*n('pas'))];\n    }\n    case 'sabot':          return [n('w') + 2*n('ep') + 2*n('a'), n('p'), n('h')];\n    case 'plaque':         return [n('L'), n('l'), n('ep')];\n    case 'gousset':        return [n('a'), n('b'), n('ep')];\n    case 'cale':           return [n('l'), n('w'), Math.max(n('h1'), n('h2'))];\n    case 'entretoise':     return [n('d_ext'), n('d_ext'), n('h')];\n    case 'etrier':         return [n('w') + 2*n('ep') + 2*n('a'), n('l'), n('h') + n('ep')];\n    case 'plaque_t':       return [n('L'), n('H'), n('ep')];\n    case 'plaque_l':       return [n('a'), n('b'), n('ep')];\n    case 'crochet':        return [n('ep') + n('saillie'), Math.max(n('H'), n('pointe')), n('l')];\n    case 'support_tube': { const dt = n('d_tube') + 0.4, R = dt/2 + n('ep'); return [2*R + 2*n('aile'), n('l'), dt/2 + R]; }\n    case 'clip_tube':    { const dt = n('d_tube') + 0.3, R = dt/2 + n('ep'); return [2*R + 2*n('aile'), n('l'), R * (1 + Math.cos(55*Math.PI/180))]; }\n    case 'chape':          return [n('e') + 2*n('ep'), n('l'), n('h')];\n    case 'pied_reglable':  return [n('d'), n('d'), n('h')];\n    case 'boite':          return [n('L'), n('l'), n('h')];\n    case 'couvercle':      return [n('L'), n('l'), n('ep_c') + n('levre')];\n    case 'palier':         return [n('L'), n('l'), n('h_roul') + n('ep')];\n    case 'support_moteur': return [n('cote'), n('base'), n('cote') + n('ep')];\n    case 'collier':        return [n('d_ext'), n('d_ext'), n('h')];\n    case 'poulie':         return [n('d'), n('d'), n('h')];\n    case 'engrenage':      return null; // dents : encombrement approximatif, pas de controle\n  }\n  // mode libre : boite englobante des volumes \"add\" (impossible si rotation)\n  const adds = (vols || []).filter(v => v.op !== 'cut');\n  if (!adds.length || adds.some(v => v.rot)) return null;\n  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];\n  for (const v of adds) {\n    const q = (v.pos || [0,0,0]).map(Number);\n    let a, b;\n    if (v.type === 'cylinder') { const r = Math.max(Number(v.d || 2*v.r || 10), Number(v.d2 || 0)) / 2; a = [q[0]-r, q[1]-r, q[2]]; b = [q[0]+r, q[1]+r, q[2] + Number(v.h || 10)]; }\n    else if (v.type === 'sphere') { const r = Number(v.d || 10) / 2; a = q.map(c => c - r); b = q.map(c => c + r); }\n    else if (v.type === 'prism') { const P = (v.points || []).map(pt => [Number(pt[0]) + q[0], Number(pt[1]) + q[1]]); a = [Math.min(...P.map(t => t[0])), Math.min(...P.map(t => t[1])), q[2]]; b = [Math.max(...P.map(t => t[0])), Math.max(...P.map(t => t[1])), q[2] + Number(v.h || 4)]; }\n    else { const s = (v.size || [10,10,10]).map(Number); a = q; b = q.map((c, i) => c + s[i]); }\n    for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], a[i]); hi[i] = Math.max(hi[i], b[i]); }\n  }\n  return hi.map((h, i) => h - lo[i]);\n}\n\n// 4. Construire le code OpenSCAD\nlet code = '$fn = 64;\\n' + LIB + '\\n';\n\nlet paramsUtilises = null;\nif (DEF[forme]) {\n  // Forme du catalogue : on mélange défauts + cotes du Concepteur\n  // Synonymes que le Concepteur invente parfois\n  const ALIAS = { tige_diametre:'tige', diametre_tige:'tige', tige_d:'tige', d_tige:'tige', tige_longueur:'tige_l', longueur_tige:'tige_l', epaisseur:'ep', largeur:'l' };\n  const brutP = Object.assign({}, plan.params || {});\n  for (const [k, v] of Object.entries(ALIAS)) if (brutP[k] !== undefined && brutP[v] === undefined) { brutP[v] = brutP[k]; delete brutP[k]; }\n  const inconnus = Object.keys(brutP).filter(k => !(k in DEF[forme]));\n  if (inconnus.length) plan.hypotheses = (plan.hypotheses ? plan.hypotheses + ' ; ' : '') + 'parametres ignores : ' + inconnus.join(', ');\n  const params = Object.assign({}, DEF[forme], brutP);\n  const args = Object.keys(DEF[forme])\n    .map(k => k + '=' + fmt(params[k], DEF[forme][k]))\n    .join(', ');\n  code += forme + '(' + args + ');\\n';\n  paramsUtilises = params;\n} else {\n  // Mode libre : assemblage de volumes\n  const vols = plan.volumes || [];\n  if (!vols.length) throw new Error('Forme inconnue et aucun volume fourni');\n\n  const num = (x, d) => { const n = Number(Array.isArray(x) ? x[0] : x); return isNaN(n) ? d : n; };\n  const vec = (a, d) => (Array.isArray(a) && a.length === 3) ? a.map(x => num(x, 0)) : d;\n  const vol = v => {\n    const p = vec(v.pos, [0,0,0]);\n    const r = vec(v.rot, null);\n    const t = 'translate([' + p.join(',') + ']) ' + (r ? 'rotate([' + r.join(',') + ']) ' : '');\n    if (v.type === 'cylinder') {\n      const d = num(v.d, v.r !== undefined ? num(v.r, 5) * 2 : 10);\n      const d2 = v.d2 !== undefined ? num(v.d2, d) : d;\n      return t + 'cylinder(d1=' + d + ', d2=' + d2 + ', h=' + num(v.h, 10) + ');';\n    }\n    if (v.type === 'sphere') {\n      return t + 'sphere(d=' + num(v.d, 10) + ');';\n    }\n    if (v.type === 'prism') {\n      const pts = (v.points || []).filter(pt => Array.isArray(pt) && pt.length >= 2);\n      if (pts.length < 3) throw new Error('prism : il faut au moins 3 points');\n      return t + 'linear_extrude(' + num(v.h, 4) + ') polygon([' + pts.map(pt => '[' + num(pt[0], 0) + ',' + num(pt[1], 0) + ']').join(',') + ']);';\n    }\n    if (v.type !== 'box') throw new Error('Type de volume inconnu : ' + v.type + '. Types possibles : box, cylinder, sphere, prism.');\n    return t + 'cube([' + vec(v.size, [10,10,10]).join(',') + ']);';\n  };\n\n  const adds = vols.filter(v => v.op !== 'cut').map(vol);\n  const cuts = vols.filter(v => v.op === 'cut').map(vol);\n  code += 'difference() {\\n union() {\\n' + adds.join('\\n') + '\\n }\\n' + cuts.join('\\n') + '\\n}\\n';\n}\n\n// 5. Sortie\nreturn [{ json: {\n  code,\n  nom: plan.nom,\n  hypotheses: plan.hypotheses || hyp,\n  forme,\n  params: paramsUtilises,\n  attendu: encombrement(forme, paramsUtilises || {}, plan.volumes),\n  nom_base: $('Nom fichier').first().json.nom_base\n} }];"
+   },
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1780,
+    -160
+   ],
+   "id": "b0d22f78-c7f5-4efe-afa4-f4f41bfb1dbf",
+   "name": "Assembler SCAD"
+  },
+  {
+   "parameters": {
+    "jsCode": "// Garde-fou : catalogue en ligne d'abord, sauf demande explicite de concevoir\nconst fs = require('fs');\nconst tr = $('Execute Workflow Trigger').first().json;\nconst direct = /^(oui|true|1|yes)$/i.test(String(tr.concevoir_directement || '').trim());\nif (!direct) {\n  let recent = false;\n  try { recent = (Date.now() - fs.statSync(($env.ARCHI_BASE || '') + '/impression3d/derniere_recherche.json').mtimeMs) < 60 * 60 * 1000; } catch (e) {}\n  if (!recent) {\n    throw new Error(\"ETAPE MANQUANTE : cherche d'abord dans les catalogues avec catalogues_3d (action=chercher, mots-cles en anglais) et montre les resultats a l'utilisateur. Seulement si l'utilisateur a demande de concevoir la piece lui-meme, ou si c'est une forme simple du catalogue avec des cotes precises, rappelle cet outil avec concevoir_directement=oui.\");\n  }\n}\n// Verifie que la demande n'est pas vide et la met au propre pour le Concepteur\nconst j = $input.first().json;\nconst desc = String(j.description || '').trim();\nif (desc.length < 5) {\n  throw new Error(\"Description vide : demande a l'utilisateur de decrire la piece avec ses cotes en mm, puis rappelle l'outil.\");\n}\nconst cotes = String(j.cotes || '').trim();\nconst demande = 'Piece demandee : ' + desc + (cotes ? '\\nCotes (mm) : ' + cotes : '');\nreturn [{ json: { ...j, demande } }];"
+   },
+   "id": "b7e1c0de-3d01-4c11-9a01-000000000001",
+   "name": "Verifier demande",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1340,
+    -160
+   ]
+  },
+  {
+   "parameters": {
+    "command": "=\"{{ $env.ARCHI_OPENSCAD || 'openscad' }}\" -o \"{{ $('Nom fichier').first().json.chemin_stl.replace(/\\.stl$/, '.png') }}\" --imgsize=900,700 --viewall --autocenter --colorscheme=Tomorrow \"{{ $('Nom fichier').first().json.chemin_scad }}\""
+   },
+   "id": "b7e1c0de-3d01-4c11-9a01-000000000002",
+   "name": "Apercu PNG",
+   "type": "n8n-nodes-base.executeCommand",
+   "typeVersion": 1,
+   "position": [
+    2660,
+    -160
+   ],
+   "onError": "continueRegularOutput"
+  },
+  {
+   "parameters": {
+    "fileSelector": "={{ $('Nom fichier').first().json.chemin_stl.replace(/\\.stl$/, '.png') }}",
+    "options": {}
+   },
+   "id": "b7e1c0de-3d01-4c11-9a01-000000000003",
+   "name": "Lire PNG",
+   "type": "n8n-nodes-base.readWriteFile",
+   "typeVersion": 1,
+   "position": [
+    2880,
+    -160
+   ],
+   "onError": "continueRegularOutput"
+  },
+  {
+   "parameters": {
+    "operation": "sendPhoto",
+    "chatId": "={{ $env.ARCHI_TELEGRAM_CHAT_ID.split(',')[0] }}",
+    "binaryData": true,
+    "additionalFields": {
+     "caption": "={{ $('Fiche apercu').first().json.fiche }}"
+    }
+   },
+   "id": "b7e1c0de-3d01-4c11-9a01-000000000004",
+   "name": "Envoyer apercu",
+   "type": "n8n-nodes-base.telegram",
+   "typeVersion": 1.2,
+   "position": [
+    3100,
+    -160
+   ],
+   "onError": "continueRegularOutput",
+   "credentials": {
+    "telegramApi": {
+     "id": "ArchiTelegram001",
+     "name": "Bot Telegram Archi"
+    }
+   },
+   "retryOnFail": true,
+   "maxTries": 3,
+   "waitBetweenTries": 3000
+  },
+  {
+   "parameters": {
+    "jsCode": "// Retour de l'etape 1 vers Archi\nconst f = $('Fiche apercu').first().json;\nconst env = $input.first().json || {};\nconst envoye = !env.error && (env.ok === true || !!env.result || !!env.message_id);\nconst phrase = envoye\n  ? `Voilà l'aperçu BOSS, je te l'ai envoyé avec la fiche : ${f.forme}, encombrement prévu ${f.encomb.replace(/ x /g, ' sur ').replace('mm', 'millimètres')}. Je lance la fabrication ?`\n  : `L'aperçu n'a pas pu être envoyé BOSS. J'ai compris : ${f.compris}. Encombrement prévu ${f.encomb}. Je lance la fabrication ?`;\nreturn [{ json: { statut: 'APERCU', apercu_envoye: envoye, nom_fichier: f.nom_base, phrase_pour_utilisateur: phrase, hypotheses: f.hyp } }];\n"
+   },
+   "id": "b7e1c0de-3d01-4c11-9a01-000000000005",
+   "name": "Retour apercu",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    3320,
+    -160
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "// Etape 1 : prepare la fiche de l'apercu et memorise le plan pour l'etape 2\nconst fs = require('fs');\nconst a = $('Assembler SCAD').first().json;\nconst nf = $('Nom fichier').first().json;\nconst NOMS = { H:'hauteur', saillie:'saillie', pointe:'pointe', d_tube:'diamètre du tube', aile:'pattes', e:'écartement', d_axe:'trou d\\'axe', fond:'fond', ep_c:'épaisseur couvercle', levre:'lèvre', jeu:'jeu', a:'aile au sol', b:'aile verticale', l:'largeur', l_sol:'largeur au sol (angle)', l_bout:'largeur au sol (bout)', ep:'épaisseur', trou:'perçages', n:'trous par aile', renfort:'renfort',\n  tige:'diamètre de tige', tige_l:'longueur de tige', pas:'pas', filet:'filetage', w:'largeur intérieure', h:'hauteur', p:'profondeur',\n  L:'longueur', nx:'trous en longueur', ny:'trous en largeur', marge:'marge', h1:'bout fin', h2:'bout épais', d_ext:'diamètre extérieur',\n  d_int:'diamètre intérieur', d_roul:'diamètre roulement', h_roul:'épaisseur roulement', d_arbre:'diamètre arbre', cote:'côté moteur',\n  entraxe:'entraxe', d_centre:'diamètre centrage', base:'base', trou_m:'trous moteur', vis:'trou de vis', d:'diamètre', gorge:'gorge', m:'module', z:'dents' };\nconst SANS_MM = ['n', 'nx', 'ny', 'z', 'm'];\nconst val = (k, v) => (typeof v === 'boolean' || v === 'true' || v === 'false') ? ((v === true || v === 'true') ? 'oui' : 'non') : v + (SANS_MM.includes(k) ? '' : ' mm');\nconst compris = a.params\n  ? Object.entries(a.params).map(([k, v]) => (NOMS[k] || k) + ' ' + val(k, v)).join(', ')\n  : 'assemblage libre de volumes';\nconst att = a.attendu ? a.attendu.map(x => +Number(x).toFixed(1)) : null;\nconst encomb = att ? `${att[0]} x ${att[1]} x ${att[2]} mm` : 'non calculé';\nconst hyp = String(a.hypotheses || '').trim();\n\nconst plan = {\n  nom_base: nf.nom_base, chemin_scad: nf.chemin_scad, chemin_stl: nf.chemin_stl,\n  forme: a.forme, params: a.params, attendu: a.attendu, hypotheses: hyp, compris, cree_le: new Date().toISOString()\n};\nconst dossier = nf.chemin_scad.replace(/[^/\\\\]+$/, '');\nfs.writeFileSync(nf.chemin_scad.replace(/\\.scad$/, '.plan.json'), JSON.stringify(plan, null, 2), 'utf8');\nfs.writeFileSync(dossier + 'dernier_apercu.json', JSON.stringify(plan, null, 2), 'utf8');\n\nconst fiche = [\n  `APERÇU (rien n'est fabriqué) : ${nf.nom_base} (${a.forme})`,\n  `J'ai compris : ${compris}`,\n  `Encombrement prévu : ${encomb}`,\n  hyp ? `Hypothèses : ${hyp}` : '',\n  `Réponds « vas-y » pour lancer la fabrication, ou dis-moi quoi changer.`\n].filter(Boolean).join('\\n').slice(0, 1000);\n\nreturn [{ json: { fiche, encomb, compris, hyp, nom_base: nf.nom_base, forme: a.forme } }];\n"
+   },
+   "id": "b7e1c0de-3d01-4c11-9a01-000000000006",
+   "name": "Fiche apercu",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    2440,
+    -160
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "// Etape 2 : retrouve le plan valide a l'apercu\nconst fs = require('fs');\nconst nf = $('Nom fichier').first().json;\nconst dossier = nf.chemin_scad.replace(/[^/\\\\]+$/, '');\nconst fichierPlan = nf.chemin_scad.replace(/\\.scad$/, '.plan.json');\nlet source = fs.existsSync(fichierPlan) ? fichierPlan : dossier + 'dernier_apercu.json';\nif (!fs.existsSync(source)) {\n  throw new Error(\"Aucun apercu trouve : fais d'abord un apercu (mode apercu) avant de lancer la fabrication.\");\n}\nconst plan = JSON.parse(fs.readFileSync(source, 'utf8'));\nif (!fs.existsSync(plan.chemin_scad)) {\n  throw new Error(\"Le fichier de l'apercu a disparu : refais un apercu.\");\n}\nreturn [{ json: plan }];\n"
+   },
+   "id": "b7e1c0de-3d01-4c11-9a01-000000000007",
+   "name": "Lire plan",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1340,
+    260
+   ]
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": false,
+      "leftValue": "",
+      "typeValidation": "loose",
+      "version": 3
+     },
+     "conditions": [
+      {
+       "id": "m0de-0001",
+       "leftValue": "={{ String($('Execute Workflow Trigger').first().json.mode || '').toLowerCase().trim() }}",
+       "rightValue": "valider",
+       "operator": {
+        "type": "string",
+        "operation": "equals"
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "looseTypeValidation": true,
+    "options": {}
+   },
+   "id": "b7e1c0de-3d01-4c11-9a01-000000000008",
+   "name": "Mode valider ?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2.3,
+   "position": [
+    1120,
+    48
+   ]
+  }
+ ],
+ "connections": {
+  "Execute Workflow Trigger": {
+   "main": [
+    [
+     {
+      "node": "Préparer dossier",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Préparer dossier": {
+   "main": [
+    [
+     {
+      "node": "Nom fichier",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Nom fichier": {
+   "main": [
+    [
+     {
+      "node": "Mode valider ?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Mode valider ?": {
+   "main": [
+    [
+     {
+      "node": "Lire plan",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Verifier demande",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Verifier demande": {
+   "main": [
+    [
+     {
+      "node": "Concepteur IA",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Concepteur IA": {
+   "main": [
+    [
+     {
+      "node": "Assembler SCAD",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Assembler SCAD": {
+   "main": [
+    [
+     {
+      "node": "Convert to File",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Convert to File": {
+   "main": [
+    [
+     {
+      "node": "Ecrire fichier SCAD",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Ecrire fichier SCAD": {
+   "main": [
+    [
+     {
+      "node": "Fiche apercu",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Fiche apercu": {
+   "main": [
+    [
+     {
+      "node": "Apercu PNG",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Apercu PNG": {
+   "main": [
+    [
+     {
+      "node": "Lire PNG",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Lire PNG": {
+   "main": [
+    [
+     {
+      "node": "Envoyer apercu",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Envoyer apercu": {
+   "main": [
+    [
+     {
+      "node": "Retour apercu",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Lire plan": {
+   "main": [
+    [
+     {
+      "node": "Convertir en STL",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Convertir en STL": {
+   "main": [
+    [
+     {
+      "node": "Audit STL",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Audit STL": {
+   "main": [
+    [
+     {
+      "node": "Lire audit",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Lire audit": {
+   "main": [
+    [
+     {
+      "node": "Reponse pour Archi",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "active": false,
+ "settings": {
+  "executionOrder": "v1"
+ }
+}

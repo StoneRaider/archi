@@ -1,0 +1,17 @@
+{
+ "nom": "cameras",
+ "description": "MODE D EMPLOI : les cameras de l'utilisateur sur son reseau local (RTSP, sans cloud). action=liste ; chercher (trouve les cameras du WiFi) ; ajouter (nom, ip, marque : imou, dahua, hikvision, reolink, tapo, axis, foscam, generique + chemin) ; verifier (camera=nom) ; photo (camera=nom ; champ fichier = le .jpg a envoyer) ; video (camera=nom, duree_s 1 a 120). Lecture seule, reseau local uniquement.",
+ "script": "cameras.py",
+ "parametres": [
+  {"nom": "action", "description": "liste, chercher, ajouter, verifier, photo ou video"},
+  {"nom": "camera", "description": "nom de la camera (la premiere par defaut)"},
+  {"nom": "duree_s", "description": "video : duree en secondes (1 a 120, 10 par defaut)"},
+  {"nom": "nom", "description": "ajouter : nom a donner (ex. entree)"},
+  {"nom": "ip", "description": "ajouter : adresse locale de la camera (ex. 192.168.1.20)"},
+  {"nom": "marque", "description": "ajouter : imou, dahua, hikvision, reolink, tapo, axis, foscam ou generique"},
+  {"nom": "chemin", "description": "ajouter, marque generique : chemin du flux RTSP (ex. /live)"}
+ ],
+ "timeout_s": 200,
+ "sensible": true,
+ "touche": ["cameras du domicile (images)", "reseau local", "dossier .n8n-files/camera"]
+}

@@ -1,0 +1,5 @@
+{
+ "protected_senders": ["impots.gouv.fr", "banque-exemple.fr", "mairie-exemple.fr"],
+ "commercial_senders": ["promo@", "newsletter@", "deals@"],
+ "commercial_keywords": ["soldes", "promo", "-50%", "black friday", "derniers jours", "code promo"]
+}

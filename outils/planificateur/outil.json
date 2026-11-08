@@ -1,0 +1,48 @@
+{
+ "nom": "planificateur",
+ "description": "MODE D EMPLOI : faire quelque chose PLUS TARD. action=ajouter avec texte + UN moment : a (\"11h\", \"demain 9h\", \"dans 20 min\"), tous_les (\"lundi\", \"jour\", \"mois\") + heure, ou lieu (\"chalet\") quand J y arrive. Action differee (radiateur) : outil=prises_shelly + outil_parametres ; exige accord=oui (apres un oui de J), essai a blanc puis confirmer=oui. Autres : lister, annuler (quoi), retenir_lieu (nom, ou=ici), lieux.",
+ "script": "planificateur.py",
+ "parametres": [
+  {
+   "nom": "action",
+   "description": "ajouter, lister, annuler, retenir_lieu ou lieux"
+  },
+  {
+   "nom": "texte",
+   "description": "ajouter : ce qu'il faut rappeler a J"
+  },
+  {
+   "nom": "a",
+   "description": "ajouter : quand, ex. 11h, demain 9h, jeudi 18h, dans 20 min, 2026-11-20 14:00"
+  },
+  {
+   "nom": "tous_les",
+   "description": "ajouter a repetition : jour, lundi, lundi et jeudi, en semaine, mois ; avec heure=9h"
+  },
+  {
+   "nom": "lieu",
+   "description": "ajouter : a l'arrivee de J sur ce lieu (chaque_fois=oui pour toujours) ; retenir_lieu : nom=, ou=ici ou adresse, rayon="
+  },
+  {
+   "nom": "outil",
+   "description": "facultatif : action a faire a ce moment, seulement prises_shelly (radiateur)"
+  },
+  {
+   "nom": "outil_parametres",
+   "description": "JSON de l'action, ex. {\"action\":\"eteindre\",\"prise\":\"radiateur\"}"
+  },
+  {
+   "nom": "confirmer",
+   "description": "oui quand J a dit vas-y pour une action differee ; annuler : oui si plusieurs"
+  }
+ ],
+ "timeout_s": 60,
+ "touche": [
+  "rappels",
+  "prises",
+  "action differee sur une prise : accord=oui"
+ ],
+ "sensible_si": [
+  "outil"
+ ]
+}

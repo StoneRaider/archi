@@ -1,0 +1,312 @@
+{
+ "id": "ArchiVision00001",
+ "name": "vision",
+ "nodes": [
+  {
+   "parameters": {
+    "workflowInputs": {
+     "values": [
+      {
+       "name": "image_url"
+      },
+      {
+       "name": "question"
+      },
+      {
+       "name": "file_id"
+      }
+     ]
+    }
+   },
+   "type": "n8n-nodes-base.executeWorkflowTrigger",
+   "typeVersion": 1.1,
+   "position": [
+    0,
+    0
+   ],
+   "id": "96bb8a67-3270-46a2-9109-1a1dbbc47419",
+   "name": "When Executed by Another Workflow"
+  },
+  {
+   "parameters": {
+    "url": "={{ $json.image_url }}",
+    "options": {
+     "allowUnauthorizedCerts": false,
+     "response": {
+      "response": {
+       "responseFormat": "file"
+      }
+     }
+    }
+   },
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.4,
+   "position": [
+    416,
+    0
+   ],
+   "id": "85aff287-17a2-4311-86f6-1df7ef86e322",
+   "name": "HTTP Request"
+  },
+  {
+   "parameters": {
+    "operation": "binaryToPropery",
+    "destinationKey": "image64",
+    "options": {}
+   },
+   "type": "n8n-nodes-base.extractFromFile",
+   "typeVersion": 1.1,
+   "position": [
+    624,
+    0
+   ],
+   "id": "5fb51d29-7566-4d61-997d-791a2e6ca5f0",
+   "name": "Extract from File"
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "={{ $env.ARCHI_LM_URL }}/chat/completions",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={\n  \"model\": \"{{ $env.ARCHI_MODELE_VISION || 'google/gemma-3-12b' }}\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": [\n        { \"type\": \"text\", \"text\": {{ JSON.stringify($('When Executed by Another Workflow').item.json.question || 'Décris cette image en détail, en français.') }} },\n        { \"type\": \"image_url\", \"image_url\": { \"url\": \"data:image/jpeg;base64,{{ $json.image64 }}\" } }\n      ]\n    }\n  ],\n  \"max_tokens\": 1000\n}",
+    "options": {
+     "response": {
+      "response": {
+       "responseFormat": "json"
+      }
+     }
+    }
+   },
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.4,
+   "position": [
+    832,
+    0
+   ],
+   "id": "01e9bd3e-5ab1-4227-a9d5-0257ec6cbf40",
+   "name": "HTTP Request1"
+  },
+  {
+   "parameters": {
+    "assignments": {
+     "assignments": [
+      {
+       "id": "8cf59f03-5062-496b-acfd-4bbd77c96420",
+       "name": "output",
+       "value": "={{ $json.choices?.[0]?.message?.content || $json.choices?.[0]?.message?.reasoning_content || \"Aucune description reçue de Gemma\" }}",
+       "type": "string"
+      }
+     ]
+    },
+    "options": {}
+   },
+   "type": "n8n-nodes-base.set",
+   "typeVersion": 3.4,
+   "position": [
+    1040,
+    0
+   ],
+   "id": "b0421f6a-5c80-4f5f-adf8-bbb27e0be0f8",
+   "name": "Edit Fields"
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "loose",
+      "version": 3
+     },
+     "conditions": [
+      {
+       "id": "28346f46-f9d7-41b9-bbfa-adffb031e846",
+       "leftValue": "={{ $json.image_url }}",
+       "rightValue": "http",
+       "operator": {
+        "type": "string",
+        "operation": "startsWith"
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "looseTypeValidation": true,
+    "options": {}
+   },
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2.3,
+   "position": [
+    208,
+    0
+   ],
+   "id": "98b8b59b-8088-4057-a8f1-0c4a5f83d1e4",
+   "name": "If"
+  },
+  {
+   "parameters": {
+    "resource": "file",
+    "fileId": "={{ $json.file_id }}",
+    "additionalFields": {}
+   },
+   "type": "n8n-nodes-base.telegram",
+   "typeVersion": 1.2,
+   "position": [
+    368,
+    -160
+   ],
+   "id": "a40d917e-d5f6-4db4-aed5-459d498f73c9",
+   "name": "Get a file",
+   "retryOnFail": true,
+   "waitBetweenTries": 3000,
+   "credentials": {
+    "telegramApi": {
+     "id": "ArchiTelegram001",
+     "name": "Bot Telegram Archi"
+    }
+   }
+  },
+  {
+   "parameters": {
+    "operation": "binaryToPropery",
+    "destinationKey": "image64",
+    "options": {}
+   },
+   "type": "n8n-nodes-base.extractFromFile",
+   "typeVersion": 1.1,
+   "position": [
+    576,
+    -160
+   ],
+   "id": "0d12724f-04e5-41d0-81e5-825569f64571",
+   "name": "Extract from File1"
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "={{ $env.ARCHI_LM_URL }}/chat/completions",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({\n  model: $env.ARCHI_MODELE_VISION || 'google/gemma-3-12b',\n  messages: [\n    {\n      role: \"user\",\n      content: [\n        { type: \"text\", text: $('When Executed by Another Workflow').item.json.question || \"Décris cette image\" },\n        { type: \"image_url\", image_url: { url: \"data:image/jpeg;base64,\" + $json.image64 } }\n      ]\n    }\n  ],\n  max_tokens: 4000\n}) }}",
+    "options": {
+     "allowUnauthorizedCerts": false,
+     "response": {
+      "response": {
+       "responseFormat": "json"
+      }
+     }
+    }
+   },
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.4,
+   "position": [
+    752,
+    -160
+   ],
+   "id": "200afbd4-06e0-4521-bedb-70dfb9694805",
+   "name": "HTTP Request2"
+  }
+ ],
+ "connections": {
+  "When Executed by Another Workflow": {
+   "main": [
+    [
+     {
+      "node": "If",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "HTTP Request": {
+   "main": [
+    [
+     {
+      "node": "Extract from File",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Extract from File": {
+   "main": [
+    [
+     {
+      "node": "HTTP Request1",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "HTTP Request1": {
+   "main": [
+    [
+     {
+      "node": "Edit Fields",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "If": {
+   "main": [
+    [
+     {
+      "node": "HTTP Request",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Get a file",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Get a file": {
+   "main": [
+    [
+     {
+      "node": "Extract from File1",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Extract from File1": {
+   "main": [
+    [
+     {
+      "node": "HTTP Request2",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "HTTP Request2": {
+   "main": [
+    [
+     {
+      "node": "Edit Fields",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "active": false,
+ "settings": {
+  "executionOrder": "v1"
+ }
+}

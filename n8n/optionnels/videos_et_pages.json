@@ -1,0 +1,347 @@
+{
+ "id": "ArchiVideosPage1",
+ "name": "Archi - Videos et pages",
+ "nodes": [
+  {
+   "parameters": {
+    "workflowInputs": {
+     "values": [
+      {
+       "name": "action"
+      },
+      {
+       "name": "cible"
+      },
+      {
+       "name": "question"
+      }
+     ]
+    }
+   },
+   "id": "v1",
+   "name": "Execute Workflow Trigger",
+   "type": "n8n-nodes-base.executeWorkflowTrigger",
+   "typeVersion": 1.1,
+   "position": [
+    0,
+    0
+   ]
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": false,
+      "leftValue": "",
+      "typeValidation": "loose",
+      "version": 2
+     },
+     "conditions": [
+      {
+       "id": "c1",
+       "leftValue": "={{ String($json.action || \"\").toLowerCase().trim() }}",
+       "rightValue": "page",
+       "operator": {
+        "type": "string",
+        "operation": "equals"
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "id": "v2",
+   "name": "Page web ?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2.2,
+   "position": [
+    224,
+    0
+   ]
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://api.tavily.com/extract",
+    "authentication": "genericCredentialType",
+    "genericAuthType": "httpHeaderAuth",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ urls: [String($json.cible || \"\").trim()], extract_depth: \"basic\" }) }}",
+    "options": {
+     "timeout": 60000
+    }
+   },
+   "id": "v3",
+   "name": "Lire la page (Tavily)",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    880,
+    -128
+   ],
+   "credentials": {
+    "httpHeaderAuth": {
+     "id": "ArchiTavily00001",
+     "name": "Tavily (recherche web)"
+    }
+   },
+   "onError": "continueRegularOutput"
+  },
+  {
+   "parameters": {
+    "jsCode": "const r = $input.first().json;\nconst url = $('Execute Workflow Trigger').first().json.cible;\nconst res = (r.results || [])[0];\nif (!res || !res.raw_content) return [{ json: { resultat: \"Je n'ai pas pu lire cette page (site protégé, introuvable ou vide) : \" + url } }];\nlet t = String(res.raw_content).replace(/!\\[[^\\]]*\\]\\([^)]*\\)/g, '').replace(/\\n{3,}/g, '\\n\\n').trim();\nconst coupe = t.length > 9000;\nreturn [{ json: { resultat: 'CONTENU DE LA PAGE ' + url + (coupe ? ' (début seulement)' : '') + ' :\\n\\n' + t.slice(0, 9000) + '\\n\\nRésume pour l’utilisateur ce qui répond à sa demande, sans inventer, et cite la page.' } }];"
+   },
+   "id": "v4",
+   "name": "Preparer la page",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1104,
+    -128
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "const fs = require('fs');\nconst i = $input.first().json;\nconst action = String(i.action || '').toLowerCase().includes('lien') ? 'lien' : 'chercher';\nconst fichier = ($env.ARCHI_BASE || '') + '/video_demande_' + Date.now() + '.json';\nfs.writeFileSync(fichier, JSON.stringify({ action, cible: String(i.cible || '').slice(0, 300), question: String(i.question || '').slice(0, 300) }), 'utf8');\nreturn [{ json: { fichier } }];"
+   },
+   "id": "v5",
+   "name": "Ecrire la demande",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    448,
+    128
+   ]
+  },
+  {
+   "parameters": {
+    "command": "=cd /d \"{{ $env.ARCHI_BASE }}\\outils\\recolte_youtube\" && set PYTHONIOENCODING=utf-8&& \"{{ $env.ARCHI_PY || 'python' }}\" video.py --fichier \"{{ $json.fichier }}\""
+   },
+   "id": "v6",
+   "name": "Regarder YouTube",
+   "type": "n8n-nodes-base.executeCommand",
+   "typeVersion": 1,
+   "position": [
+    672,
+    128
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "const fs = require('fs');\ntry { fs.unlinkSync($('Ecrire la demande').first().json.fichier); } catch (e) {}\nconst o = String($input.first().json.stdout || '').trim().split(/\\r?\\n/).pop();\nlet r;\ntry { r = JSON.parse(o); } catch (e) { return [{ json: { resultat: \"ERREUR : l'outil vidéo n'a pas répondu correctement. \" + String($input.first().json.stderr || o).slice(-200) } }]; }\nif (!r.ok) return [{ json: { resultat: 'ERREUR : ' + r.erreur, phrase_pour_utilisateur: r.phrase_pour_utilisateur } }];\nif (!r.videos.length) return [{ json: { resultat: r.phrase_pour_utilisateur } }];\nconst t = r.videos.map((v, i) => (i + 1) + '. ' + v.titre + ' — ' + v.chaine + ', ' + v.duree + ' (' + v.source + ')\\n' + v.url + '\\n' + v.resume).join('\\n\\n');\nreturn [{ json: { resultat: 'VIDÉOS REGARDÉES :\\n\\n' + t + \"\\n\\nFais la synthèse pour l’utilisateur à partir de ces résumés seulement, et donne les liens en mode [TEXTE].\" } }];"
+   },
+   "id": "v7",
+   "name": "Preparer les videos",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    880,
+    128
+   ]
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": false,
+      "leftValue": "",
+      "typeValidation": "loose",
+      "version": 2
+     },
+     "conditions": [
+      {
+       "id": "c2",
+       "leftValue": "={{ String($json.action || \"\").toLowerCase().trim() }}",
+       "rightValue": "recolte",
+       "operator": {
+        "type": "string",
+        "operation": "equals"
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "id": "v8",
+   "name": "Recolte ?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2.2,
+   "position": [
+    336,
+    128
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "// Lancer la recolte : passe la demande a l'outil maison recolte_youtube (recolte_lancer.py)\nconst fs = require('fs'), cp = require('child_process'), os = require('os'), path = require('path');\nconst i = $('Execute Workflow Trigger').first().json;\nconst BASE = $env.ARCHI_BASE || path.join(os.homedir(), '.n8n-files');\nconst dossier = path.join(BASE, 'outils', 'recolte_youtube');\nconst f = path.join(os.tmpdir(), 'recolte_cmd_' + Date.now() + '.json');\nfs.writeFileSync(f, JSON.stringify({ cible: String(i.cible || ''), question: String(i.question || '') }), 'utf8');\nlet out = '';\ntry {\n  out = cp.execFileSync($env.ARCHI_PY || 'python', [path.join(dossier, 'recolte_lancer.py'), '--fichier', f],\n    { cwd: dossier, timeout: 300000, windowsHide: true, encoding: 'utf8', env: Object.assign({}, process.env, { PYTHONIOENCODING: 'utf-8' }) });\n} catch (e) { out = String(e.stdout || ''); }\ntry { fs.unlinkSync(f); } catch (e) {}\nlet r;\ntry { r = JSON.parse(String(out).trim().split(/\\r?\\n/).pop()); } catch (e) {\n  return [{ json: { resultat: \"ERREUR : la recolte n'a pas repondu (recolte_lancer.py).\", phrase_pour_utilisateur: 'La recolte a eu un souci technique.' } }];\n}\nreturn [{ json: { ok: r.ok, resultat: r.resultat, phrase_pour_utilisateur: r.phrase_pour_utilisateur } }];\n"
+   },
+   "id": "v9",
+   "name": "Lancer la recolte",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    560,
+    288
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "// Lecteur de pages LOCAL (Scrapling, sur le PC) avant Tavily : gratuit, passe la plupart des protections.\n// Si la lecture rate ou si la page est presque vide, on passe la main a Tavily (noeud suivant).\nconst cp = require('child_process'), fs = require('fs'), pr = require('process');\nconst url = String($('Execute Workflow Trigger').first().json.cible || '').trim();\nconst PY = ($env.ARCHI_PY || 'python');\nconst f = ($env.ARCHI_BASE || '') + '/page_demande_' + Date.now() + '.json';\nfs.writeFileSync(f, JSON.stringify({ url, max_caracteres: 9000, furtif: 'auto' }), 'utf8');\nlet r = { ok: false };\ntry {\n  const out = await new Promise((ok, ko) => cp.execFile(PY, [($env.ARCHI_DEPOT || '') + '/pc/lire_page/lire_page.py', '--fichier', f],\n    { timeout: 75000, windowsHide: true, maxBuffer: 32 * 1024 * 1024, env: Object.assign({}, pr.env, { PYTHONIOENCODING: 'utf-8' }) },\n    (e, so) => (e && !so) ? ko(e) : ok(String(so || ''))));\n  r = JSON.parse(out.trim().split(/\\r?\\n/).pop());\n} catch (e) { r = { ok: false, erreur: String(e.message || e).slice(0, 200) }; }\ntry { fs.unlinkSync(f); } catch (e) {}\nif (r.ok && r.texte && String(r.texte).length > 300) {\n  const t = String(r.texte);\n  return [{ json: { lu: true, moteur: r.moteur, resultat: 'CONTENU DE LA PAGE ' + url + (r.titre ? ' (« ' + r.titre + ' »)' : '') + (r.coupe ? ' (début seulement)' : '') + ' :\\n\\n' + t + '\\n\\nRésume pour l’utilisateur ce qui répond à sa demande, sans inventer, et cite la page.' } }];\n}\nif (r.phrase_pour_utilisateur && /404|n'existe pas|locales/.test(r.phrase_pour_utilisateur)) return [{ json: { lu: true, resultat: r.phrase_pour_utilisateur } }];\nreturn [{ json: { lu: false, cible: url, erreur_local: r.erreur || r.phrase_pour_utilisateur || '' } }];"
+   },
+   "id": "5ced2399-4ed4-41ad-ba74-15ea6c3d405b",
+   "name": "Lire la page (local)",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    448,
+    -256
+   ]
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "loose",
+      "version": 2
+     },
+     "conditions": [
+      {
+       "id": "lu1",
+       "leftValue": "={{ $json.lu }}",
+       "rightValue": true,
+       "operator": {
+        "type": "boolean",
+        "operation": "true",
+        "singleValue": true
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "id": "fea4d97a-6614-43f1-9e34-43c3f384dfc8",
+   "name": "Lue ?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2.2,
+   "position": [
+    672,
+    -256
+   ]
+  }
+ ],
+ "connections": {
+  "Execute Workflow Trigger": {
+   "main": [
+    [
+     {
+      "node": "Page web ?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Page web ?": {
+   "main": [
+    [
+     {
+      "node": "Lire la page (local)",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Recolte ?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Lire la page (Tavily)": {
+   "main": [
+    [
+     {
+      "node": "Preparer la page",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Ecrire la demande": {
+   "main": [
+    [
+     {
+      "node": "Regarder YouTube",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Regarder YouTube": {
+   "main": [
+    [
+     {
+      "node": "Preparer les videos",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Recolte ?": {
+   "main": [
+    [
+     {
+      "node": "Lancer la recolte",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Ecrire la demande",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Lire la page (local)": {
+   "main": [
+    [
+     {
+      "node": "Lue ?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Lue ?": {
+   "main": [
+    [],
+    [
+     {
+      "node": "Lire la page (Tavily)",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "active": false,
+ "settings": {
+  "executionOrder": "v1"
+ }
+}

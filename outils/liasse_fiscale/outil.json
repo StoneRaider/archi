@@ -1,0 +1,44 @@
+{
+ "nom": "liasse_fiscale",
+ "description": "MODE D EMPLOI : liasse fiscale annuelle d'une petite entreprise individuelle au regime reel simplifie (BIC, formulaires 2031 et 2033 A a D) + cases de la declaration de revenus. action=preparer, annee, et les montants connus (recettes, subventions, assurance, honoraires, interets, capital_restant), le reste est estime et signale. Autres actions : comparer (annee + cases du comptable), cloturer (confirmer=oui une fois la liasse deposee), etat, synthese. Brouillon : ne declare rien, n'envoie rien.",
+ "script": "liasse_fiscale.py",
+ "parametres": [
+  {
+   "nom": "action",
+   "description": "preparer, comparer, cloturer, etat ou synthese"
+  },
+  {
+   "nom": "annee",
+   "description": "annee de l'exercice, ex. 2026"
+  },
+  {
+   "nom": "recettes",
+   "description": "chiffre d'affaires de l'annee, hors TVA"
+  },
+  {
+   "nom": "subventions",
+   "description": "primes recues dans l'annee"
+  },
+  {
+   "nom": "assurance",
+   "description": "assurance de l'activite (multirisque)"
+  },
+  {
+   "nom": "honoraires",
+   "description": "facture du comptable"
+  },
+  {
+   "nom": "interets",
+   "description": "interets du pret payes dans l'annee (releve annuel du preteur)"
+  },
+  {
+   "nom": "capital_restant",
+   "description": "capital du pret restant du au 31/12 (releve annuel)"
+  }
+ ],
+ "timeout_s": 60,
+ "touche": [
+  "fichiers",
+  "admin"
+ ]
+}

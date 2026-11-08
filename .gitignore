@@ -1,0 +1,54 @@
+# Secrets et donnees personnelles : JAMAIS dans le depot
+.env
+*.env
+!.env.example
+**/secret.xml
+**/secret*.json
+**/cle*.txt
+*.pickle
+*.pkl
+*.keystore
+*.jks
+credentials*.json
+# Etat et donnees de fonctionnement des outils
+**/demande_*.json
+**/etat.json
+**/journal*
+**/historique.json
+**/prises.json
+# Build
+appli/build/
+appli/app/build/
+appli/.gradle/
+appli/local.properties
+*.apk
+__pycache__/
+node_modules/
+.local/
+
+# Donnees reelles de la liasse (jamais publiees)
+outils/liasse_fiscale/historique.json
+outils/liasse_fiscale/preparations/
+# Donnees de l indicateur
+/indicateur_polymarket/
+
+# Cameras : la liste et les codes restent sur le PC
+outils/cameras/cameras.json
+!**/*.exemple.json
+**/acces_*.txt
+boite_outils/relais_cams/sources.json
+boite_outils/searxng/
+boite_outils/presenton_data/
+boite_outils/gods-eye-view/
+# Donnees de fonctionnement des outils (jamais publiees)
+outils/oeil/porte.json
+outils/oeil/cache_lieux.json
+outils/oeil/cle_oeil.txt
+outils/retro/rapports/
+outils/retro/missions/
+outils/retro/moteurs/
+outils/liasse_fiscale/preparations/
+pc/voix/essais*/
+
+# Serveur : jetons Google/Microsoft, journaux, memoire des expediteurs
+serveur/donnees/

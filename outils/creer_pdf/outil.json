@@ -1,0 +1,28 @@
+{
+ "nom": "creer_pdf",
+ "description": "MODE D EMPLOI : fabrique un PDF (compte rendu, fiche, carte de lieux) enregistre sur le PC (dossier documents ; envoye sur Telegram dans la version complete). contenu facon markdown (# titre, - puce, | tableau |, **gras**). Pour une carte, donne toi-meme la liste des lieux dans lieux (avec la ville dans chaque nom). Ne dis jamais c est fait sans le C est fait de l outil.",
+ "script": "creer_pdf.py",
+ "parametres": [
+  {
+   "nom": "titre",
+   "description": "titre du document"
+  },
+  {
+   "nom": "contenu",
+   "description": "texte du document facon markdown (titres #, puces -, tableaux |, **gras**)"
+  },
+  {
+   "nom": "lieux",
+   "description": "carte : liste JSON [{nom, lat, lon, note}] ou noms separes par ; (ex : Chateau de Chambord ; Chateau de Blois)"
+  },
+  {
+   "nom": "sous_titre",
+   "description": "facultatif"
+  }
+ ],
+ "timeout_s": 180,
+ "touche": [
+  "documents",
+  "internet (carte OpenStreetMap)"
+ ]
+}

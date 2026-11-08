@@ -1,0 +1,35 @@
+{
+ "nom": "musique",
+ "description": "MODE D EMPLOI : propose de la musique selon les GOUTS de l'utilisateur, tiree de SA bibliotheque (index fabrique par indexer.py). action=proposer (ambiance=calme|route|pechu|fete, ou genre, ou artiste ; nombre=3) ; chercher (q=artiste ou titre) ; gouts. Puis lance le morceau choisi avec telephone action=youtube recherche=recherche_youtube.",
+ "script": "musique.py",
+ "parametres": [
+  {
+   "nom": "action",
+   "description": "proposer, chercher ou gouts"
+  },
+  {
+   "nom": "ambiance",
+   "description": "proposer : calme, route, pechu ou fete"
+  },
+  {
+   "nom": "genre",
+   "description": "proposer : reggae, dub, rap, rock, electro, monde, blues (facultatif)"
+  },
+  {
+   "nom": "artiste",
+   "description": "proposer : un artiste (facultatif)"
+  },
+  {
+   "nom": "q",
+   "description": "chercher : artiste ou titre"
+  },
+  {
+   "nom": "nombre",
+   "description": "proposer : combien de morceaux (3 par defaut)"
+  }
+ ],
+ "timeout_s": 30,
+ "touche": [
+  "lecture de memoire\\passions\\musique_index.tsv"
+ ]
+}

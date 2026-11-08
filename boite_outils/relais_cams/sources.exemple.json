@@ -1,0 +1,4 @@
+{
+ "exemple_route": {"image": "https://webcams.exemple.gouv.fr/route_1.jpg"},
+ "exemple_station": {"page": "https://station.exemple.fr/webcams.html", "motif": "src=\"(/img/cam_[0-9]+\.jpg)\""}
+}

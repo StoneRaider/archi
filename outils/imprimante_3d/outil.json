@@ -1,0 +1,38 @@
+{
+ "nom": "imprimante_3d",
+ "description": "MODE D EMPLOI : piloter l'imprimante 3D du reseau local (Klipper/Moonraker, OctoPrint ou PrusaLink, reglee dans le .env). action=etat (ou en est l'impression, temperatures) ; fichiers (sur l'imprimante) ; envoyer (fichier = chemin d'un .gcode/.3mf du PC) ; lancer (fichier = nom sur l'imprimante) ; pause ; reprendre ; annuler. envoyer, lancer et annuler : essai a blanc, puis confirmer=oui quand l'utilisateur a dit oui (plateau libre). Jamais de chauffe ni de G-code libre.",
+ "script": "imprimante_3d.py",
+ "parametres": [
+  {
+   "nom": "action",
+   "description": "etat, fichiers, envoyer, lancer, pause, reprendre ou annuler"
+  },
+  {
+   "nom": "fichier",
+   "description": "envoyer : chemin du fichier sur le PC ; lancer : nom du fichier sur l'imprimante"
+  },
+  {
+   "nom": "confirmer",
+   "description": "oui seulement apres le oui de l'utilisateur (envoyer, lancer, annuler)"
+  }
+ ],
+ "timeout_s": 600,
+ "sensible_si": {
+  "action": [
+   "envoyer",
+   "televerser",
+   "upload",
+   "lancer",
+   "imprimer",
+   "demarrer",
+   "start",
+   "annuler",
+   "stop",
+   "arreter"
+  ]
+ },
+ "touche": [
+  "imprimante 3D du reseau local",
+  "lancement et annulation d'impression : accord=oui"
+ ]
+}

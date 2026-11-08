@@ -1,0 +1,27 @@
+BOITE A OUTILS D ARCHI (Docker)
+
+Trois outils tournent dans Docker, visibles seulement depuis ce PC :
+  - SearXNG   (recherche web sans pistage)   http://127.0.0.1:8888
+  - Presenton (presentations PowerPoint)     http://127.0.0.1:5001
+  - Oeil      (globe gods-eye-view)          http://127.0.0.1:4173
+
+INSTALLATION (une fois)
+1. Installe Docker Desktop (docker.com). Dans ses reglages : "Start Docker Desktop when you sign in".
+2. Telecharge gods-eye-view (github.com, licence MIT) et decompresse-le DANS CE DOSSIER et renomme le dossier obtenu "gods-eye-view"
+   (il doit contenir package.json et Dockerfile).
+3. Lance lancer_archi.bat (racine du depot) : il demarre la boite, avec le globe si gods-eye-view est la.
+
+AU QUOTIDIEN
+- Docker Desktop relance tout seul les trois outils au demarrage.
+- Pour arreter : docker compose --profile oeil --profile tunnel down     (dans ce dossier)
+- Pour mettre a jour : docker compose pull, puis relancer lancer_archi.bat
+
+CLES FACULTATIVES : toutes dans le fichier .env a la racine du depot (section 6), jamais ailleurs.
+
+
+OEIL DEPUIS LE TELEPHONE (02/11 soir) : voir porte_oeil\LISEZ-MOI.txt (porte + tunnel Cloudflare, TUNNEL_TOKEN dans le .env).
+Le conteneur « oeil » sert desormais la version compilee du globe (vite build + preview : rapide sur le telephone),
+et le relais d'images partage son reseau (webcams publiques de relais_cams/sources.json).
+
+FICHIERS A CREER (jamais publies) : le .env a la racine du depot (copier .env.example),
+relais_cams/sources.json (copier sources.exemple.json), et la cle de la porte dans ce .env (ARCHI_CLE_OEIL).

@@ -1,0 +1,218 @@
+{
+ "id": "ArchiNavigateur1",
+ "name": "Archi - Navigateur",
+ "nodes": [
+  {
+   "id": "d84f855e-1985-468b-b300-7f013ee38fdd",
+   "name": "Execute Workflow Trigger",
+   "type": "n8n-nodes-base.executeWorkflowTrigger",
+   "typeVersion": 1.1,
+   "position": [
+    0,
+    0
+   ],
+   "parameters": {
+    "workflowInputs": {
+     "values": [
+      {
+       "name": "action"
+      },
+      {
+       "name": "cible"
+      },
+      {
+       "name": "valeur"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "3b1bc31a-9058-40af-bf9f-600fcd243c11",
+   "name": "Navigateur",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    220,
+    0
+   ],
+   "parameters": {
+    "jsCode": "// Archi - Navigateur : pilote l'Edge d'Archi (navigateur.py) et renvoie la capture s'il y en a une\nconst cp = require('child_process');\nconst fs = require('fs');\nconst i = $('Execute Workflow Trigger').first().json;\nconst f = ($env.ARCHI_BASE || '') + '/navigateur/demande_' + Date.now() + '.json';\nfs.writeFileSync(f, JSON.stringify({ action: i.action || '', cible: i.cible || '', valeur: i.valeur || '' }), 'utf8');\nlet r;\ntry {\n  const o = cp.execFileSync(($env.ARCHI_SERVEUR_PY || (($env.ARCHI_DEPOT || '') + '/serveur/venv/Scripts/python.exe')),\n    [($env.ARCHI_DEPOT || '') + '/serveur/navigateur.py', '--fichier', f],\n    { timeout: 120000, windowsHide: true, env: Object.assign({}, require('process').env, { PYTHONIOENCODING: 'utf-8' }) }).toString('utf8').trim().split(/\\r?\\n/).pop();\n  r = JSON.parse(o);\n} catch (e) { r = { ok: false, phrase_pour_utilisateur: 'Mon navigateur ne répond pas BOSS.', erreur: String(e.message || e).slice(0, 200) }; }\ntry { fs.unlinkSync(f); } catch (e) {}\nconst item = { json: r };\nif (r.capture && fs.existsSync(r.capture)) {\n  item.binary = { capture: await this.helpers.prepareBinaryData(fs.readFileSync(r.capture), 'capture.png', 'image/png') };\n  r.capture_envoyee = 'oui, l’utilisateur la voit sur Telegram';\n}\nreturn [item];"
+   }
+  },
+  {
+   "id": "85cd54c8-5f69-44cc-9e5f-6f709603b392",
+   "name": "Capture ?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2.2,
+   "position": [
+    440,
+    0
+   ],
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "loose",
+      "version": 2
+     },
+     "conditions": [
+      {
+       "id": "c1",
+       "leftValue": "={{ $json.capture_envoyee }}",
+       "rightValue": "",
+       "operator": {
+        "type": "string",
+        "operation": "notEmpty",
+        "singleValue": true
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   }
+  },
+  {
+   "id": "5feaebd9-b517-4081-a3a5-50434ab7bcc0",
+   "name": "Envoyer capture",
+   "type": "n8n-nodes-base.telegram",
+   "typeVersion": 1.2,
+   "position": [
+    660,
+    -100
+   ],
+   "credentials": {
+    "telegramApi": {
+     "id": "ArchiTelegram001",
+     "name": "Bot Telegram Archi"
+    }
+   },
+   "parameters": {
+    "operation": "sendPhoto",
+    "chatId": "={{ $env.ARCHI_TELEGRAM_CHAT_ID.split(',')[0] }}",
+    "binaryData": true,
+    "binaryPropertyName": "capture",
+    "additionalFields": {
+     "caption": "={{ (\"🌐 \" + ($json.titre || \"\") + \" — \" + ($json.url || \"\")).slice(0, 900) }}"
+    }
+   },
+   "onError": "continueRegularOutput"
+  },
+  {
+   "id": "3f9b80e1-d7c0-46f7-b8d1-34ce0146b4b9",
+   "name": "Rendre",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    880,
+    0
+   ],
+   "parameters": {
+    "jsCode": "const r = Object.assign({}, $('Navigateur').first().json);\ndelete r.capture;\nreturn [{ json: r }];"
+   }
+  },
+  {
+   "id": "e011347d-49de-425e-a0fb-b69a3a05ff61",
+   "name": "9h et 18h",
+   "type": "n8n-nodes-base.scheduleTrigger",
+   "typeVersion": 1.2,
+   "position": [
+    0,
+    250
+   ],
+   "parameters": {
+    "rule": {
+     "interval": [
+      {
+       "field": "cronExpression",
+       "expression": "7 9,18 * * *"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "68bc56b9-c2e4-4b27-96f5-bb9cabfbeca0",
+   "name": "Verifier les pages",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    220,
+    250
+   ],
+   "parameters": {
+    "jsCode": "const cp = require('child_process');\nconst p = cp.spawn(($env.ARCHI_SERVEUR_PY || (($env.ARCHI_DEPOT || '') + '/serveur/venv/Scripts/python.exe')), [($env.ARCHI_DEPOT || '') + '/serveur/navigateur.py', 'surveiller_tout'], { detached: true, stdio: 'ignore', windowsHide: true, env: Object.assign({}, require('process').env, { PYTHONIOENCODING: 'utf-8' }) });\np.unref();\nreturn [{ json: { lance: 'surveillance' } }];"
+   }
+  }
+ ],
+ "connections": {
+  "Execute Workflow Trigger": {
+   "main": [
+    [
+     {
+      "node": "Navigateur",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Navigateur": {
+   "main": [
+    [
+     {
+      "node": "Capture ?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Capture ?": {
+   "main": [
+    [
+     {
+      "node": "Envoyer capture",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Rendre",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Envoyer capture": {
+   "main": [
+    [
+     {
+      "node": "Rendre",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "9h et 18h": {
+   "main": [
+    [
+     {
+      "node": "Verifier les pages",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "active": false,
+ "settings": {
+  "executionOrder": "v1"
+ }
+}

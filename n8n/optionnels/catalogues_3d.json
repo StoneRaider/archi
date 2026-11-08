@@ -1,0 +1,263 @@
+{
+ "name": "Archi - Catalogues 3D",
+ "nodes": [
+  {
+   "parameters": {
+    "workflowInputs": {
+     "values": [
+      {
+       "name": "action"
+      },
+      {
+       "name": "requete"
+      },
+      {
+       "name": "choix"
+      }
+     ]
+    }
+   },
+   "id": "ab4ed14f-77eb-4228-a089-94c1cb20d146",
+   "name": "Execute Workflow Trigger",
+   "type": "n8n-nodes-base.executeWorkflowTrigger",
+   "typeVersion": 1.1,
+   "position": [
+    220,
+    0
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "// Archi - Catalogues 3D : recherche sur Printables et telechargement des STL\nconst fs = require('fs');\nconst inp = $input.first().json.query || $input.first().json;\nconst action = String(inp.action || 'chercher').toLowerCase().trim();\nconst API = 'https://api.printables.com/graphql/';\nconst HEAD = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36', 'Content-Type': 'application/json' };\nconst DOSSIER = ($env.ARCHI_BASE || '') + '/impression3d/';\nconst MEMO = DOSSIER + 'derniere_recherche.json';\n\nconst gql = async (operationName, query, variables) => {\n  const r = await this.helpers.httpRequest({ method: 'POST', url: API, headers: HEAD, body: { operationName, query, variables }, json: true, timeout: 20000 });\n  if (r.errors) throw new Error('Printables a refuse la requete : ' + JSON.stringify(r.errors).slice(0, 300));\n  return r.data;\n};\n\nif (action === 'chercher') {\n  const q = String(inp.requete || '').trim();\n  if (!q) throw new Error('Recherche vide : donne des mots-cles en anglais.');\n  const data = await gql('SearchModels',\n    'query SearchModels($query: String!, $limit: Int) { result: searchPrints2(query: $query, printType: print, limit: $limit, ordering: best_match) { items { id name slug likesCount downloadCount user { publicUsername } image { filePath } } } }',\n    { query: q, limit: 8 });\n  const items = ((data.result || {}).items || []).slice(0, 5).map((m, i) => ({\n    n: i + 1, id: String(m.id), nom: m.name, slug: m.slug,\n    auteur: (m.user || {}).publicUsername || '?', likes: m.likesCount || 0, telechargements: m.downloadCount || 0,\n    lien: 'https://www.printables.com/model/' + m.id + '-' + m.slug,\n    image: m.image && m.image.filePath ? 'https://media.printables.com/' + m.image.filePath : null\n  }));\n  fs.writeFileSync(MEMO, JSON.stringify({ requete: q, date: new Date().toISOString(), resultats: items }, null, 2), 'utf8');\n  const texte = items.length\n    ? 'Printables, recherche « ' + q + ' » :\\n\\n' + items.map(m => m.n + '. ' + m.nom + '\\n   par ' + m.auteur + ' · ' + m.likes + ' j\\'aime · ' + m.telechargements + ' téléchargements\\n   ' + m.lien).join('\\n\\n') + '\\n\\nRéponds avec le numéro à télécharger, ou dis-moi de la fabriquer moi-même.'\n    : 'Printables : aucun modèle trouvé pour « ' + q + ' ».';\n  return [{ json: { action, requete: q, nb: items.length, resultats: items, texte } }];\n}\n\nif (action === 'telecharger') {\n  let id = String(inp.id_modele || '').trim();\n  let modele = null;\n  if (!id) {\n    if (!fs.existsSync(MEMO)) throw new Error('Aucune recherche recente : fais d\\'abord une recherche.');\n    const memo = JSON.parse(fs.readFileSync(MEMO, 'utf8'));\n    const n = parseInt(String(inp.choix || '').replace(/\\D/g, ''), 10);\n    modele = (memo.resultats || []).find(m => m.n === n);\n    if (!modele) throw new Error('Numero ' + inp.choix + ' introuvable dans la derniere recherche (1 a ' + (memo.resultats || []).length + ').');\n    id = modele.id;\n  }\n  const data = await gql('ModelFiles', 'query ModelFiles($id: ID!) { model: print(id: $id) { id name slug stls { id name fileSize } } }', { id });\n  const m = data.model;\n  if (!m) throw new Error('Modele ' + id + ' introuvable sur Printables.');\n  const stls = (m.stls || []).slice(0, 15);\n  if (!stls.length) {\n    return [{ json: { action, statut: 'SANS_STL', phrase_pour_utilisateur: 'Ce modèle n\\'a pas de fichier STL téléchargeable BOSS, seulement d\\'autres formats. Le lien est dans la liste que je t\\'ai envoyée.' } }];\n  }\n  const dest = DOSSIER + 'telecharges/' + m.id + '-' + String(m.slug || 'modele').slice(0, 60) + '/';\n  fs.mkdirSync(dest, { recursive: true });\n  const ok = [], ko = [];\n  for (const f of stls) {\n    try {\n      const dl = await gql('GetDownloadLink',\n        'mutation GetDownloadLink($id: ID!, $modelId: ID!, $fileType: DownloadFileTypeEnum!, $source: DownloadSourceEnum!) { getDownloadLink(id: $id, printId: $modelId, fileType: $fileType, source: $source) { ok output { link } } }',\n        { id: f.id, modelId: m.id, fileType: 'stl', source: 'model_detail' });\n      const link = dl.getDownloadLink && dl.getDownloadLink.output && dl.getDownloadLink.output.link;\n      if (!link) { ko.push(f.name); continue; }\n      const buf = await this.helpers.httpRequest({ method: 'GET', url: link, headers: { 'User-Agent': HEAD['User-Agent'] }, encoding: 'arraybuffer', timeout: 60000 });\n      const nomFichier = String(f.name).replace(/[\\\\/:*?\"<>|]/g, '_');\n      fs.writeFileSync(dest + nomFichier, Buffer.from(buf));\n      ok.push(nomFichier);\n    } catch (e) { ko.push(f.name); }\n  }\n  if (!ok.length) throw new Error('Aucun fichier n\\'a pu etre telecharge.');\n  const phrase = 'C\\'est téléchargé BOSS : ' + ok.length + ' fichier' + (ok.length > 1 ? 's' : '') + ' 3D de « ' + m.name + ' », rangé' + (ok.length > 1 ? 's' : '') + ' dans le dossier des téléchargements 3D.' + (ko.length ? ' ' + ko.length + ' fichier' + (ko.length > 1 ? 's n\\'ont' : ' n\\'a') + ' pas pu être récupéré.' : '');\n  return [{ json: { action, statut: 'OK', modele: m.name, dossier: dest, fichiers: ok, echecs: ko, phrase_pour_utilisateur: phrase } }];\n}\n\nthrow new Error('Action inconnue : ' + action + ' (chercher ou telecharger).');\n"
+   },
+   "id": "74d7a7f8-e64b-444e-884e-23b506c4ff12",
+   "name": "Catalogues",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    440,
+    0
+   ]
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": false,
+      "leftValue": "",
+      "typeValidation": "loose",
+      "version": 3
+     },
+     "conditions": [
+      {
+       "id": "a76afffe-e05e-4056-866d-40ff086a9a80",
+       "leftValue": "={{ $json.action }}",
+       "rightValue": "chercher",
+       "operator": {
+        "type": "string",
+        "operation": "equals"
+       }
+      },
+      {
+       "id": "6f3c92a4-9755-46b4-8141-98ef94c8ed39",
+       "leftValue": "={{ $json.nb }}",
+       "rightValue": 0,
+       "operator": {
+        "type": "number",
+        "operation": "gt"
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "looseTypeValidation": true,
+    "options": {}
+   },
+   "id": "4b863f21-61b6-46bf-b4c6-e40a5fae6888",
+   "name": "Resultats a envoyer ?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2.3,
+   "position": [
+    660,
+    0
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "return $('Catalogues').first().json.resultats.filter(m => m.image).slice(0, 3).map(m => ({ json: { image: m.image, legende: m.n + '. ' + m.nom + ' (par ' + m.auteur + ')' } }));"
+   },
+   "id": "ec899105-116c-4de7-a5f4-d5db28637d4d",
+   "name": "Photos",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    880,
+    -120
+   ],
+   "alwaysOutputData": true
+  },
+  {
+   "parameters": {
+    "operation": "sendPhoto",
+    "chatId": "={{ $env.ARCHI_TELEGRAM_CHAT_ID.split(',')[0] }}",
+    "binaryData": false,
+    "file": "={{ $json.image }}",
+    "additionalFields": {
+     "caption": "={{ $json.legende }}"
+    }
+   },
+   "id": "bcfb20b3-2365-4f89-a49c-885573894662",
+   "name": "Envoyer photos",
+   "type": "n8n-nodes-base.telegram",
+   "typeVersion": 1.2,
+   "position": [
+    1100,
+    -120
+   ],
+   "credentials": {
+    "telegramApi": {
+     "id": "ArchiTelegram001",
+     "name": "Bot Telegram Archi"
+    }
+   },
+   "onError": "continueRegularOutput",
+   "retryOnFail": true,
+   "maxTries": 3,
+   "waitBetweenTries": 3000,
+   "alwaysOutputData": true
+  },
+  {
+   "parameters": {
+    "chatId": "={{ $env.ARCHI_TELEGRAM_CHAT_ID.split(',')[0] }}",
+    "text": "={{ $('Catalogues').first().json.texte }}",
+    "additionalFields": {
+     "disable_web_page_preview": true
+    }
+   },
+   "id": "a5a7ad6b-3b10-4110-9816-2421b4152691",
+   "name": "Envoyer liste",
+   "type": "n8n-nodes-base.telegram",
+   "typeVersion": 1.2,
+   "position": [
+    1320,
+    -120
+   ],
+   "credentials": {
+    "telegramApi": {
+     "id": "ArchiTelegram001",
+     "name": "Bot Telegram Archi"
+    }
+   },
+   "onError": "continueRegularOutput",
+   "retryOnFail": true,
+   "maxTries": 3,
+   "waitBetweenTries": 3000,
+   "executeOnce": true
+  },
+  {
+   "parameters": {
+    "jsCode": "const c = $('Catalogues').first().json;\nconst env = $input.first().json || {};\nconst ok = !env.error;\nconst noms = c.resultats.slice(0, 3).map(m => m.n + ', ' + m.nom).join(' ; ');\nconst phrase = ok\n  ? `J'ai trouvé ${c.nb} modèles sur Printables BOSS, je t'ai envoyé la liste avec les liens. Les trois premiers : ${noms}. Je télécharge lequel, ou je la conçois moi-même ?`\n  : `J'ai trouvé ${c.nb} modèles sur Printables mais l'envoi de la liste a échoué. Les premiers : ${noms}. Je télécharge lequel, ou je la conçois moi-même ?`;\nreturn [{ json: { statut: 'RESULTATS', liste_envoyee: ok, resultats: c.resultats.map(({ n, nom, auteur }) => ({ n, nom, auteur })), phrase_pour_utilisateur: phrase } }];"
+   },
+   "id": "8ee30309-6716-4c60-80ee-06ab2b57272c",
+   "name": "Retour recherche",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1540,
+    -120
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "const c = $('Catalogues').first().json;\nif (c.action === 'chercher') {\n  return [{ json: { statut: 'RIEN', phrase_pour_utilisateur: `Je n'ai rien trouvé sur Printables pour « ${c.requete} » BOSS. Je la conçois moi-même ?` } }];\n}\nreturn [{ json: c }];"
+   },
+   "id": "0f7c4b72-b59c-4296-b375-128763427e34",
+   "name": "Retour direct",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    880,
+    120
+   ]
+  }
+ ],
+ "connections": {
+  "Execute Workflow Trigger": {
+   "main": [
+    [
+     {
+      "node": "Catalogues",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Catalogues": {
+   "main": [
+    [
+     {
+      "node": "Resultats a envoyer ?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Resultats a envoyer ?": {
+   "main": [
+    [
+     {
+      "node": "Photos",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Retour direct",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Photos": {
+   "main": [
+    [
+     {
+      "node": "Envoyer photos",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Envoyer photos": {
+   "main": [
+    [
+     {
+      "node": "Envoyer liste",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Envoyer liste": {
+   "main": [
+    [
+     {
+      "node": "Retour recherche",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "active": false,
+ "settings": {
+  "executionOrder": "v1"
+ }
+}

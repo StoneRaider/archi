@@ -1,0 +1,21 @@
+{
+ "nom": "camera_imprimante",
+ "description": "MODE D EMPLOI : voir l'imprimante 3D (Klipper/Moonraker avec camera WebRTC) en direct. action=montrer (defaut, « montre-moi la fabrication ») : trouve l'imprimante, allume sa lumiere si besoin, ouvre la video en direct dans le navigateur du PC et dit ou en est l'impression. action=photo : une image de la video (ouverte avant) dans le panneau, champ fichier = le .jpg. action=etat : ou en est l'impression. action=arreter : ferme la video. Lecture seule, jamais d'ordre d'impression.",
+ "script": "camera_imprimante.py",
+ "parametres": [
+  {
+   "nom": "action",
+   "description": "montrer, photo, etat ou arreter"
+  }
+ ],
+ "timeout_s": 90,
+ "touche": [
+  "imprimante 3D (reseau local : Moonraker 7125, video 8000)",
+  "lumiere de l'imprimante",
+  "navigateur du PC",
+  "dossier .n8n-files/camera (derniere image)",
+  "panneau Archi"
+ ],
+ "sensible": false,
+ "tests": "05/11/2026 : etat, montrer (video en direct OK), photo (1280x720) sur une vraie imprimante Klipper"
+}

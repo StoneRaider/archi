@@ -1,0 +1,24 @@
+{
+ "nom": "lire_pdf",
+ "description": "MODE D EMPLOI : lit un PDF rangé sur le PC (facture, contrat, courrier, scan). action=lire, nom = un bout du nom du fichier (ex. facture EDF), pages facultatif (1-3). Pages scannées recopiées par le modèle d'image, 6 par appel : redemander la suite. action=liste : les PDF trouvés. Pas les PDF reçus sur Telegram : les ranger sur le PC.",
+ "script": "lire_pdf.py",
+ "parametres": [
+  {
+   "nom": "action",
+   "description": "lire ou liste"
+  },
+  {
+   "nom": "nom",
+   "description": "un bout du nom du PDF, ou son chemin complet"
+  },
+  {
+   "nom": "pages",
+   "description": "facultatif, ex. 1-3 ou 2,5"
+  }
+ ],
+ "timeout_s": 240,
+ "touche": [
+  "fichiers"
+ ],
+ "sensible": true
+}

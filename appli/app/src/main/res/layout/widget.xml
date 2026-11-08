@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_racine"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="4dp">
+    <!-- le meme logo que l'appli : sphere de points et A a l'egaliseur -->
+    <ImageView
+        android:id="@+id/widget_bouton"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:layout_gravity="center"
+        android:background="@drawable/fond_widget"
+        android:src="@drawable/ic_avant"
+        android:scaleType="centerCrop"
+        android:contentDescription="Parler à Archi" />
+</FrameLayout>

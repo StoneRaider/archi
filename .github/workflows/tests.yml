@@ -1,0 +1,44 @@
+# Tests et garde-fou anti-secrets a CHAQUE envoi, quel que soit le dossier touche.
+name: Tests et secrets
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Pas de secret ni de donnee perso dans le depot
+        run: python outils_depot/verifier_depot.py .
+      - name: Le detecteur attrape bien les fuites
+        run: python outils_depot/test_verifier_depot.py
+      - name: Tests du coeur
+        run: node --test core/test/
+      - name: Tests du planificateur
+        run: cd outils/planificateur && python test_planificateur.py
+      - name: Tests de l'indicateur Polymarket (hors ligne)
+        run: cd outils/indicateur_polymarket && python test_indicateur_polymarket.py
+      - name: Tests de la liasse (entreprise fictive)
+        run: pip install reportlab && cd outils/liasse_fiscale && python test_liasse.py
+      - name: Tests des cameras (hors ligne)
+        run: cd outils/cameras && python test_cameras.py
+      - name: Tests de la musique (bibliotheque inventee)
+        run: cd outils/musique && python test_musique.py
+      - name: Tests du rangement de mails (boite simulee)
+        run: cd outils/ranger_mails && python test_chercher.py
+      - name: Protection SSRF de la lecture de pages
+        run: cd pc/lire_page && python test_lire_page.py
+      - name: Tests du serveur mails et agenda (Google et Microsoft simules)
+        run: cd serveur && python test_serveur.py
+      - name: Chargeur du fichier .env
+        run: python outils_depot/test_archi_env.py
+      - name: Tests de la recolte YouTube (hors ligne)
+        run: cd outils/recolte_youtube && python test_recolte.py
+      - name: Tests de l'imprimante 3D (imprimante simulee)
+        run: cd outils/imprimante_3d && python test_imprimante_3d.py
+      - name: Regles dures du navigateur
+        run: cd serveur && python test_navigateur_regles.py

@@ -1,0 +1,47 @@
+{
+ "nom": "ranger_mails",
+ "description": "MODE D EMPLOI : compte=gmail ou outlook. action=chercher (LECTURE SEULE, rien ne bouge) : dans=envoyes/brouillons/indesirables/inbox/dossier + expediteur, destinataire, sujet, apres, avant (AAAA-MM-JJ), nombre<=20. dossiers ; creer_dossier (chemin) ; deplacer (vers, depuis, criteres) ESSAI A BLANC sauf confirmer=true ; annuler ; journal. Ne supprime et n'envoie jamais rien.",
+ "script": "ranger_mails.py",
+ "parametres": [
+  {
+   "nom": "compte",
+   "description": "gmail ou outlook"
+  },
+  {
+   "nom": "action",
+   "description": "chercher, dossiers, creer_dossier, deplacer, annuler ou journal"
+  },
+  {
+   "nom": "dans",
+   "description": "chercher : dossier lu (envoyes, brouillons, indesirables, inbox ou nom de dossier)"
+  },
+  {
+   "nom": "chemin",
+   "description": "creer_dossier : dossier a creer, ex. Factures/EDF"
+  },
+  {
+   "nom": "vers",
+   "description": "deplacer : dossier d'arrivee (cree s'il manque)"
+  },
+  {
+   "nom": "depuis",
+   "description": "deplacer : dossier de depart (inbox par defaut)"
+  },
+  {
+   "nom": "criteres",
+   "description": "expediteur, destinataire (chercher), sujet, apres, avant (AAAA-MM-JJ), nombre (chercher, 20 max) ou ids (deplacer)"
+  },
+  {
+   "nom": "confirmer",
+   "description": "deplacer : true pour ranger pour de vrai, sinon essai a blanc"
+  }
+ ],
+ "timeout_s": 300,
+ "touche": [
+  "mail",
+  "internet",
+  "gmail",
+  "outlook"
+ ],
+ "sensible": true
+}

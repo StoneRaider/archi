@@ -1,0 +1,158 @@
+{
+ "id": "ArchiOsintOutil1",
+ "name": "Archi - OSINT outils",
+ "nodes": [
+  {
+   "id": "o1",
+   "name": "Execute Workflow Trigger",
+   "type": "n8n-nodes-base.executeWorkflowTrigger",
+   "typeVersion": 1.1,
+   "position": [
+    0,
+    0
+   ],
+   "parameters": {
+    "workflowInputs": {
+     "values": [
+      {
+       "name": "action"
+      },
+      {
+       "name": "cible"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "o2",
+   "name": "Photo ?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2.2,
+   "position": [
+    220,
+    0
+   ],
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": false,
+      "leftValue": "",
+      "typeValidation": "loose",
+      "version": 2
+     },
+     "conditions": [
+      {
+       "id": "c1",
+       "leftValue": "={{ String($json.action || \"\").toLowerCase().trim() }}",
+       "rightValue": "metadonnees",
+       "operator": {
+        "type": "string",
+        "operation": "equals"
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   }
+  },
+  {
+   "id": "o3",
+   "name": "Telecharger le fichier",
+   "type": "n8n-nodes-base.telegram",
+   "typeVersion": 1.2,
+   "position": [
+    440,
+    -120
+   ],
+   "credentials": {
+    "telegramApi": {
+     "id": "ArchiTelegram001",
+     "name": "Bot Telegram Archi"
+    }
+   },
+   "onError": "continueRegularOutput",
+   "parameters": {
+    "resource": "file",
+    "fileId": "={{ String($json.cible || \"\").trim() }}",
+    "additionalFields": {}
+   },
+   "retryOnFail": true,
+   "maxTries": 3,
+   "waitBetweenTries": 3000
+  },
+  {
+   "id": "o4",
+   "name": "Lire les metadonnees",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    660,
+    -120
+   ],
+   "parameters": {
+    "jsCode": "// Lit les metadonnees (EXIF) d'une photo envoyee en FICHIER sur Telegram\nconst fs = require('fs');\nconst cp = require('child_process');\nconst item = $input.first();\nconst bin = item.binary && (item.binary.data || Object.values(item.binary)[0]);\nif (!bin) return [{ json: { resultat: \"ERREUR : fichier introuvable sur Telegram.\" } }];\nconst buf = await this.helpers.getBinaryDataBuffer(0, item.binary.data ? 'data' : Object.keys(item.binary)[0]);\nconst chemin = ($env.ARCHI_BASE || '') + '/osint_photo_' + Date.now() + '.' + (bin.fileExtension || 'jpg');\nfs.writeFileSync(chemin, buf);\nconst py = ($env.ARCHI_SERVEUR_PY || (($env.ARCHI_DEPOT || '') + '/serveur/venv/Scripts/python.exe'));\nconst script = `\nimport json, sys\nfrom PIL import Image, ExifTags\nr = {}\ntry:\n    im = Image.open(sys.argv[1]); ex = im.getexif()\n    T = ExifTags.TAGS\n    for k, v in ex.items():\n        n = T.get(k, k)\n        if n in (\"Make\", \"Model\", \"Software\", \"DateTime\"): r[n] = str(v)\n    sub = ex.get_ifd(0x8769)\n    for k, v in sub.items():\n        n = T.get(k, k)\n        if n in (\"DateTimeOriginal\", \"LensModel\"): r[n] = str(v)\n    g = ex.get_ifd(0x8825)\n    def dec(x, ref):\n        d = float(x[0]) + float(x[1]) / 60 + float(x[2]) / 3600\n        return -d if ref in (\"S\", \"W\") else d\n    if 2 in g and 4 in g:\n        lat, lon = dec(g[2], g.get(1, \"N\")), dec(g[4], g.get(3, \"E\"))\n        r[\"GPS\"] = f\"{lat:.2f}, {lon:.2f}\"   # environ 1 km : la commune, jamais la maison\n    r[\"Taille\"] = f\"{im.width} x {im.height}\"\nexcept Exception as e:\n    r[\"erreur\"] = str(e)[:150]\nprint(json.dumps(r, ensure_ascii=False))\n`;\nlet r;\ntry { r = JSON.parse(cp.execFileSync(py, ['-c', script, chemin], { timeout: 30000, windowsHide: true }).toString('utf8').trim().split(/\\r?\\n/).pop()); }\ncatch (e) { r = { erreur: String(e.message || e).slice(0, 150) }; }\ntry { fs.unlinkSync(chemin); } catch (e) {}\n// date en toutes lettres (evite les erreurs de lecture) et lieu reel (OpenStreetMap), pour ne rien deviner\nconst MOIS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];\nfor (const k of ['DateTimeOriginal', 'DateTime']) {\n  const m = String(r[k] || '').match(/^(\\d{4}):(\\d{2}):(\\d{2}) (\\d{2}):(\\d{2})/);\n  if (m) r[k] = `${parseInt(m[3])} ${MOIS[parseInt(m[2]) - 1]} ${m[1]} à ${m[4]} h ${m[5]}`;\n}\nif (r.DateTime && r.DateTime === r.DateTimeOriginal) delete r.DateTime;\nif (r.DateTimeOriginal) { r['Date de prise de vue'] = r.DateTimeOriginal; delete r.DateTimeOriginal; }\nif (r.Model) { r['Appareil'] = ((r.Make || '') + ' ' + r.Model).trim(); delete r.Make; delete r.Model; }\nif (r.GPS) {\n  const [la, lo] = r.GPS.split(',').map(x => x.trim());\n  try {\n    const g = await this.helpers.httpRequest({ url: `https://nominatim.openstreetmap.org/reverse?format=json&lat=${la}&lon=${lo}&zoom=10&accept-language=fr`, json: true, timeout: 20000, headers: { 'User-Agent': 'Archi assistant personnel (usage prive)' } });\n    const a = g.address || {};\n    const commune = a.village || a.town || a.city || a.hamlet || a.municipality || '';\n    r['Lieu (OpenStreetMap)'] = [commune, a.county, a.country].filter(Boolean).join(', ') || g.display_name || '?';\n  } catch (e) { r['Lieu (OpenStreetMap)'] = 'introuvable (' + String(e.message).slice(0, 60) + ')'; }\n}\nconst lignes = Object.entries(r).filter(([k]) => k !== 'erreur').map(([k, v]) => `- ${k} : ${v}`);\nreturn [{ json: { resultat: lignes.length > 1\n  ? 'MÉTADONNÉES DE LA PHOTO (faits, à recopier tels quels, sans rien changer) :\\n' + lignes.join('\\n') + (r.GPS ? '' : \"\\n(aucune position GPS enregistrée)\")\n  : \"Aucune métadonnée exploitable. Si la photo a été envoyée comme PHOTO sur Telegram, elles ont été effacées : il faut l'envoyer comme FICHIER (trombone, puis Fichier).\" + (r.erreur ? ' (' + r.erreur + ')' : '') } }];\n"
+   }
+  },
+  {
+   "id": "o5",
+   "name": "Outils",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    440,
+    120
+   ],
+   "parameters": {
+    "jsCode": "// Archi - OSINT outils : sources publiques pour Hunter (une action par appel)\nconst h = this.helpers;\nconst fs = require('fs');\nconst cp = require('child_process');\nconst inp = $('Execute Workflow Trigger').first().json;\nconst action = String(inp.action || '').toLowerCase().trim();\nconst cible = String(inp.cible || '').trim();\nconst out = (t) => [{ json: { resultat: t } }];\nconst attendre = (ms) => new Promise(r => setTimeout(r, ms));\nconst get = async (url, json = true, essais = 2) => {\n  for (let i = 0; i < essais; i++) {\n    try { return await h.httpRequest({ url, json, timeout: 30000, headers: { 'User-Agent': 'Mozilla/5.0 (Archi OSINT)' } }); }\n    catch (e) { if (i === essais - 1) throw e; await attendre(4000); }\n  }\n};\nif (!cible && action !== 'crises') return out('ERREUR : cible vide.');\n\ntry {\n  // ---------- registres d'entreprises (France + Suisse) ----------\n  if (action === 'entreprise') {\n    const L = [];\n    try {\n      const fr = await get('https://recherche-entreprises.api.gouv.fr/search?per_page=3&q=' + encodeURIComponent(cible));\n      for (const e of (fr.results || [])) {\n        const s = e.siege || {};\n        const dir = (e.dirigeants || []).slice(0, 5).map(d => (d.nom ? (d.prenoms || '') + ' ' + d.nom : d.denomination || '?') + (d.qualite ? ' (' + d.qualite + ')' : '')).join(', ');\n        L.push(`FRANCE — ${e.nom_complet} | SIREN ${e.siren} | créée le ${e.date_creation || '?'} | état : ${e.etat_administratif === 'A' ? 'active' : 'fermée'} | activité ${s.activite_principale || '?'} | siège : ${s.adresse || s.libelle_commune || '?'} | effectif : ${e.tranche_effectif_salarie || '?'} | dirigeants : ${dir || '?'} | source : https://annuaire-entreprises.data.gouv.fr/entreprise/${e.siren}`);\n      }\n    } catch (e) { L.push('France : registre injoignable (' + e.message + ')'); }\n    try {\n      const ch = await h.httpRequest({ method: 'POST', url: 'https://www.zefix.admin.ch/ZefixREST/api/v1/firm/search.json', body: { name: cible, languageKey: 'fr', maxEntries: 3 }, json: true, timeout: 30000 });\n      for (const e of (ch.list || [])) L.push(`SUISSE — ${e.name} | ${e.uidFormatted} | siège : ${e.legalSeat} | statut : ${e.status === 'EXISTIEREND' ? 'active' : e.status} | source : https://www.zefix.ch/fr/search/entity/list/firm/${e.ehraid}`);\n    } catch (e) { L.push('Suisse : registre Zefix injoignable (' + e.message + ')'); }\n    return out(L.length ? 'REGISTRES OFFICIELS pour « ' + cible + ' » :\\n' + L.join('\\n') : 'Rien trouvé dans les registres français et suisse.');\n  }\n\n  // ---------- archives du web (Wayback Machine) ----------\n  if (action === 'archive') {\n    const dom = cible.replace(/^https?:\\/\\//, '').replace(/\\/.*$/, '');\n    const rows = await get('https://web.archive.org/cdx/search/cdx?output=json&fl=timestamp,original,statuscode&collapse=timestamp:6&limit=300&url=' + encodeURIComponent(dom), true, 3);\n    const data = (rows || []).slice(1);\n    if (!data.length) return out('Aucune archive de ' + dom + ' dans la Wayback Machine.');\n    const annees = {};\n    for (const [ts] of data) annees[ts.slice(0, 4)] = (annees[ts.slice(0, 4)] || 0) + 1;\n    const f = data[0][0], l = data[data.length - 1][0];\n    const lien = ts => `https://web.archive.org/web/${ts}/${dom}`;\n    return out(`ARCHIVES de ${dom} (Wayback Machine) :\\nPremière capture : ${f.slice(0, 4)}-${f.slice(4, 6)}-${f.slice(6, 8)} → ${lien(f)}\\nDernière capture du relevé : ${l.slice(0, 4)}-${l.slice(4, 6)}-${l.slice(6, 8)} → ${lien(l)}\\nCaptures par année (une par mois au plus) : ${Object.entries(annees).map(([a, n]) => a + ' : ' + n).join(', ')}\\nUn site très récent qui se présente comme ancien = signal d'arnaque.`);\n  }\n\n  // ---------- sous-domaines (certificats, crt.sh) ----------\n  if (action === 'sous_domaines') {\n    const dom = cible.replace(/^https?:\\/\\//, '').replace(/\\/.*$/, '').replace(/^www\\./, '');\n    const certs = await get('https://crt.sh/?output=json&q=' + encodeURIComponent('%.' + dom), true, 2);\n    const vus = {};\n    for (const c of certs || []) for (const n of String(c.name_value || '').split('\\n')) {\n      const x = n.trim().replace(/^\\*\\./, '').toLowerCase();\n      if (x.endsWith(dom) && (!vus[x] || c.not_before < vus[x])) vus[x] = c.not_before;\n    }\n    const liste = Object.entries(vus).sort((a, b) => a[1] < b[1] ? -1 : 1);\n    const suspect = liste.filter(([n]) => /login|secure|account|compte|verif|pay|bank|banque|update|support|wallet/.test(n));\n    return out(`SOUS-DOMAINES de ${dom} (certificats publics, crt.sh) : ${liste.length} trouvés.\\n` +\n      liste.slice(0, 60).map(([n, d]) => `- ${n} (premier certificat : ${String(d).slice(0, 10)})`).join('\\n') +\n      (suspect.length ? `\\nÀ surveiller (mots typiques d'hameçonnage) : ${suspect.map(s => s[0]).join(', ')}` : '') +\n      `\\nSource : https://crt.sh/?q=%25.${dom}`);\n  }\n\n  // ---------- pseudo sur des centaines de sites (Maigret) ----------\n  if (action === 'pseudo') {\n    const base = cible.replace(/^@/, '').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 40);\n    if (!base) return out('ERREUR : pseudo invalide.');\n    // variantes : tel quel, sans separateurs (Stone_Raider -> StoneRaider), en minuscules\n    const vv = [base, base.replace(/[._-]/g, '')];\n    const variantes = vv.filter((v, i) => vv.findIndex(x => x.toLowerCase() === v.toLowerCase()) === i).slice(0, 2);\n    const dossier = ($env.ARCHI_BASE || '') + '/osint_tmp_' + Date.now();\n    fs.mkdirSync(dossier, { recursive: true });\n    const py = ($env.ARCHI_SERVEUR_PY || (($env.ARCHI_DEPOT || '') + '/serveur/venv/Scripts/python.exe'));\n    // lancement NON bloquant : n8n reste reactif pendant les 1 a 3 minutes de recherche\n    await new Promise((resolve) => {\n      const p = cp.spawn(py, ['-m', 'maigret', ...variantes.filter(v => !/^-/.test(String(v))), '--top-sites', '500', '--timeout', '20', '-n', '10', '--no-recursion',\n        '--no-color', '--no-progressbar', '-J', 'simple', '--folderoutput', dossier],\n        { windowsHide: true, stdio: 'ignore', env: Object.assign({}, require('process').env, { PYTHONIOENCODING: 'utf-8' }) });\n      const minuterie = setTimeout(() => { try { p.kill(); } catch (e) {} resolve(); }, 240000);\n      p.on('exit', () => { clearTimeout(minuterie); resolve(); });\n      p.on('error', () => { clearTimeout(minuterie); resolve(); });\n    });\n    const lignes = [], vus = new Set();\n    let bloques = 0;\n    for (const v of variantes) {\n      const f = dossier + '/report_' + v + '_simple.json';\n      if (!fs.existsSync(f)) continue;\n      const d = JSON.parse(fs.readFileSync(f, 'utf8'));\n      for (const [site, x] of Object.entries(d)) {\n        const st = (x.status || {});\n        if (st.status === 'Claimed') {\n          const url = x.url_user || st.url || '';\n          if (!vus.has(url)) { vus.add(url); lignes.push(`- ${site} (${v}) : ${url}`); }\n        } else if (st.status === 'Unknown') bloques++;\n      }\n    }\n    try { fs.rmSync(dossier, { recursive: true, force: true }); } catch (e) {}\n    return out(`PSEUDO « ${base} » (variantes testées : ${variantes.join(', ')}) : ${lignes.length} comptes trouvés sur 500 sites (Maigret).\\n` +\n      (bloques ? `${bloques} vérifications impossibles (site protégé contre les robots ou limite de requêtes) : l'absence d'un site ne prouve rien.\\n` : '') +\n      `ATTENTION : un même pseudo peut appartenir à des personnes différentes ; ne relie un compte à la cible que si le contenu le confirme.\\n` + lignes.slice(0, 60).join('\\n'));\n  }\n\n  // ---------- crises et conflits recents ----------\n  if (action === 'crises') {\n    const titres = async (url, n) => {\n      const x = String(await get(url, false));\n      return [...x.matchAll(/<item>[\\s\\S]*?<title>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/title>[\\s\\S]*?<link>([\\s\\S]*?)<\\/link>/g)].filter(m => !/[\\u0600-\\u06FF\\u0400-\\u04FF]/.test(m[1])).slice(0, n).map(m => `- ${m[1].trim()} → ${m[2].trim()}`);\n    };\n    const L = [];\n    try { L.push('INTERNATIONAL CRISIS GROUP (analyses de conflits) :', ...(await titres('https://www.crisisgroup.org/rss', 10))); } catch (e) { L.push('Crisis Group injoignable.'); }\n    try { L.push('', 'RELIEFWEB (crises humanitaires) :', ...(await titres('https://reliefweb.int/disasters/rss.xml', 8))); } catch (e) { L.push('ReliefWeb injoignable.'); }\n    return out(L.join('\\n') + (cible ? `\\n\\nFiltre demandé par l’utilisateur : « ${cible} » (garde ce qui le concerne, complète avec recherche_web).` : ''));\n  }\n\n  return out('ERREUR : action inconnue « ' + action + ' » (entreprise, archive, sous_domaines, pseudo, crises).');\n} catch (e) {\n  return out('ERREUR : ' + String(e.message || e).slice(0, 200));\n}\n"
+   }
+  }
+ ],
+ "connections": {
+  "Execute Workflow Trigger": {
+   "main": [
+    [
+     {
+      "node": "Photo ?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Photo ?": {
+   "main": [
+    [
+     {
+      "node": "Telecharger le fichier",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Outils",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Telecharger le fichier": {
+   "main": [
+    [
+     {
+      "node": "Lire les metadonnees",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "active": false,
+ "settings": {
+  "executionOrder": "v1"
+ }
+}

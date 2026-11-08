@@ -1,0 +1,16 @@
+{
+ "radiateur": {
+  "ip": "192.0.2.10",
+  "alias": [
+   "chauffage"
+  ],
+  "pilotable": true
+ },
+ "pc": {
+  "ip": "192.0.2.11",
+  "alias": [
+   "ordi"
+  ],
+  "pilotable": false
+ }
+}

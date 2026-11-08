@@ -1,0 +1,33 @@
+{
+ "nom": "prises_shelly",
+ "description": "MODE D EMPLOI : prises Shelly de J. action=etat (prise facultatif) : allumee ou eteinte, watts, kWh. action=allumer ou eteindre avec prise=radiateur : ESSAI A BLANC d'abord, puis confirmer=oui quand J dit vas-y. allumer : extinction automatique apres duree_min (180 par defaut). La prise du PC ne s'allume et ne s'eteint jamais depuis Archi.",
+ "script": "prises_shelly.py",
+ "parametres": [
+  {
+   "nom": "action",
+   "description": "etat, allumer ou eteindre"
+  },
+  {
+   "nom": "prise",
+   "description": "radiateur ou pc"
+  },
+  {
+   "nom": "duree_min",
+   "description": "allumer : extinction automatique apres ce nombre de minutes (180 par defaut, 720 max)"
+  },
+  {
+   "nom": "sans_limite",
+   "description": "allumer : oui pour ne pas mettre d'extinction automatique (seulement si J le demande)"
+  },
+  {
+   "nom": "confirmer",
+   "description": "oui seulement quand J a dit vas-y ; sinon essai a blanc"
+  }
+ ],
+ "timeout_s": 30,
+ "touche": [
+  "prises",
+  "wifi"
+ ],
+ "sensible": true
+}

@@ -1,0 +1,5 @@
+{
+ "ok": true,
+ "date": "2026-11-05",
+ "resume": "22 tests hors ligne OK (faux HOME, Polymarket simule) : refus paris/compte/portefeuille/conseil/designation de comptes, sujets legitimes non refuses, liste fermee d adresses en lecture seule (data-api exclue), tendances sans sport, recherche FR->EN, recherche par mots entiers sans mots vides (situation au Venezuela ne ramene plus Situational Awareness), volume anormal, suivis, passe de nuit (seuils, <48 h, petits marches, paliers crypto, 3 alertes max, pas de doublon, pays de J), brief vide si rien. + essais reels sur Polymarket le 05/11 : situation au Venezuela -> 3 marches Venezuela, elections en Thailande -> aucun marche, Ukraine ceasefire et Fed rates OK."
+}

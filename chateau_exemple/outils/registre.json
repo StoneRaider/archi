@@ -1,0 +1,645 @@
+{
+ "planificateur": {
+  "nom": "planificateur",
+  "description": "MODE D EMPLOI : faire quelque chose PLUS TARD. action=ajouter avec texte + UN moment : a (\"11h\", \"demain 9h\", \"dans 20 min\"), tous_les (\"lundi\", \"jour\", \"mois\") + heure, ou lieu (\"chalet\") quand J y arrive. Action differee (radiateur) : outil=prises_shelly + outil_parametres ; exige accord=oui (apres un oui de J), essai a blanc puis confirmer=oui. Autres : lister, annuler (quoi), retenir_lieu (nom, ou=ici), lieux.",
+  "script": "planificateur.py",
+  "parametres": [
+   {
+    "nom": "action",
+    "description": "ajouter, lister, annuler, retenir_lieu ou lieux"
+   },
+   {
+    "nom": "texte",
+    "description": "ajouter : ce qu'il faut rappeler a J"
+   },
+   {
+    "nom": "a",
+    "description": "ajouter : quand, ex. 11h, demain 9h, jeudi 18h, dans 20 min, 2026-11-20 14:00"
+   },
+   {
+    "nom": "tous_les",
+    "description": "ajouter a repetition : jour, lundi, lundi et jeudi, en semaine, mois ; avec heure=9h"
+   },
+   {
+    "nom": "lieu",
+    "description": "ajouter : a l'arrivee de J sur ce lieu (chaque_fois=oui pour toujours) ; retenir_lieu : nom=, ou=ici ou adresse, rayon="
+   },
+   {
+    "nom": "outil",
+    "description": "facultatif : action a faire a ce moment, seulement prises_shelly (radiateur)"
+   },
+   {
+    "nom": "outil_parametres",
+    "description": "JSON de l'action, ex. {\"action\":\"eteindre\",\"prise\":\"radiateur\"}"
+   },
+   {
+    "nom": "confirmer",
+    "description": "oui quand J a dit vas-y pour une action differee ; annuler : oui si plusieurs"
+   }
+  ],
+  "timeout_s": 60,
+  "touche": [
+   "rappels",
+   "prises",
+   "action differee sur une prise : accord=oui"
+  ],
+  "sensible_si": [
+   "outil"
+  ]
+ },
+ "creer_pdf": {
+  "nom": "creer_pdf",
+  "description": "MODE D EMPLOI : fabrique un PDF (compte rendu, fiche, carte de lieux) enregistre sur le PC (dossier documents ; envoye sur Telegram dans la version complete). contenu facon markdown (# titre, - puce, | tableau |, **gras**). Pour une carte, donne toi-meme la liste des lieux dans lieux (avec la ville dans chaque nom). Ne dis jamais c est fait sans le C est fait de l outil.",
+  "script": "creer_pdf.py",
+  "parametres": [
+   {
+    "nom": "titre",
+    "description": "titre du document"
+   },
+   {
+    "nom": "contenu",
+    "description": "texte du document facon markdown (titres #, puces -, tableaux |, **gras**)"
+   },
+   {
+    "nom": "lieux",
+    "description": "carte : liste JSON [{nom, lat, lon, note}] ou noms separes par ; (ex : Chateau de Chambord ; Chateau de Blois)"
+   },
+   {
+    "nom": "sous_titre",
+    "description": "facultatif"
+   }
+  ],
+  "timeout_s": 180,
+  "touche": [
+   "documents",
+   "internet (carte OpenStreetMap)"
+  ]
+ },
+ "lire_pdf": {
+  "nom": "lire_pdf",
+  "description": "MODE D EMPLOI : lit un PDF rangé sur le PC (facture, contrat, courrier, scan). action=lire, nom = un bout du nom du fichier (ex. facture EDF), pages facultatif (1-3). Pages scannées recopiées par le modèle d'image, 6 par appel : redemander la suite. action=liste : les PDF trouvés. Pas les PDF reçus sur Telegram : les ranger sur le PC.",
+  "script": "lire_pdf.py",
+  "parametres": [
+   {
+    "nom": "action",
+    "description": "lire ou liste"
+   },
+   {
+    "nom": "nom",
+    "description": "un bout du nom du PDF, ou son chemin complet"
+   },
+   {
+    "nom": "pages",
+    "description": "facultatif, ex. 1-3 ou 2,5"
+   }
+  ],
+  "timeout_s": 240,
+  "touche": [
+   "fichiers"
+  ],
+  "sensible": true
+ },
+ "prises_shelly": {
+  "nom": "prises_shelly",
+  "description": "MODE D EMPLOI : prises Shelly de J. action=etat (prise facultatif) : allumee ou eteinte, watts, kWh. action=allumer ou eteindre avec prise=radiateur : ESSAI A BLANC d'abord, puis confirmer=oui quand J dit vas-y. allumer : extinction automatique apres duree_min (180 par defaut). La prise du PC ne s'allume et ne s'eteint jamais depuis Archi.",
+  "script": "prises_shelly.py",
+  "parametres": [
+   {
+    "nom": "action",
+    "description": "etat, allumer ou eteindre"
+   },
+   {
+    "nom": "prise",
+    "description": "radiateur ou pc"
+   },
+   {
+    "nom": "duree_min",
+    "description": "allumer : extinction automatique apres ce nombre de minutes (180 par defaut, 720 max)"
+   },
+   {
+    "nom": "sans_limite",
+    "description": "allumer : oui pour ne pas mettre d'extinction automatique (seulement si J le demande)"
+   },
+   {
+    "nom": "confirmer",
+    "description": "oui seulement quand J a dit vas-y ; sinon essai a blanc"
+   }
+  ],
+  "timeout_s": 30,
+  "touche": [
+   "prises",
+   "wifi"
+  ],
+  "sensible": true
+ },
+ "telephone": {
+  "nom": "telephone",
+  "description": "MODE D EMPLOI : les MAINS d'Archi sur le telephone de J (appli Archi). parametres = {\"action\":..., ...}. Actions : whatsapp (a=contact, texte=message) : WhatsApp s'ouvre avec le texte pret, J choisit le contact et appuie sur Envoyer (tu ne lis pas WhatsApp) ; sms (a, texte) : confirmation a l'ecran ; youtube (recherche) ; musique (commande=lire|pause|suivant|precedent, ou recherche=titre) ; appel (a=nom ou numero) : il faut appuyer sur « Appeler » ; secours (numero=112|15|17|18, message) : composeur ouvert, J appuie ; lampe (etat=on|off) ; alarme (heure=7:30, libelle) ; minuteur (minutes ou secondes, libelle) ; navigation (destination, mode=voiture|pied|velo|transports) ; ouvrir (appli) ; volume (niveau=0-100|plus|moins|muet) ; web (url ou requete) ; agenda (titre, debut=AAAA-MM-JJTHH:MM, duree_min, lieu) ; reglages (panneau=wifi|bluetooth|son|batterie|ecran) ; photo ; arreter. Depuis Telegram il ne se passe rien. Repete la phrase_pour_utilisateur.",
+  "script": "telephone.py",
+  "parametres": [
+   {
+    "nom": "action",
+    "description": "whatsapp, sms, youtube, musique, appel, secours, lampe, alarme, minuteur, navigation, ouvrir, volume, web, agenda, reglages, photo, arreter"
+   },
+   {
+    "nom": "a",
+    "description": "whatsapp/sms/appel : nom du contact ou numero"
+   },
+   {
+    "nom": "texte",
+    "description": "whatsapp/sms : le message exact valide par J"
+   },
+   {
+    "nom": "recherche",
+    "description": "youtube/musique : ce qu'il faut chercher"
+   },
+   {
+    "nom": "commande",
+    "description": "musique : lire, pause, suivant, precedent"
+   },
+   {
+    "nom": "numero",
+    "description": "secours : 112 (defaut), 15, 17, 18"
+   },
+   {
+    "nom": "etat",
+    "description": "lampe : on ou off"
+   },
+   {
+    "nom": "heure",
+    "description": "alarme : 7:30"
+   },
+   {
+    "nom": "minutes",
+    "description": "minuteur : duree en minutes"
+   },
+   {
+    "nom": "destination",
+    "description": "navigation : ou aller"
+   },
+   {
+    "nom": "appli",
+    "description": "ouvrir : nom de l'appli (Spotify, WhatsApp...)"
+   },
+   {
+    "nom": "niveau",
+    "description": "volume : 0-100, plus, moins, muet"
+   },
+   {
+    "nom": "requete",
+    "description": "web : recherche ; ou url"
+   },
+   {
+    "nom": "titre",
+    "description": "agenda : titre ; debut=AAAA-MM-JJTHH:MM, duree_min, lieu"
+   },
+   {
+    "nom": "panneau",
+    "description": "reglages : wifi, bluetooth, son, batterie, ecran"
+   }
+  ],
+  "timeout_s": 40,
+  "touche": [
+   "dossier pc\\telephone\\actions (ordres pour l'appli)",
+   "internet (yt-dlp pour trouver la video YouTube)"
+  ],
+  "sensible": false
+ },
+ "oeil": {
+  "nom": "oeil",
+  "description": "MODE D EMPLOI : l'OEIL d'Archi. (1) Regarder EN DIRECT autour d'un lieu public : avions en vol (OpenSky), seismes des 7 derniers jours (EMSC), lien du globe. parametres = {\"action\":\"avions\"|\"seismes\"|\"globe\"|\"tout\", \"lieu\":\"Lyon\", \"rayon_km\":50}. (2) MONTRER quelque chose a J dans l'oeil de son appli telephone (le globe s'ouvre tout seul sur son ecran) : parametres = {\"action\":\"montrer\", \"cible\":\"avion\"|\"bateau\"|\"feux\"|\"cables\"|\"rue\"|\"lieu\"|\"camera\", \"lieu\":\"Lyon\" ou \"ici\"}. cible avion = l'avion le plus proche (suivi en direct) ; bateau = le bateau le plus proche (AIS, suivi) ; feux = les feux vus par satellite (24 h) ; cables = les cables sous-marins ; rue = les photos de rue (Mapillary) ; lieu = un endroit (ville, detroit, pays, site) ; camera = la camera publique la plus proche. lieu \"ici\" (ou vide) = la position de J. La reponse contient phrase_pour_utilisateur : repete-la, sans lire les liens a voix haute.",
+  "script": "oeil.py",
+  "parametres": [
+   {
+    "nom": "action",
+    "description": "avions, seismes, globe, tout (regarder) ou montrer (ouvrir l'oeil sur le telephone)"
+   },
+   {
+    "nom": "cible",
+    "description": "pour montrer : avion, bateau, feux, cables, rue, lieu ou camera"
+   },
+   {
+    "nom": "lieu",
+    "description": "ville, aeroport, port, site, detroit, pays, coordonnees 'lat,lon', ou 'ici' (position de J)"
+   },
+   {
+    "nom": "rayon_km",
+    "description": "rayon en km, 1 a 300 (defaut 50 ; 80 pour l'avion le plus proche)"
+   }
+  ],
+  "timeout_s": 90,
+  "touche": [
+   "internet (OpenSky, EMSC, USGS, OpenStreetMap)",
+   "dossier outils\\oeil (cache des lieux, cle de la porte)",
+   "pc\\telephone\\oeil (jetons pour l'appli)",
+   "memoire\\position.json (lecture)"
+  ],
+  "sensible": false
+ },
+ "appli_telephone": {
+  "nom": "appli_telephone",
+  "description": "MODE D EMPLOI : envoie a J sur Telegram la derniere version de l'appli Archi du telephone (fichier .apk a installer). Aucun parametre. Quand il dit « envoie-moi l'appli », « la nouvelle version de l'appli ». Repete la phrase_pour_utilisateur.",
+  "script": "appli_telephone.py",
+  "parametres": [],
+  "timeout_s": 30,
+  "touche": [
+   "lecture de pc/telephone\\Archi.apk"
+  ]
+ },
+ "transmettre_document": {
+  "nom": "transmettre_document",
+  "description": "MODE D EMPLOI : donne a J sur Telegram un PDF deja range sur le PC dans documents (lettre a imprimer, note, fiche). action=donner, nom = un bout du nom du PDF ou de son dossier (ex. facture, ou contrats). Un PDF par appel : si plusieurs correspondent, l outil les liste, redemande avec un nom plus precis. action=liste (mot facultatif) : les PDF disponibles, du plus recent au plus ancien.",
+  "script": "transmettre_document.py",
+  "parametres": [
+   {
+    "nom": "action",
+    "description": "donner ou liste"
+   },
+   {
+    "nom": "nom",
+    "description": "donner : un bout du nom du PDF ou du dossier"
+   },
+   {
+    "nom": "mot",
+    "description": "liste : filtre facultatif"
+   }
+  ],
+  "timeout_s": 60,
+  "touche": [
+   "fichiers (lecture seule)"
+  ]
+ },
+ "indicateur_polymarket": {
+  "nom": "indicateur_polymarket",
+  "description": "MODE D EMPLOI : ce que les marches de prediction Polymarket estiment sur un sujet (actualite, OSINT). Lecture seule. sujet = quelques mots, en anglais si possible : action chercher (defaut). Sans sujet : tendances (10 marches les plus actifs). surveiller (sujet), arreter (quoi), suivis. Repete la phrase : cotes = estimations, jamais de pari ni de conseil.",
+  "script": "indicateur_polymarket.py",
+  "parametres": [
+   {
+    "nom": "action",
+    "description": "chercher (defaut avec sujet), tendances (defaut sans sujet), surveiller, arreter, suivis"
+   },
+   {
+    "nom": "sujet",
+    "description": "de quoi parle J, en quelques mots anglais si possible (ex. France government, Ukraine ceasefire, Fed December)"
+   },
+   {
+    "nom": "quoi",
+    "description": "arreter : le sujet suivi a ne plus surveiller (ou tout)"
+   },
+   {
+    "nom": "nombre",
+    "description": "facultatif : combien de marches montrer (tendances 10 max, chercher 5 max)"
+   }
+  ],
+  "timeout_s": 120,
+  "touche": [
+   "internet"
+  ]
+ },
+ "liasse_fiscale": {
+  "nom": "liasse_fiscale",
+  "description": "MODE D EMPLOI : liasse fiscale annuelle d'une petite entreprise individuelle au regime reel simplifie (BIC, formulaires 2031 et 2033 A a D) + cases de la declaration de revenus. action=preparer, annee, et les montants connus (recettes, subventions, assurance, honoraires, interets, capital_restant), le reste est estime et signale. Autres actions : comparer (annee + cases du comptable), cloturer (confirmer=oui une fois la liasse deposee), etat, synthese. Brouillon : ne declare rien, n'envoie rien.",
+  "script": "liasse_fiscale.py",
+  "parametres": [
+   {
+    "nom": "action",
+    "description": "preparer, comparer, cloturer, etat ou synthese"
+   },
+   {
+    "nom": "annee",
+    "description": "annee de l'exercice, ex. 2026"
+   },
+   {
+    "nom": "recettes",
+    "description": "chiffre d'affaires de l'annee, hors TVA"
+   },
+   {
+    "nom": "subventions",
+    "description": "primes recues dans l'annee"
+   },
+   {
+    "nom": "assurance",
+    "description": "assurance de l'activite (multirisque)"
+   },
+   {
+    "nom": "honoraires",
+    "description": "facture du comptable"
+   },
+   {
+    "nom": "interets",
+    "description": "interets du pret payes dans l'annee (releve annuel du preteur)"
+   },
+   {
+    "nom": "capital_restant",
+    "description": "capital du pret restant du au 31/12 (releve annuel)"
+   }
+  ],
+  "timeout_s": 60,
+  "touche": [
+   "fichiers",
+   "admin"
+  ]
+ },
+ "cameras": {
+  "nom": "cameras",
+  "description": "MODE D EMPLOI : les cameras de l'utilisateur sur son reseau local (RTSP, sans cloud). action=liste ; chercher (trouve les cameras du WiFi) ; ajouter (nom, ip, marque : imou, dahua, hikvision, reolink, tapo, axis, foscam, generique + chemin) ; verifier (camera=nom) ; photo (camera=nom ; champ fichier = le .jpg a envoyer) ; video (camera=nom, duree_s 1 a 120). Lecture seule, reseau local uniquement.",
+  "script": "cameras.py",
+  "parametres": [
+   {
+    "nom": "action",
+    "description": "liste, chercher, ajouter, verifier, photo ou video"
+   },
+   {
+    "nom": "camera",
+    "description": "nom de la camera (la premiere par defaut)"
+   },
+   {
+    "nom": "duree_s",
+    "description": "video : duree en secondes (1 a 120, 10 par defaut)"
+   },
+   {
+    "nom": "nom",
+    "description": "ajouter : nom a donner (ex. entree)"
+   },
+   {
+    "nom": "ip",
+    "description": "ajouter : adresse locale de la camera (ex. 192.168.1.20)"
+   },
+   {
+    "nom": "marque",
+    "description": "ajouter : imou, dahua, hikvision, reolink, tapo, axis, foscam ou generique"
+   },
+   {
+    "nom": "chemin",
+    "description": "ajouter, marque generique : chemin du flux RTSP (ex. /live)"
+   }
+  ],
+  "timeout_s": 200,
+  "sensible": true,
+  "touche": [
+   "cameras du domicile (images)",
+   "reseau local",
+   "dossier .n8n-files/camera"
+  ]
+ },
+ "camera_imprimante": {
+  "nom": "camera_imprimante",
+  "description": "MODE D EMPLOI : voir l'imprimante 3D (Klipper/Moonraker avec camera WebRTC) en direct. action=montrer (defaut, « montre-moi la fabrication ») : trouve l'imprimante, allume sa lumiere si besoin, ouvre la video en direct dans le navigateur du PC et dit ou en est l'impression. action=photo : une image de la video (ouverte avant) dans le panneau, champ fichier = le .jpg. action=etat : ou en est l'impression. action=arreter : ferme la video. Lecture seule, jamais d'ordre d'impression.",
+  "script": "camera_imprimante.py",
+  "parametres": [
+   {
+    "nom": "action",
+    "description": "montrer, photo, etat ou arreter"
+   }
+  ],
+  "timeout_s": 90,
+  "touche": [
+   "imprimante 3D (reseau local : Moonraker 7125, video 8000)",
+   "lumiere de l'imprimante",
+   "navigateur du PC",
+   "dossier .n8n-files/camera (derniere image)",
+   "panneau Archi"
+  ],
+  "sensible": false
+ },
+ "musique": {
+  "nom": "musique",
+  "description": "MODE D EMPLOI : propose de la musique selon les GOUTS de l'utilisateur, tiree de SA bibliotheque (index fabrique par indexer.py). action=proposer (ambiance=calme|route|pechu|fete, ou genre, ou artiste ; nombre=3) ; chercher (q=artiste ou titre) ; gouts. Puis lance le morceau choisi avec telephone action=youtube recherche=recherche_youtube.",
+  "script": "musique.py",
+  "parametres": [
+   {
+    "nom": "action",
+    "description": "proposer, chercher ou gouts"
+   },
+   {
+    "nom": "ambiance",
+    "description": "proposer : calme, route, pechu ou fete"
+   },
+   {
+    "nom": "genre",
+    "description": "proposer : reggae, dub, rap, rock, electro, monde, blues (facultatif)"
+   },
+   {
+    "nom": "artiste",
+    "description": "proposer : un artiste (facultatif)"
+   },
+   {
+    "nom": "q",
+    "description": "chercher : artiste ou titre"
+   },
+   {
+    "nom": "nombre",
+    "description": "proposer : combien de morceaux (3 par defaut)"
+   }
+  ],
+  "timeout_s": 30,
+  "touche": [
+   "lecture de memoire\\passions\\musique_index.tsv"
+  ]
+ },
+ "vision_video": {
+  "nom": "vision_video",
+  "description": "MODE D EMPLOI : REGARDER et ECOUTER une video en entier (images + son, en local) et ranger une fiche dans la Bibliotheque (montre, dit, etapes, moments a revoir, 6 captures). parametres = {\"action\":\"analyser\", \"source\":\"lien YouTube ou chemin du fichier\", \"question\":\"...\"} ; 30 min max, sinon debut/fin. Arriere-plan, previent a la fin. action etat = ou j'en suis. Repete phrase_pour_utilisateur.",
+  "script": "vision_video.py",
+  "parametres": [
+   {
+    "nom": "action",
+    "description": "analyser (regarder une video) ou etat (ou en est l'analyse)"
+   },
+   {
+    "nom": "source",
+    "description": "lien YouTube (ou autre site video) ou chemin d'un fichier video sur le PC"
+   },
+   {
+    "nom": "question",
+    "description": "facultatif : ce que J cherche dans la video (ex. le reglage de la buse)"
+   },
+   {
+    "nom": "debut",
+    "description": "facultatif : debut du passage a regarder, ex. 2:00 (obligatoire si la video depasse 30 min)"
+   },
+   {
+    "nom": "fin",
+    "description": "facultatif : fin du passage, ex. 32:00 (30 min max entre debut et fin)"
+   },
+   {
+    "nom": "images_max",
+    "description": "facultatif : nombre d'images a regarder, 5 a 60 (60 par defaut)"
+   }
+  ],
+  "timeout_s": 180,
+  "touche": [
+   "internet (YouTube seulement)",
+   "LM Studio local (Gemma, gpt-oss)",
+   "Whisper local",
+   "memoire/bibliotheque",
+   "panneau Archi (une capture)"
+  ],
+  "sensible": false
+ },
+ "presentation": {
+  "nom": "presentation",
+  "description": "MODE D EMPLOI : fabrique une PRESENTATION (diaporama) avec Presenton sur le PC, ecrite par le modele local. parametres = {\"sujet\":\"...\", \"contenu\":\"notes, plan ou texte de J (facultatif)\", \"diapos\":8, \"ton\":\"professionnel|detendu|drole|pedagogique|vente\", \"format\":\"pdf\"}. Duree : 5 a 10 minutes. Le fichier part tout seul sur Telegram et dans l'appli. Si J demande un PowerPoint (modifiable), mets \"format\":\"pptx\". Repete la phrase_pour_utilisateur.",
+  "script": "presentation.py",
+  "parametres": [
+   {
+    "nom": "sujet",
+    "description": "le sujet ou le titre"
+   },
+   {
+    "nom": "contenu",
+    "description": "notes, plan ou texte a mettre en forme (facultatif)"
+   },
+   {
+    "nom": "diapos",
+    "description": "nombre de diapositives, 3 a 20 (defaut 8)"
+   },
+   {
+    "nom": "ton",
+    "description": "professionnel, detendu, drole, pedagogique ou vente"
+   },
+   {
+    "nom": "format",
+    "description": "pdf (defaut) ou pptx si J veut un PowerPoint"
+   }
+  ],
+  "timeout_s": 900,
+  "touche": [
+   "Presenton (Docker, 127.0.0.1:5001)",
+   "modele local LM Studio",
+   "Pexels (photos d'illustration)",
+   "dossier documents\\presentations"
+  ],
+  "sensible": false
+ },
+ "retro": {
+  "nom": "retro",
+  "description": "MODE D EMPLOI : retro-ingenierie d'un logiciel, d'une appli ou d'un appareil QUI APPARTIENT A J, pour comprendre comment ca marche (interoperabilite) puis reecrire a neuf. action=triage (defaut) : identifie la cible (type, empreinte, structure, adresses/URL utiles) et prepare une MISSION pre-remplie pour l'expert ; cible = chemin complet ou un bout du nom ; but = ce que J veut comprendre. action=liste : les cibles analysables trouvees sur le PC. Lecture seule : ne lance JAMAIS le programme (l'analyse dynamique est un geste separe decide par J) et n'analyse pas les fichiers sensibles (cles, base n8n, .env). Rien n'est contourne (licence, protection, DRM).",
+  "script": "retro.py",
+  "parametres": [
+   {
+    "nom": "action",
+    "description": "triage (defaut) ou liste"
+   },
+   {
+    "nom": "cible",
+    "description": "chemin complet du fichier, ou un bout de son nom (ex. Archi.apk)"
+   },
+   {
+    "nom": "but",
+    "description": "facultatif : ce que tu veux comprendre (ex. le protocole appli<->Archi)"
+   }
+  ],
+  "timeout_s": 240,
+  "touche": [
+   "fichiers"
+  ],
+  "sensible": true
+ },
+ "ranger_mails": {
+  "nom": "ranger_mails",
+  "description": "MODE D EMPLOI : compte=gmail ou outlook. action=chercher (LECTURE SEULE, rien ne bouge) : dans=envoyes/brouillons/indesirables/inbox/dossier + expediteur, destinataire, sujet, apres, avant (AAAA-MM-JJ), nombre<=20. dossiers ; creer_dossier (chemin) ; deplacer (vers, depuis, criteres) ESSAI A BLANC sauf confirmer=true ; annuler ; journal. Ne supprime et n'envoie jamais rien.",
+  "script": "ranger_mails.py",
+  "parametres": [
+   {
+    "nom": "compte",
+    "description": "gmail ou outlook"
+   },
+   {
+    "nom": "action",
+    "description": "chercher, dossiers, creer_dossier, deplacer, annuler ou journal"
+   },
+   {
+    "nom": "dans",
+    "description": "chercher : dossier lu (envoyes, brouillons, indesirables, inbox ou nom de dossier)"
+   },
+   {
+    "nom": "chemin",
+    "description": "creer_dossier : dossier a creer, ex. Factures/EDF"
+   },
+   {
+    "nom": "vers",
+    "description": "deplacer : dossier d'arrivee (cree s'il manque)"
+   },
+   {
+    "nom": "depuis",
+    "description": "deplacer : dossier de depart (inbox par defaut)"
+   },
+   {
+    "nom": "criteres",
+    "description": "expediteur, destinataire (chercher), sujet, apres, avant (AAAA-MM-JJ), nombre (chercher, 20 max) ou ids (deplacer)"
+   },
+   {
+    "nom": "confirmer",
+    "description": "deplacer : true pour ranger pour de vrai, sinon essai a blanc"
+   }
+  ],
+  "timeout_s": 300,
+  "touche": [
+   "mail",
+   "internet",
+   "gmail",
+   "outlook"
+  ],
+  "sensible": true
+ },
+ "recolte_youtube": {
+  "nom": "recolte_youtube",
+  "description": "MODE D EMPLOI : recolte les videos d'une ou plusieurs chaines YouTube vers la BIBLIOTHEQUE du chateau (une fiche par video, faite par le modele local a partir des sous-titres), en arriere-plan. cible = noms EXACTS de chaines ou liens (virgules) ; ou etat ; arreter ; suivies ; retirer: nom1, nom2. question = nombre de mois (6 par defaut, 120 max) ou tout. Les chaines recoltees sont suivies chaque jour.",
+  "script": "recolte_lancer.py",
+  "parametres": [
+   {
+    "nom": "cible",
+    "description": "noms de chaines ou liens, ou etat / arreter / suivies / retirer: ..."
+   },
+   {
+    "nom": "question",
+    "description": "nombre de mois (6 par defaut) ou tout"
+   }
+  ],
+  "timeout_s": 300,
+  "touche": [
+   "bibliotheque du chateau",
+   "YouTube (lecture des sous-titres)",
+   "modele local"
+  ]
+ },
+ "imprimante_3d": {
+  "nom": "imprimante_3d",
+  "description": "MODE D EMPLOI : piloter l'imprimante 3D du reseau local (Klipper/Moonraker, OctoPrint ou PrusaLink, reglee dans le .env). action=etat (ou en est l'impression, temperatures) ; fichiers (sur l'imprimante) ; envoyer (fichier = chemin d'un .gcode/.3mf du PC) ; lancer (fichier = nom sur l'imprimante) ; pause ; reprendre ; annuler. envoyer, lancer et annuler : essai a blanc, puis confirmer=oui quand l'utilisateur a dit oui (plateau libre). Jamais de chauffe ni de G-code libre.",
+  "script": "imprimante_3d.py",
+  "parametres": [
+   {
+    "nom": "action",
+    "description": "etat, fichiers, envoyer, lancer, pause, reprendre ou annuler"
+   },
+   {
+    "nom": "fichier",
+    "description": "envoyer : chemin du fichier sur le PC ; lancer : nom du fichier sur l'imprimante"
+   },
+   {
+    "nom": "confirmer",
+    "description": "oui seulement apres le oui de l'utilisateur (envoyer, lancer, annuler)"
+   }
+  ],
+  "timeout_s": 600,
+  "sensible_si": {
+   "action": [
+    "envoyer",
+    "televerser",
+    "upload",
+    "lancer",
+    "imprimer",
+    "demarrer",
+    "start",
+    "annuler",
+    "stop",
+    "arreter"
+   ]
+  },
+  "touche": [
+   "imprimante 3D du reseau local",
+   "lancement et annulation d'impression : accord=oui"
+  ]
+ }
+}

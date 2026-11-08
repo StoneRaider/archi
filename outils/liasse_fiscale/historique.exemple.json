@@ -1,0 +1,68 @@
+{
+ "entreprise": {
+  "nom": "Atelier Exemple (EI fictive)",
+  "siren": "000000000",
+  "tva": "FR00000000000",
+  "activite": "location de materiel",
+  "libelle_ventes": "locations facturees",
+  "regime": "BIC reel simplifie",
+  "comptable": "Cabinet Exemple"
+ },
+ "debut_activite": 2023,
+ "immobilisation": {
+  "libelle": "materiel de location",
+  "brut": 12000,
+  "duree_ans": 10,
+  "dotation_annuelle": 1200.0,
+  "fin_amortissement": 2032
+ },
+ "pret": {
+  "preteur": "Banque Exemple",
+  "libelle": "pret materiel",
+  "annuite": 1500.0,
+  "progression": 1.03,
+  "echeancier": {
+   "2026": {
+    "interets": 280.0,
+    "capital": 1220.0
+   },
+   "2027": {
+    "interets": 245.0,
+    "capital": 1255.0
+   }
+  },
+  "restant_reel_fin": {}
+ },
+ "honoraires_habituels": 600,
+ "annees": {
+  "2025": {
+   "amort_cumul": 3600.0,
+   "assurance": 240.0,
+   "ca": 5200.0,
+   "capital": -2090.0,
+   "capital_rembourse": 1180.0,
+   "charges_externes": 840.0,
+   "credit_tva": 0.0,
+   "dettes_plus_un_an": 6400.0,
+   "dotation": 1200.0,
+   "emprunt": 7650.0,
+   "honoraires": 600.0,
+   "interets": 320.0,
+   "resultat": 2840.0,
+   "source": "exemple fictif",
+   "subventions": 0.0,
+   "total_passif": 8400.0
+  }
+ },
+ "deficits": {},
+ "pieces": [
+  "facture des ventes",
+  "releve annuel du pret",
+  "attestation d'assurance",
+  "facture du comptable"
+ ],
+ "questions_comptable": [],
+ "notes": [
+  "Entreprise et chiffres inventes pour la demo."
+ ]
+}

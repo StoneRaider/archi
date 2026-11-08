@@ -1,0 +1,31 @@
+{
+  "nom": "oeil",
+  "description": "MODE D EMPLOI : l'OEIL d'Archi. (1) Regarder EN DIRECT autour d'un lieu public : avions en vol (OpenSky), seismes des 7 derniers jours (EMSC), lien du globe. parametres = {\"action\":\"avions\"|\"seismes\"|\"globe\"|\"tout\", \"lieu\":\"Lyon\", \"rayon_km\":50}. (2) MONTRER quelque chose a J dans l'oeil de son appli telephone (le globe s'ouvre tout seul sur son ecran) : parametres = {\"action\":\"montrer\", \"cible\":\"avion\"|\"bateau\"|\"feux\"|\"cables\"|\"rue\"|\"lieu\"|\"camera\", \"lieu\":\"Lyon\" ou \"ici\"}. cible avion = l'avion le plus proche (suivi en direct) ; bateau = le bateau le plus proche (AIS, suivi) ; feux = les feux vus par satellite (24 h) ; cables = les cables sous-marins ; rue = les photos de rue (Mapillary) ; lieu = un endroit (ville, detroit, pays, site) ; camera = la camera publique la plus proche. lieu \"ici\" (ou vide) = la position de J. La reponse contient phrase_pour_utilisateur : repete-la, sans lire les liens a voix haute.",
+  "script": "oeil.py",
+  "parametres": [
+    {
+      "nom": "action",
+      "description": "avions, seismes, globe, tout (regarder) ou montrer (ouvrir l'oeil sur le telephone)"
+    },
+    {
+      "nom": "cible",
+      "description": "pour montrer : avion, bateau, feux, cables, rue, lieu ou camera"
+    },
+    {
+      "nom": "lieu",
+      "description": "ville, aeroport, port, site, detroit, pays, coordonnees 'lat,lon', ou 'ici' (position de J)"
+    },
+    {
+      "nom": "rayon_km",
+      "description": "rayon en km, 1 a 300 (defaut 50 ; 80 pour l'avion le plus proche)"
+    }
+  ],
+  "timeout_s": 90,
+  "touche": [
+    "internet (OpenSky, EMSC, USGS, OpenStreetMap)",
+    "dossier outils\\oeil (cache des lieux, cle de la porte)",
+    "pc\\telephone\\oeil (jetons pour l'appli)",
+    "memoire\\position.json (lecture)"
+  ],
+  "sensible": false
+}

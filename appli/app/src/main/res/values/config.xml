@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Valeurs par defaut VIDES : l'appli demande l'adresse du serveur et la cle au premier lancement (classe Reglages). -->
+<!-- Ne jamais mettre de vraie cle ici : ce fichier est publie. -->
+<resources>
+    <string name="archi_url" translatable="false"></string>
+    <string name="archi_cle" translatable="false"></string>
+</resources>

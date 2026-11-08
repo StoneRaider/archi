@@ -1,0 +1,23 @@
+# Fabrique l'APK de l'appli Android a chaque envoi (aucune cle dedans : elle se saisit au premier lancement).
+name: Appli Android
+on:
+  push:
+    paths: ["appli/**", ".github/workflows/appli.yml"]
+  workflow_dispatch:
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@v3
+      - name: Fabriquer l'APK (debug)
+        working-directory: appli
+        run: chmod +x gradlew && ./gradlew --no-daemon assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archi-appli-debug
+          path: appli/app/build/outputs/apk/debug/*.apk

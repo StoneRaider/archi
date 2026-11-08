@@ -1,0 +1,5 @@
+{
+ "ok": true,
+ "date": "2026-10-31",
+ "resume": "21/21 tests (31/10 : + action deduite de la duree, lecture reelle de la prise radiateur OK sur le PC) contre une prise Shelly Gen3 simulee (API RPC Switch.GetStatus / Switch.Set) : etat de toutes les prises, prise injoignable signalee, alias (chauffage, ordi), essai a blanc sans effet, allumage avec extinction automatique (180 min par defaut, 720 max), extinction, sans limite, prise du PC refusee dans les deux sens, prise ou action inconnues refusees. Essai reel sur les vraies prises a faire par J."
+}

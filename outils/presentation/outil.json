@@ -1,0 +1,35 @@
+{
+  "nom": "presentation",
+  "description": "MODE D EMPLOI : fabrique une PRESENTATION (diaporama) avec Presenton sur le PC, ecrite par le modele local. parametres = {\"sujet\":\"...\", \"contenu\":\"notes, plan ou texte de J (facultatif)\", \"diapos\":8, \"ton\":\"professionnel|detendu|drole|pedagogique|vente\", \"format\":\"pdf\"}. Duree : 5 a 10 minutes. Le fichier part tout seul sur Telegram et dans l'appli. Si J demande un PowerPoint (modifiable), mets \"format\":\"pptx\". Repete la phrase_pour_utilisateur.",
+  "script": "presentation.py",
+  "parametres": [
+    {
+      "nom": "sujet",
+      "description": "le sujet ou le titre"
+    },
+    {
+      "nom": "contenu",
+      "description": "notes, plan ou texte a mettre en forme (facultatif)"
+    },
+    {
+      "nom": "diapos",
+      "description": "nombre de diapositives, 3 a 20 (defaut 8)"
+    },
+    {
+      "nom": "ton",
+      "description": "professionnel, detendu, drole, pedagogique ou vente"
+    },
+    {
+      "nom": "format",
+      "description": "pdf (defaut) ou pptx si J veut un PowerPoint"
+    }
+  ],
+  "timeout_s": 900,
+  "touche": [
+    "Presenton (Docker, 127.0.0.1:5001)",
+    "modele local LM Studio",
+    "Pexels (photos d'illustration)",
+    "dossier documents\\presentations"
+  ],
+  "sensible": false
+}
