@@ -7,7 +7,10 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = 'fr.archi.telephone'
+        // nom interne de la version publique. Il differe du nom des classes Java (namespace) :
+        // deux applis Archi peuvent ainsi vivre cote a cote sur un telephone, sans que l'une ecrase l'autre.
+        // Le meme nom est ecrit dans AndroidManifest.xml, Fichiers.java et portail/telephone.html (un test le verifie).
+        applicationId = 'fr.archi.local'
         minSdk = 26
         targetSdk = 36
         versionCode = 13

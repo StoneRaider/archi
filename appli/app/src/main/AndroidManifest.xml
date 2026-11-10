@@ -71,7 +71,7 @@
         <!-- passe-plat prive pour l'appareil photo -->
         <provider
             android:name=".Fichiers"
-            android:authorities="fr.archi.telephone.fichiers"
+            android:authorities="fr.archi.local.fichiers"
             android:exported="false"
             android:grantUriPermissions="true" />
 

@@ -11,10 +11,11 @@ import java.io.FileNotFoundException;
 
 /**
  * Un tout petit « passe-plat » prive : il laisse l'appareil photo ecrire la photo dans le dossier de l'appli
- * (content://fr.archi.telephone.fichiers/photo.jpg). Rien d'autre n'est accessible.
+ * (content://fr.archi.local.fichiers/photo.jpg). Rien d'autre n'est accessible.
  */
 public class Fichiers extends ContentProvider {
-    public static final String AUTORITE = "fr.archi.telephone.fichiers";
+    /** Le nom interne de l'appli (applicationId) + « .fichiers » : le meme que dans AndroidManifest.xml. */
+    public static final String AUTORITE = "fr.archi.local.fichiers";
     public static final String PHOTO = "photo.jpg";
     public static final String DOCS = "doc";
 

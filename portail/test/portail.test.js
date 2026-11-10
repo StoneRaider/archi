@@ -271,3 +271,16 @@ test('chien de garde : quand le lanceur disparait, les aides sont arretees et l\
     fs.rmSync(d, { recursive: true, force: true });
   }
 });
+
+test('appli : un seul nom interne, le meme dans Gradle, le manifeste, le passe-plat et la page du telephone', () => {
+  const lire = f => fs.readFileSync(path.join(__dirname, '..', '..', f), 'utf8');
+  const nom = (/applicationId\s*=\s*'([^']+)'/.exec(lire('appli/app/build.gradle')) || [])[1];
+  assert.match(nom || '', /^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$/, 'applicationId introuvable dans build.gradle');
+  // la version publique ne doit pas ecraser une autre appli Archi deja installee : son nom n'est pas celui des classes Java
+  assert.notEqual(nom, (/namespace\s*=\s*'([^']+)'/.exec(lire('appli/app/build.gradle')) || [])[1]);
+  assert.ok(lire('appli/app/src/main/AndroidManifest.xml').includes('android:authorities="' + nom + '.fichiers"'), 'manifeste');
+  assert.ok(lire('appli/app/src/main/java/fr/archi/telephone/Fichiers.java').includes('AUTORITE = "' + nom + '.fichiers"'), 'Fichiers.java');
+  // le bouton « Brancher l'appli » vise cette appli-la, et aucune autre
+  const paquets = lire('portail/telephone.html').match(/package=[a-z0-9.]+;/g) || [];
+  assert.deepEqual(paquets, ['package=' + nom + ';']);
+});
