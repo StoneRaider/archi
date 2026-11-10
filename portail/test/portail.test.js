@@ -145,6 +145,11 @@ test('de bout en bout : la porte du telephone ne connait que la liste blanche, l
     const m = [];
     req.on('data', x => m.push(x));
     req.on('end', () => {
+      // la sonde du portail (« le workflow est-il active ? ») : un GET sur le webhook, auquel le vrai n8n repond 404
+      if (req.method === 'GET' && req.url === '/webhook/telephone-archi') {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ code: 404, message: 'This webhook is not registered for GET requests. Did you mean to make a POST request?' }));
+      }
       recus.push({ url: req.url, cle: req.headers['x-archi-cle'], corps: Buffer.concat(m).toString('utf8'), hote: req.headers.host, entetes: req.headers });
       if (req.url === '/healthz') { res.writeHead(200); return res.end('ok'); }
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -382,4 +387,37 @@ test('page d accueil : le micro ne peut pas s ouvrir deux fois, et il est toujou
   assert.ok(micro.indexOf('microEnOuverture = true') < micro.indexOf('getUserMedia'));
   assert.ok(micro.includes('finally { microEnOuverture = false; }'));
   assert.ok((micro.match(/rendre\(\)/g) || []).length >= 4, 'le micro est rendu a l arret, a l erreur, au delai et si le demarrage echoue');
+});
+
+test('etat : « agent pret » seulement quand le workflow est active, pas des que n8n repond', async () => {
+  // un faux n8n : en bonne sante tout de suite, mais son webhook n'est enregistre qu'apres « activation »
+  let active = false;
+  const n8n = http.createServer((req, res) => {
+    if (req.url === '/healthz') { res.writeHead(200); return res.end('{"status":"ok"}'); }
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ code: 404, message: active
+      ? 'This webhook is not registered for GET requests. Did you mean to make a POST request?'
+      : 'The requested webhook "GET telephone-archi" is not registered.' }));
+  });
+  await new Promise(x => n8n.listen(0, '127.0.0.1', x));
+  const d = chateau(false);
+  const r = { port: 0, portPorte: 0, n8nPort: n8n.address().port, depot: d, base: d, etat: d, cle: CLE, lmUrl: 'http://127.0.0.1:1', modele: 'm', modeleVision: 'v', utilisateur: '', telegram: false };
+  const local = P.creerServeurLocal(r);
+  await new Promise(x => local.listen(0, '127.0.0.1', x));
+  r.port = local.address().port;
+  const etat = () => new Promise((ok, non) => {
+    http.get({ host: '127.0.0.1', port: r.port, path: '/api/etat', headers: { 'X-Archi-Portail': '1' } }, rep => {
+      const m = []; rep.on('data', x => m.push(x)); rep.on('end', () => ok(JSON.parse(Buffer.concat(m).toString('utf8'))));
+    }).on('error', non);
+  });
+  try {
+    assert.equal((await etat()).n8n, false, 'n8n repond, mais le workflow n est pas encore active : un message se perdrait');
+    active = true;
+    assert.equal((await etat()).n8n, true);
+    const page = fs.readFileSync(path.join(__dirname, '..', 'accueil.html'), 'utf8');
+    assert.ok(page.includes("if (!pret) { bulle('souci', 'Archi finit de démarrer"), 'la page n envoie rien tant que ce n est pas pret');
+  } finally {
+    local.close(); n8n.close();
+    fs.rmSync(d, { recursive: true, force: true });
+  }
 });

@@ -334,6 +334,8 @@ async function micro() {
 
 async function envoyer(texte, fichier, vocal) {
   if (occupe || (!texte && !fichier && !vocal)) return;
+  // le workflow n'est pas encore active (les premieres secondes apres le lancement) : le message se perdrait
+  if (!pret) { bulle('souci', 'Archi finit de démarrer : encore quelques secondes, puis renvoie ton message.'); return; }
   taire();
   occupe = true; $('b-envoi').disabled = true; $('sphere').classList.add('pense');
   const moi = bulle('moi', vocal ? '🎙 …' : (texte || '(photo)'), fichier ? { image: URL.createObjectURL(fichier) } : null);
@@ -387,6 +389,7 @@ $('photo').onchange = () => { const f = $('photo').files[0]; $('jointe').style.d
 $('saisie').onsubmit = ev => {
   ev.preventDefault();
   const t = $('texte').value.trim(), f = $('photo').files[0];
+  if (!pret) { envoyer(t, f); return; }   // pas encore pret : on previent, et on garde ce qui est ecrit
   $('texte').value = ''; $('photo').value = ''; $('jointe').style.display = 'none'; $('texte').style.height = '';
   envoyer(t, f);
 };
