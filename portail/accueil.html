@@ -32,9 +32,24 @@
   .logo .egal path:nth-child(4) { animation-delay: -.15s; } .logo .egal path:nth-child(5) { animation-delay: -.6s; }
   @keyframes egal { 50% { transform: scaleY(.45); } }
   .nom small { display: block; font: 600 12px var(--corps); letter-spacing: .08em; color: var(--doux); margin-top: 9px; }
-  .haut { position: absolute; right: 30px; top: 24px; z-index: 2; display: flex; gap: 22px; }
-  .haut button { font: 700 13px var(--corps); color: var(--pale); border-bottom: 1px solid var(--vert); padding-bottom: 2px; }
-  .haut button.discret { color: var(--doux); border-bottom-color: var(--trait); }
+  /* « Archi » s'ecrit toujours avec son logo (logo.js) : le dessin prend la hauteur des lettres autour */
+  .mot-archi { position: relative; white-space: nowrap; --ep: 4.3; --ep-egal: 2.5; }
+  .mot-archi svg { height: .74em; width: 2.61em; vertical-align: -.03em; overflow: visible; }
+  .mot-archi span { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .reponse .mot-archi, .carton h3 .mot-archi, .volet h2 .mot-archi { --ep: 3.3; --ep-egal: 1.9; }
+  .memoire h2 .mot-archi svg { height: 1.05em; width: 3.7em; vertical-align: -.17em; }   /* un petit titre en capitales grasses */
+  /* le menu : trois barres facon egaliseur (comme le A du logo), et une courte liste qui se deplie */
+  .haut { position: absolute; right: 30px; top: 24px; z-index: 30; }
+  #b-menu { display: inline-flex; align-items: center; gap: 11px; font: 700 13px var(--corps); letter-spacing: .14em; text-transform: uppercase; color: var(--pale); padding: 4px 0; }
+  #b-menu .barres { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  #b-menu .barres i { display: block; height: 2px; width: 20px; border-radius: 2px; background: var(--vert); transition: width .2s ease; }
+  #b-menu .barres i:nth-child(2) { width: 12px; } #b-menu .barres i:nth-child(3) { width: 16px; }
+  #b-menu:hover .barres i, #b-menu[aria-expanded="true"] .barres i { width: 20px; }
+  .menu { position: absolute; right: 0; top: calc(100% + 12px); width: max-content; max-width: min(340px, 86vw); padding: 4px 0 4px 18px; border-left: 2px solid var(--vert);
+          background: rgba(7,15,11,.96); box-shadow: 0 26px 60px rgba(0,0,0,.6); animation: glisse .2s ease-out; }
+  .menu button { display: block; width: 100%; text-align: left; padding: 9px 20px 9px 0; font: 700 15px var(--corps); color: var(--texte); }
+  .menu button small { display: block; font: 500 12.5px var(--corps); color: var(--doux); margin-top: 1px; }
+  .menu button:hover, .menu button:focus-visible { color: var(--vert); outline: none; }
 
   /* --- la sphere et son orbite --- */
   .astre { grid-column: 2; grid-row: 1; position: relative; display: grid; place-items: center; min-height: 0; }
@@ -126,9 +141,11 @@
   #tel-code { font-family: Consolas, monospace; font-size: 12.5px; color: var(--pale); overflow-wrap: anywhere; }
   #tel-suivi { list-style: none; margin: 14px 0 0; padding: 0; }
   #tel-suivi li { padding: 3px 0; } #tel-suivi li.fait { color: var(--vert); } #tel-suivi li.souci { color: var(--ambre); }
-  #outils { list-style: none; margin: 0; padding: 0; }
-  #outils li { padding: 9px 0; border-top: 1px solid var(--trait); } #outils li:first-child { border-top: 0; }
-  #outils b { color: var(--vert); font-family: Consolas, monospace; font-size: 13px; font-weight: 600; }
+  #outils, #chantiers { list-style: none; margin: 0; padding: 0; }
+  #outils li, #chantiers li { padding: 9px 0; border-top: 1px solid var(--trait); } #outils li:first-child, #chantiers li:first-child { border-top: 0; }
+  #outils b { color: var(--vert); font-size: 15px; font-weight: 700; }
+  #chantiers b { color: var(--pale); font-size: 15px; font-weight: 700; }
+  #outils em { display: block; font-style: normal; font-size: 12.5px; color: var(--ambre); margin-top: 2px; }
   .accord { color: var(--ambre); font-size: 11.5px; border: 1px solid var(--ambre); border-radius: 4px; padding: 0 4px; margin-left: 6px; }
 
   /* --- la visite guidee : un voile, un element mis en lumiere, quelques mots --- */
@@ -155,7 +172,7 @@
   @media (max-width: 980px) {
     body { overflow: auto; }
     .scene { grid-template-columns: 1fr; grid-template-rows: auto; height: auto; }
-    .nom { position: static; padding: 18px 22px 0; } .haut { position: static; padding: 10px 22px 0; justify-content: flex-start; }
+    .nom { position: static; padding: 18px 22px 0; } .haut { position: relative; right: auto; top: auto; padding: 10px 22px 0; } .menu { right: auto; left: 22px; }
     .fil, .memoire { grid-column: 1; grid-row: auto; padding: 14px 22px; max-height: none; -webkit-mask-image: none; mask-image: none; }
     .astre { grid-column: 1; grid-row: auto; display: flex; flex-direction: column; padding-top: 6px; }
     .lune { position: static; transform: none; display: inline-flex; margin: 3px 9px; }
@@ -181,9 +198,23 @@
     </svg>
     <small>100 % local · rien ne part vers un service d'IA en ligne</small>
   </header>
-  <nav class="haut">
-    <button type="button" id="b-visite">Visite guidée</button>
-    <button type="button" id="b-coulisses" class="discret">Ses outils</button>
+  <!-- le meme logo, pret a etre pose partout ou le mot « Archi » est ecrit (logo.js) -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="mot-archi" viewBox="0 0 120 34" overflow="visible">
+    <g fill="none" stroke="url(#degrade)" stroke-linecap="round" stroke-linejoin="round" style="stroke-width: var(--ep, 3.2)">
+      <path d="M2,32 L13,2 L24,32"/>
+      <path d="M33,32 V2 H47 A4,4 0 0 1 51,6 V13 A4,4 0 0 1 47,17 H33 M42,17 L51,32 M80,2 H64 A4,4 0 0 0 60,6 V28 A4,4 0 0 0 64,32 H80 M89,2 V32 M109,2 V32 M89,17 H109 M118,2 V32"/>
+    </g>
+    <g fill="none" stroke="#3DDC97" stroke-linecap="round" style="stroke-width: var(--ep-egal, 1.8)">
+      <path d="M8.4,25.5 L8.4,22.5"/><path d="M10.7,26.5 L10.7,21.5"/><path d="M13,27.5 L13,20.5"/><path d="M15.3,26.5 L15.3,21.5"/><path d="M17.6,25.5 L17.6,22.5"/>
+    </g>
+  </symbol></svg>
+  <nav class="haut" id="haut">
+    <button type="button" id="b-menu" aria-haspopup="true" aria-expanded="false" aria-controls="menu"><span class="barres" aria-hidden="true"><i></i><i></i><i></i></span>Menu</button>
+    <div class="menu" id="menu" role="menu" hidden>
+      <button type="button" role="menuitem" id="b-visite">Visite guidée<small>Le tour d'Archi, en sept étapes</small></button>
+      <button type="button" role="menuitem" id="b-coulisses">Ses outils<small>Ce qu'il sait faire aujourd'hui</small></button>
+      <button type="button" role="menuitem" id="b-chantier">Outils en cours de développement<small>Ce qui arrive ensuite</small></button>
+    </div>
   </nav>
 
   <aside class="fil" id="fil" aria-label="La discussion"></aside>
@@ -232,7 +263,7 @@
   <p>L'appli Android se branche sur <b>ce PC</b> : tu lui parles de partout, il te répond avec sa voix.</p>
   <button type="button" id="b-qr" title="Le QR code contient la clé de l'appli : il reste caché tant que tu n'en as pas besoin">Afficher le QR code</button>
   <div id="qr" role="img" aria-label="QR code à scanner avec le téléphone"></div>
-  <p id="tel-code"></p>
+  <p id="tel-code" data-sans-logo></p>
   <div id="tel-texte"><p>Ouverture de l'adresse HTTPS du PC…</p></div>
   <ul id="tel-suivi" aria-live="polite" aria-label="Où en est le téléphone"></ul>
 </aside>
@@ -240,12 +271,20 @@
 <aside class="volet" id="volet-outils" hidden aria-label="Les outils d'Archi">
   <button type="button" class="fermer" data-fermer aria-label="Fermer">&#10005;</button>
   <h2>Ses outils</h2>
-  <p>Archi choisit lui-même l'outil qu'il faut. Ceux marqués <span class="accord">accord</span> ne partent jamais sans ton « oui ».</p>
+  <p>Archi choisit lui-même l'outil qu'il faut. Ceux marqués <span class="accord">accord</span> ne partent jamais sans ton « oui ».
+    « À brancher » : l'outil est installé, il lui faut ton matériel ou ton compte.</p>
   <ul id="outils"></ul>
   <h3>Dans les coulisses</h3>
   <p>Modèle : <code id="c-modele">…</code><br>Vision : <code id="c-vision">…</code><br>
     Workflows : <a id="c-n8n" href="#" target="_blank" rel="noopener">ouvrir n8n</a> (sur ce PC seulement)<br>
     Telegram : <span id="c-tg">…</span></p>
+</aside>
+
+<aside class="volet" id="volet-chantier" hidden aria-label="Les outils en cours de développement">
+  <button type="button" class="fermer" data-fermer aria-label="Fermer">&#10005;</button>
+  <h2>En cours de développement</h2>
+  <p>Les projets pas encore aboutis. Ils ne sont <b>pas</b> dans cette version : on y travaille.</p>
+  <ul id="chantiers"></ul>
 </aside>
 
 <div id="visite" hidden>
@@ -261,6 +300,7 @@
 <script src="/qrcode.js"></script>
 <script src="/sphere.js"></script>
 <script src="/ecoute.js"></script>
+<script src="/logo.js"></script>
 <script>
 'use strict';
 const $ = id => document.getElementById(id);
@@ -354,22 +394,38 @@ async function majEtat() {
         '(tunnel Cloudflare, sans compte). Regarde la fenêtre « Archi » si elle ne vient pas.</p>';
     }
   }
-  const noms = e.outils.map(o => o.nom).join('|');
+  const titre = o => o.titre || o.nom.replace(/_/g, ' ');
+  const noms = e.outils.map(o => o.nom + '=' + titre(o)).join('|');
   if ($('outils').dataset.cle !== noms) {
     $('outils').dataset.cle = noms; $('outils').textContent = ''; $('ruban-liste').textContent = '';
     for (const o of e.outils) {
       const li = document.createElement('li'), b = document.createElement('b');
-      b.textContent = o.nom; li.appendChild(b);
+      li.title = o.nom;   // le nom technique, au survol
+      b.textContent = titre(o); li.appendChild(b);
       if (o.sensible) { const s = document.createElement('span'); s.className = 'accord'; s.textContent = 'accord'; li.appendChild(s); }
       li.appendChild(document.createElement('br')); li.appendChild(document.createTextNode(o.quoi));
+      if (o.besoin) { const m = document.createElement('em'); m.textContent = 'À brancher : ' + o.besoin; li.appendChild(m); }
       $('outils').appendChild(li);
     }
     // le ruban : les noms des outils, deux fois de suite pour defiler sans couture
     for (let tour = 0; tour < 2; tour++) {
       for (const o of e.outils) {
-        $('ruban-liste').appendChild(document.createTextNode(o.nom.replace(/_/g, ' ')));
+        $('ruban-liste').appendChild(document.createTextNode(titre(o)));
         const i = document.createElement('i'); i.textContent = '✦'; $('ruban-liste').appendChild(i);
       }
+    }
+  }
+  // les projets pas encore aboutis (config/vitrine.json) : sans projet, la ligne du menu disparait
+  const chantiers = e.chantiers || [];
+  $('b-chantier').hidden = !chantiers.length;
+  const cle = chantiers.map(c => c.titre).join('|');
+  if ($('chantiers').dataset.cle !== cle) {
+    $('chantiers').dataset.cle = cle; $('chantiers').textContent = '';
+    for (const c of chantiers) {
+      const li = document.createElement('li'), b = document.createElement('b');
+      b.textContent = c.titre; li.appendChild(b);
+      if (c.quoi) { li.appendChild(document.createElement('br')); li.appendChild(document.createTextNode(c.quoi)); }
+      $('chantiers').appendChild(li);
     }
   }
 }
@@ -603,8 +659,13 @@ function volet(id) {
   for (const v of document.querySelectorAll('.volet')) v.hidden = v.id !== id || !v.hidden;
 }
 for (const b of document.querySelectorAll('[data-fermer]')) b.onclick = () => volet(null);
-document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { if (!$('visite').hidden) finVisite(); else volet(null); } });
-$('scene').addEventListener('click', ev => { if (!ev.target.closest('#v-tel, #ruban, #b-coulisses')) volet(null); });
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { if (!$('visite').hidden) finVisite(); else if (!$('menu').hidden) { menu(false); $('b-menu').focus(); } else volet(null); } });
+$('scene').addEventListener('click', ev => { if (!ev.target.closest('#v-tel, #ruban, #b-coulisses, #b-chantier')) volet(null); });
+
+// ---- le menu (visite guidee, ses outils, outils en cours de developpement) : il se replie au choix, a Echap ou en cliquant ailleurs
+function menu(ouvert) { $('menu').hidden = !ouvert; $('b-menu').setAttribute('aria-expanded', ouvert ? 'true' : 'false'); }
+$('b-menu').onclick = () => menu($('menu').hidden);
+document.addEventListener('click', ev => { if (!ev.target.closest('#haut')) menu(false); });
 
 // ---- la visite guidee : au premier lancement, puis a la demande
 const VISITE = [
@@ -621,7 +682,7 @@ const VISITE = [
   { cible: 'ruban', mode: 'reflechit', haut: true, titre: 'Il a des <i>mains</i>.',
     dit: 'PDF, prises connectées, caméras, imprimante 3D, musique, enquêtes… Il choisit lui-même le bon outil. Les actions qui comptent demandent <b>toujours ton accord</b>.' },
   { cible: 'saisie', mode: 'repos', haut: true, titre: 'À toi.',
-    dit: 'Dis-lui bonjour, ou essaie une des phrases proposées. Tu retrouves cette visite en haut à droite.' },
+    dit: 'Dis-lui bonjour, ou essaie une des phrases proposées. Tu retrouves cette visite dans le <b>menu</b>, avec ses outils et ceux qui arrivent.' },
 ];
 let pas = -1;
 function montrerPas(i) {
@@ -638,7 +699,7 @@ function montrerPas(i) {
   sphere.mode(p.mode); if (p.mots) sphere.mots(p.mots);
   $('v-suite').focus();
 }
-function debutVisite() { volet(null); fermerMicro(); $('idees').hidden = false; document.body.classList.add('en-visite'); $('visite').hidden = false; montrerPas(0); }
+function debutVisite() { volet(null); menu(false); fermerMicro(); $('idees').hidden = false; document.body.classList.add('en-visite'); $('visite').hidden = false; montrerPas(0); }
 function finVisite() {
   $('visite').hidden = true; pas = -1; document.body.classList.remove('en-visite');
   for (const x of document.querySelectorAll('.vise, .pointe')) x.classList.remove('vise', 'pointe');
@@ -661,7 +722,8 @@ $('b-son').onclick = () => { son = !son; localStorage.setItem('archi_son', son ?
 $('b-qr').onclick = () => montrerQr($('qr').style.display === 'none');
 $('v-tel').onclick = () => volet('volet-tel');
 $('ruban').onclick = () => volet('volet-outils');
-$('b-coulisses').onclick = () => volet('volet-outils');
+$('b-coulisses').onclick = () => { menu(false); volet('volet-outils'); };
+$('b-chantier').onclick = () => { menu(false); volet('volet-chantier'); };
 $('sphere').onclick = () => { if (lecteur) taire(); else if (!$('b-micro').hidden) ouvrirMicro(); };
 $('photo').onchange = () => { const f = $('photo').files[0]; if (f) note('info', 'Photo jointe : ' + f.name + ' (elle reste sur ce PC).'); };
 $('saisie').onsubmit = ev => {
@@ -673,6 +735,7 @@ $('saisie').onsubmit = ev => {
 };
 $('texte').addEventListener('keydown', ev => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); $('saisie').requestSubmit(); } });
 $('texte').addEventListener('input', grandir);
+if (window.ArchiLogo) ArchiLogo.installer(document);   // le mot Archi s'ecrit partout avec son logo
 majEtat(); setInterval(majEtat, 5000); setInterval(rappels, 20000);
 let dejaVue = false;
 try { dejaVue = localStorage.getItem('archi_visite_vue') === '1'; } catch (x) { dejaVue = true; }

@@ -4,7 +4,7 @@
  "script": "indicateur_polymarket.py",
  "parametres": [
   {"nom": "action", "description": "chercher (defaut avec sujet), tendances (defaut sans sujet), surveiller, arreter, suivis"},
-  {"nom": "sujet", "description": "de quoi parle J, en quelques mots anglais si possible (ex. France government, Ukraine ceasefire, Fed December)"},
+  {"nom": "sujet", "description": "de quoi parle l'utilisateur, en quelques mots anglais si possible (ex. France government, Ukraine ceasefire, Fed December)"},
   {"nom": "quoi", "description": "arreter : le sujet suivi a ne plus surveiller (ou tout)"},
   {"nom": "nombre", "description": "facultatif : combien de marches montrer (tendances 10 max, chercher 5 max)"}
  ],

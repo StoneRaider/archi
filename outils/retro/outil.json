@@ -1,6 +1,6 @@
 {
  "nom": "retro",
- "description": "MODE D EMPLOI : retro-ingenierie d'un logiciel, d'une appli ou d'un appareil QUI APPARTIENT A J, pour comprendre comment ca marche (interoperabilite) puis reecrire a neuf. action=triage (defaut) : identifie la cible (type, empreinte, structure, adresses/URL utiles) et prepare une MISSION pre-remplie pour l'expert ; cible = chemin complet ou un bout du nom ; but = ce que J veut comprendre. action=liste : les cibles analysables trouvees sur le PC. Lecture seule : ne lance JAMAIS le programme (l'analyse dynamique est un geste separe decide par J) et n'analyse pas les fichiers sensibles (cles, base n8n, .env). Rien n'est contourne (licence, protection, DRM).",
+ "description": "MODE D EMPLOI : retro-ingenierie d'un logiciel, d'une appli ou d'un appareil QUI APPARTIENT A l'utilisateur, pour comprendre comment ca marche (interoperabilite) puis reecrire a neuf. action=triage (defaut) : identifie la cible (type, empreinte, structure, adresses/URL utiles) et prepare une MISSION pre-remplie pour l'expert ; cible = chemin complet ou un bout du nom ; but = ce que l'utilisateur veut comprendre. action=liste : les cibles analysables trouvees sur le PC. Lecture seule : ne lance JAMAIS le programme (l'analyse dynamique est un geste separe decide par l'utilisateur) et n'analyse pas les fichiers sensibles (cles, base n8n, .env). Rien n'est contourne (licence, protection, DRM).",
  "script": "retro.py",
  "parametres": [
   {

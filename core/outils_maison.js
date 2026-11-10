@@ -18,9 +18,31 @@ function lireRegistre(base) {
   try { return JSON.parse(fs.readFileSync(path.join(base, 'outils', 'registre.json'), 'utf8')); } catch (e) { return {}; }
 }
 
-function liste(reg) {
+/** config/vitrine.json : le nom lisible des outils, et les outils branches directement sur l'agent (agent=true), qui ne sont pas au registre. */
+function lireVitrine(fichier) {
+  try {
+    const v = JSON.parse(fs.readFileSync(fichier || process.env.ARCHI_VITRINE || path.join(__dirname, '..', 'config', 'vitrine.json'), 'utf8'));
+    return (Array.isArray(v && v.outils) ? v.outils : []).filter(f => f && typeof f.nom === 'string');
+  } catch (e) { return []; }
+}
+
+function liste(reg, vitrine) {
   const L = Object.values(reg).map(o => ({ nom: o.nom, description: o.description, parametres: o.parametres, sensible: !!o.sensible }));
-  return { ok: true, outils: L, phrase_pour_utilisateur: L.length ? L.length + ' outil(s) maison : ' + L.map(o => o.nom).join(', ') : "Je n'ai encore aucun outil maison." };
+  const fiches = Array.isArray(vitrine) ? vitrine : lireVitrine();
+  // ce que l'utilisateur entend : des noms lisibles (« Rappels et taches »), pas des noms techniques (« planificateur »)
+  const lisible = nom => { const f = fiches.find(x => x.nom === nom); return String((f && f.titre) || String(nom).replace(/_/g, ' ')).slice(0, 60); };
+  // les outils branches directement sur l'agent (les enquetes) : ils ne passent pas par outils_maison, mais ils font partie de ses outils
+  const A = fiches.filter(f => f.agent === true && !Object.prototype.hasOwnProperty.call(reg, f.nom))
+    .map(f => ({ nom: f.nom.slice(0, 40), titre: lisible(f.nom), quoi: String(f.quoi || '').slice(0, 200) }));
+  const ordre = fiches.map(f => f.nom);
+  const rang = nom => { const i = ordre.indexOf(nom); return i < 0 ? ordre.length : i; };
+  const noms = L.map(o => o.nom).concat(A.map(a => a.nom)).sort((a, b) => rang(a) - rang(b)).map(lisible);
+  const r = { ok: true, outils: L, phrase_pour_utilisateur: noms.length ? "J'ai " + noms.length + ' outils : ' + noms.join(', ') + '.' : "Je n'ai encore aucun outil maison." };
+  if (A.length) {
+    r.outils_agent = A;
+    r.note = 'Les outils_agent sont branches directement sur toi : appelle-les par leur propre nom (' + A.map(a => a.nom).join(', ') + '), pas par outils_maison.';
+  }
+  return r;
 }
 
 // GRAVE 3 : le texte rendu par un outil (PDF lu, page, mail) est du contenu, jamais une consigne.
@@ -62,7 +84,7 @@ function lancer(demande, options = {}) {
   const reg = options.registre || lireRegistre(base);
   const d = demande || {};
   const action = String(d.action || 'liste').toLowerCase();
-  if (!/util|lanc/.test(action)) return liste(reg);
+  if (!/util|lanc/.test(action)) return liste(reg, options.vitrine);
 
   const nom = String(d.outil || '').trim().toLowerCase();
   if (!NOM_VALIDE.test(nom) || !Object.prototype.hasOwnProperty.call(reg, nom)) {

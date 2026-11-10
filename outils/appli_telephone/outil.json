@@ -1,6 +1,6 @@
 {
  "nom": "appli_telephone",
- "description": "MODE D EMPLOI : envoie a J sur Telegram la derniere version de l'appli Archi du telephone (fichier .apk a installer). Aucun parametre. Quand il dit « envoie-moi l'appli », « la nouvelle version de l'appli ». Repete la phrase_pour_utilisateur.",
+ "description": "MODE D EMPLOI : envoie a l'utilisateur sur Telegram la derniere version de l'appli Archi du telephone (fichier .apk a installer). Aucun parametre. Quand il dit « envoie-moi l'appli », « la nouvelle version de l'appli ». Repete la phrase_pour_utilisateur.",
  "script": "appli_telephone.py",
  "parametres": [],
  "timeout_s": 30,

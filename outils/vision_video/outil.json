@@ -13,7 +13,7 @@
   },
   {
    "nom": "question",
-   "description": "facultatif : ce que J cherche dans la video (ex. le reglage de la buse)"
+   "description": "facultatif : ce que l'utilisateur cherche dans la video (ex. le reglage de la buse)"
   },
   {
    "nom": "debut",

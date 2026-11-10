@@ -34,6 +34,8 @@ jobs:
         run: cd outils/musique && python test_musique.py
       - name: Tests de la memoire (faux chateau, faux modele local)
         run: cd outils/memoire && python test_memoire.py
+      - name: Tests du trader en simulation (faux prix, faux modele local, aucun reseau)
+        run: cd outils/trader && python test_trader.py
       - name: Tests du rangement de mails (boite simulee)
         run: cd outils/ranger_mails && python test_chercher.py
       - name: Protection SSRF de la lecture de pages
