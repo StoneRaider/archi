@@ -23,12 +23,18 @@ function appelNode(script, entree) {
 CONTEXTE = APPEL_NODE + r"""
 const e = $input.first().json;
 const c = appelNode('contexte.js', { texte: e.texte || '', source: e.source || 'telegram', lat: e.lat, lon: e.lon });
-// La memoire : un greffier (le modele local) releve ce que l'utilisateur vient d'apprendre de durable a Archi et le range
-// en fiche (outils/memoire/memoire.py, action retenir). Il travaille EN ARRIERE-PLAN : la reponse ne l'attend pas.
+return [{ json: Object.assign({}, e, c) }];
+"""
+
+# La memoire : UNE FOIS LA REPONSE PARTIE, un greffier (le modele local) releve ce que l'utilisateur vient d'apprendre de
+# durable a Archi et le range en fiche (outils/memoire/memoire.py, action retenir). Il est lance en arriere-plan, apres le
+# noeud qui repond : la reponse ne l'attend pas, et il ne dispute pas la carte graphique a l'agent.
+RETENIR = r"""
 try {
-  const dit = String(e.entendu || e.texte || '');
+  const cp = require('child_process'), fs = require('fs'), os = require('os'), path = require('path');
+  const p = $('__SOURCE__').first().json;
+  const dit = p.direct ? '' : String(p.entendu || p.texte || '');
   if (dit && String($env.ARCHI_MEMOIRE || 'oui').toLowerCase() !== 'non') {
-    const fs = require('fs'), os = require('os');
     const BASE = $env.ARCHI_BASE || path.join(os.homedir(), '.n8n-files');
     const script = path.join(BASE, 'outils', 'memoire', 'memoire.py');
     if (fs.existsSync(script)) {
@@ -37,8 +43,8 @@ try {
       cp.spawn($env.ARCHI_PY || 'python', [script, '--fichier', f, '--menage'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
     }
   }
-} catch (x) { /* la memoire ne doit jamais empecher Archi de repondre */ }
-return [{ json: Object.assign({}, e, c) }];
+} catch (x) { /* la memoire ne doit jamais faire echouer une conversation */ }
+return $input.all();
 """
 
 TELEGRAM_ENTREE = r"""
@@ -273,6 +279,7 @@ nodes = [
           {"chatId": "={{ $('Message Telegram').first().json.chat_id }}", "text": "={{ $json.texte }}",
            "additionalFields": {"appendAttribution": False}},
           {"telegramApi": {"id": "ArchiTelegram001", "name": "Bot Telegram Archi"}}),
+    noeud("Retenir", "n8n-nodes-base.code", 2, 1440, 0, {"jsCode": RETENIR.replace("__SOURCE__", "Message Telegram")}),
 
     noeud("Appli telephone", "n8n-nodes-base.webhook", 2, 0, 520,
           {"httpMethod": "POST", "path": "telephone-archi", "responseMode": "responseNode", "options": {}}),
@@ -295,6 +302,7 @@ nodes = [
     noeud("Voix appli", "n8n-nodes-base.code", 2, 1640, 520, {"jsCode": VOIX}),
     noeud("Repondre appli", "n8n-nodes-base.respondToWebhook", 1.1, 1860, 520,
           {"respondWith": "json", "responseBody": "={{ JSON.stringify($json.reponse) }}", "options": {}}),
+    noeud("Retenir appli", "n8n-nodes-base.code", 2, 2080, 520, {"jsCode": RETENIR.replace("__SOURCE__", "Porte")}),
 
     noeud("Boite appli", "n8n-nodes-base.webhook", 2, 0, 900,
           {"httpMethod": "POST", "path": "telephone-boite", "responseMode": "responseNode", "options": {}}),
@@ -318,11 +326,12 @@ def lien(a, b, sortie=0, type_="main"):
 
 liens = [
     lien("Telegram", "Message Telegram"), lien("Message Telegram", "Contexte"), lien("Contexte", "Agent"),
-    lien("Agent", "Verifier"), lien("Verifier", "Repondre Telegram"),
+    lien("Agent", "Verifier"), lien("Verifier", "Repondre Telegram"), lien("Repondre Telegram", "Retenir"),
     lien("Appli telephone", "Porte"), lien("Porte", "Cle valide ?"), lien("Cle valide ?", "Reponse directe ?", 0),
     lien("Cle valide ?", "Refuser", 1), lien("Reponse directe ?", "Voix appli", 0),
     lien("Reponse directe ?", "Contexte appli", 1), lien("Contexte appli", "Agent appli"),
     lien("Agent appli", "Verifier appli"), lien("Verifier appli", "Voix appli"), lien("Voix appli", "Repondre appli"),
+    lien("Repondre appli", "Retenir appli"),
     lien("Boite appli", "Boite"), lien("Boite", "Repondre boite"),
     lien("Chaque minute", "Reveil planificateur"), lien("Reveil planificateur", "Rappel Telegram"),
 ]

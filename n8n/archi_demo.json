@@ -40,7 +40,7 @@
   },
   {
    "parameters": {
-    "jsCode": "\nconst cp = require('child_process');\nconst path = require('path');\nconst DEPOT = $env.ARCHI_DEPOT;\nfunction appelNode(script, entree) {\n  const out = cp.execFileSync('node', [path.join(DEPOT, 'core', script)], {\n    input: JSON.stringify(entree), timeout: 30000, windowsHide: true,\n  }).toString('utf8').trim().split(/\\r?\\n/).pop();\n  return JSON.parse(out);\n}\n\nconst e = $input.first().json;\nconst c = appelNode('contexte.js', { texte: e.texte || '', source: e.source || 'telegram', lat: e.lat, lon: e.lon });\n// La memoire : un greffier (le modele local) releve ce que l'utilisateur vient d'apprendre de durable a Archi et le range\n// en fiche (outils/memoire/memoire.py, action retenir). Il travaille EN ARRIERE-PLAN : la reponse ne l'attend pas.\ntry {\n  const dit = String(e.entendu || e.texte || '');\n  if (dit && String($env.ARCHI_MEMOIRE || 'oui').toLowerCase() !== 'non') {\n    const fs = require('fs'), os = require('os');\n    const BASE = $env.ARCHI_BASE || path.join(os.homedir(), '.n8n-files');\n    const script = path.join(BASE, 'outils', 'memoire', 'memoire.py');\n    if (fs.existsSync(script)) {\n      const f = path.join(os.tmpdir(), 'archi_memoire_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '.json');\n      fs.writeFileSync(f, JSON.stringify({ action: 'retenir', texte: dit }));\n      cp.spawn($env.ARCHI_PY || 'python', [script, '--fichier', f, '--menage'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();\n    }\n  }\n} catch (x) { /* la memoire ne doit jamais empecher Archi de repondre */ }\nreturn [{ json: Object.assign({}, e, c) }];\n"
+    "jsCode": "\nconst cp = require('child_process');\nconst path = require('path');\nconst DEPOT = $env.ARCHI_DEPOT;\nfunction appelNode(script, entree) {\n  const out = cp.execFileSync('node', [path.join(DEPOT, 'core', script)], {\n    input: JSON.stringify(entree), timeout: 30000, windowsHide: true,\n  }).toString('utf8').trim().split(/\\r?\\n/).pop();\n  return JSON.parse(out);\n}\n\nconst e = $input.first().json;\nconst c = appelNode('contexte.js', { texte: e.texte || '', source: e.source || 'telegram', lat: e.lat, lon: e.lon });\nreturn [{ json: Object.assign({}, e, c) }];\n"
    },
    "id": "daa52566-49df-5f82-917d-79b24e9496ef",
    "name": "Contexte",
@@ -203,6 +203,19 @@
   },
   {
    "parameters": {
+    "jsCode": "\ntry {\n  const cp = require('child_process'), fs = require('fs'), os = require('os'), path = require('path');\n  const p = $('Message Telegram').first().json;\n  const dit = p.direct ? '' : String(p.entendu || p.texte || '');\n  if (dit && String($env.ARCHI_MEMOIRE || 'oui').toLowerCase() !== 'non') {\n    const BASE = $env.ARCHI_BASE || path.join(os.homedir(), '.n8n-files');\n    const script = path.join(BASE, 'outils', 'memoire', 'memoire.py');\n    if (fs.existsSync(script)) {\n      const f = path.join(os.tmpdir(), 'archi_memoire_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '.json');\n      fs.writeFileSync(f, JSON.stringify({ action: 'retenir', texte: dit }));\n      cp.spawn($env.ARCHI_PY || 'python', [script, '--fichier', f, '--menage'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();\n    }\n  }\n} catch (x) { /* la memoire ne doit jamais faire echouer une conversation */ }\nreturn $input.all();\n"
+   },
+   "id": "207bb3e4-8a50-548a-b7cb-d1c2ac836fa1",
+   "name": "Retenir",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1440,
+    0
+   ]
+  },
+  {
+   "parameters": {
     "httpMethod": "POST",
     "path": "telephone-archi",
     "responseMode": "responseNode",
@@ -312,7 +325,7 @@
   },
   {
    "parameters": {
-    "jsCode": "\nconst cp = require('child_process');\nconst path = require('path');\nconst DEPOT = $env.ARCHI_DEPOT;\nfunction appelNode(script, entree) {\n  const out = cp.execFileSync('node', [path.join(DEPOT, 'core', script)], {\n    input: JSON.stringify(entree), timeout: 30000, windowsHide: true,\n  }).toString('utf8').trim().split(/\\r?\\n/).pop();\n  return JSON.parse(out);\n}\n\nconst e = $input.first().json;\nconst c = appelNode('contexte.js', { texte: e.texte || '', source: e.source || 'telegram', lat: e.lat, lon: e.lon });\n// La memoire : un greffier (le modele local) releve ce que l'utilisateur vient d'apprendre de durable a Archi et le range\n// en fiche (outils/memoire/memoire.py, action retenir). Il travaille EN ARRIERE-PLAN : la reponse ne l'attend pas.\ntry {\n  const dit = String(e.entendu || e.texte || '');\n  if (dit && String($env.ARCHI_MEMOIRE || 'oui').toLowerCase() !== 'non') {\n    const fs = require('fs'), os = require('os');\n    const BASE = $env.ARCHI_BASE || path.join(os.homedir(), '.n8n-files');\n    const script = path.join(BASE, 'outils', 'memoire', 'memoire.py');\n    if (fs.existsSync(script)) {\n      const f = path.join(os.tmpdir(), 'archi_memoire_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '.json');\n      fs.writeFileSync(f, JSON.stringify({ action: 'retenir', texte: dit }));\n      cp.spawn($env.ARCHI_PY || 'python', [script, '--fichier', f, '--menage'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();\n    }\n  }\n} catch (x) { /* la memoire ne doit jamais empecher Archi de repondre */ }\nreturn [{ json: Object.assign({}, e, c) }];\n"
+    "jsCode": "\nconst cp = require('child_process');\nconst path = require('path');\nconst DEPOT = $env.ARCHI_DEPOT;\nfunction appelNode(script, entree) {\n  const out = cp.execFileSync('node', [path.join(DEPOT, 'core', script)], {\n    input: JSON.stringify(entree), timeout: 30000, windowsHide: true,\n  }).toString('utf8').trim().split(/\\r?\\n/).pop();\n  return JSON.parse(out);\n}\n\nconst e = $input.first().json;\nconst c = appelNode('contexte.js', { texte: e.texte || '', source: e.source || 'telegram', lat: e.lat, lon: e.lon });\nreturn [{ json: Object.assign({}, e, c) }];\n"
    },
    "id": "4ec6eee0-3b35-5f79-b4d6-388895a79499",
    "name": "Contexte appli",
@@ -480,6 +493,19 @@
   },
   {
    "parameters": {
+    "jsCode": "\ntry {\n  const cp = require('child_process'), fs = require('fs'), os = require('os'), path = require('path');\n  const p = $('Porte').first().json;\n  const dit = p.direct ? '' : String(p.entendu || p.texte || '');\n  if (dit && String($env.ARCHI_MEMOIRE || 'oui').toLowerCase() !== 'non') {\n    const BASE = $env.ARCHI_BASE || path.join(os.homedir(), '.n8n-files');\n    const script = path.join(BASE, 'outils', 'memoire', 'memoire.py');\n    if (fs.existsSync(script)) {\n      const f = path.join(os.tmpdir(), 'archi_memoire_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '.json');\n      fs.writeFileSync(f, JSON.stringify({ action: 'retenir', texte: dit }));\n      cp.spawn($env.ARCHI_PY || 'python', [script, '--fichier', f, '--menage'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();\n    }\n  }\n} catch (x) { /* la memoire ne doit jamais faire echouer une conversation */ }\nreturn $input.all();\n"
+   },
+   "id": "4fbc3a1e-411e-5cb1-afba-c6599856af3d",
+   "name": "Retenir appli",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    2080,
+    520
+   ]
+  },
+  {
+   "parameters": {
     "httpMethod": "POST",
     "path": "telephone-boite",
     "responseMode": "responseNode",
@@ -638,6 +664,17 @@
     ]
    ]
   },
+  "Repondre Telegram": {
+   "main": [
+    [
+     {
+      "node": "Retenir",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
   "Appli telephone": {
    "main": [
     [
@@ -734,6 +771,17 @@
     [
      {
       "node": "Repondre appli",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Repondre appli": {
+   "main": [
+    [
+     {
+      "node": "Retenir appli",
       "type": "main",
       "index": 0
      }

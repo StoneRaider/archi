@@ -644,24 +644,16 @@
  },
  "memoire": {
   "nom": "memoire",
-  "description": "MODE D EMPLOI : la memoire long terme d'Archi, en fiches dans le chateau. Elle se remplit TOUTE SEULE apres chaque message : n'appelle PAS l'outil pour retenir ce que l'utilisateur vient de dire. action=lire (sujet facultatif : un prenom, un projet, un lieu) : tout ce qu'Archi sait. action=lister : les fiches. action=ecrire avec piece (moi, personnes, projets, lieux, preferences), sujet et fait : seulement quand l'utilisateur dicte un fait a noter tel quel. action=oublier avec texte = quelques mots du fait : ESSAI A BLANC d'abord (il montre ce qui serait efface), puis confirmer=oui quand l'utilisateur dit oui.",
+  "description": "MODE D EMPLOI : la memoire long terme d'Archi, en fiches dans le chateau. Elle se remplit TOUTE SEULE apres chaque message : cet outil ne sert PAS a retenir. action=lire (sujet facultatif : un prenom, un projet, un lieu) : tout ce qu'Archi sait. action=lister : les fiches. action=oublier avec texte = quelques mots du fait : ESSAI A BLANC d'abord (il montre ce qui serait efface), puis confirmer=oui quand l'utilisateur dit oui.",
   "script": "memoire.py",
   "parametres": [
    {
     "nom": "action",
-    "description": "lire, lister, ecrire ou oublier"
+    "description": "lire, lister ou oublier"
    },
    {
     "nom": "sujet",
-    "description": "lire ou ecrire : un prenom, un projet, un lieu"
-   },
-   {
-    "nom": "piece",
-    "description": "ecrire : moi, personnes, projets, lieux ou preferences"
-   },
-   {
-    "nom": "fait",
-    "description": "ecrire : la phrase a retenir"
+    "description": "lire : un prenom, un projet, un lieu (vide = tout)"
    },
    {
     "nom": "texte",
@@ -674,8 +666,7 @@
   ],
   "timeout_s": 60,
   "touche": [
-   "memoire du chateau (fiches Markdown)",
-   "modele local"
+   "memoire du chateau (fiches Markdown)"
   ]
  }
 }
