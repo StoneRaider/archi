@@ -18,6 +18,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
+const voix = require('../core/voix');   // l'oreille et la parole : la page d'accueil montre le micro si elles sont installees
 
 const ICI = __dirname;
 const MAX_CORPS = 30 * 1024 * 1024;          // une photo du telephone tient largement
@@ -43,6 +44,7 @@ function reglages(env) {
     modeleVision: env.ARCHI_MODELE_VISION || 'google/gemma-3-12b',
     utilisateur: env.ARCHI_UTILISATEUR || '',
     telegram: !!(env.TELEGRAM_BOT_TOKEN && env.ARCHI_TELEGRAM_CHAT_ID),
+    voix: voix.reglages(env),
   };
 }
 
@@ -235,9 +237,10 @@ function outils(r) {
 }
 
 async function etat(r, suivi) {
-  const [n8n, lm] = await Promise.all([
+  const [n8n, lm, etatVoix] = await Promise.all([
     voir('http://127.0.0.1:' + r.n8nPort + '/healthz', 2500),
     voir(r.lmUrl + '/models', 2500),
+    r.voix ? voix.etat(r.voix).catch(() => null) : null,
   ]);
   let modeles = [];
   try { modeles = (JSON.parse(lm.corps).data || []).map(m => String(m.id)); } catch (e) { modeles = []; }
@@ -248,6 +251,8 @@ async function etat(r, suivi) {
     n8n: !!(n8n && n8n.code === 200),
     cerveau: { joignable: !!lm, modele: r.modele, pret: modeles.includes(r.modele), vision: r.modeleVision, vision_prete: modeles.includes(r.modeleVision) },
     telegram: r.telegram,
+    // la voix, en local : l'oreille (Whisper installe) et la parole (le serveur Pocket TTS repond)
+    voix: { oreille: !!(etatVoix && etatVoix.oreille), parole: !!(etatVoix && etatVoix.parole) },
     cle_ok: r.cle.length >= 16,
     adresse_publique: pub,
     // le lien du QR code : la cle est dans le « # », que le navigateur du telephone n'envoie jamais sur le reseau
@@ -261,7 +266,7 @@ async function etat(r, suivi) {
   };
 }
 
-const CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
+const CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
 function fichier(res, nom, type, extra) {
   try {
     repondre(res, 200, fs.readFileSync(path.join(ICI, nom)), type, Object.assign({ 'Content-Security-Policy': CSP, 'X-Frame-Options': 'DENY' }, extra || {}));

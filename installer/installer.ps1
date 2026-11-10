@@ -3,6 +3,7 @@
 # Tout s'installe dans UN dossier (par defaut %USERPROFILE%\Archi) : Python, Node.js, n8n, le tunnel et ffmpeg y sont
 # PRIVES, rien n'est ajoute au PATH ni installe pour tout Windows. Seule exception : LM Studio (le cerveau), installe
 # par winget s'il n'est pas deja la. Desinstaller = supprimer le dossier.
+# La voix (whisper.cpp et Pocket TTS) est privee elle aussi, et tourne sur le processeur.
 # Ce fichier reste en ASCII (PowerShell 5 lit mal les accents sans BOM).
 #
 # Options (pour les essais) :
@@ -15,7 +16,8 @@
 #   -SansModeles             LM Studio oui, mais aucun modele telecharge
 #   -SansLancer              ne lance pas Archi a la fin
 #   -SansRaccourci           ne pose pas le raccourci sur le Bureau
-#   -PortN8n, -PortPortail, -PortPorte, -PortServeur   ports imposes (0 = le premier libre)
+#   -SansVoix                n'installe ni l'oreille (Whisper) ni la parole (Pocket TTS)
+#   -PortN8n, -PortPortail, -PortPorte, -PortServeur, -PortVoix   ports imposes (0 = le premier libre)
 param(
     [string]$Destination = (Join-Path $env:USERPROFILE "Archi"),
     [switch]$Oui,
@@ -26,10 +28,12 @@ param(
     [switch]$SansModeles,
     [switch]$SansLancer,
     [switch]$SansRaccourci,
+    [switch]$SansVoix,
     [int]$PortN8n = 0,
     [int]$PortPortail = 0,
     [int]$PortPorte = 0,
-    [int]$PortServeur = 0
+    [int]$PortServeur = 0,
+    [int]$PortVoix = 0
 )
 
 $ErrorActionPreference = "Stop"
@@ -47,6 +51,10 @@ $TELECHARGEMENTS = @{
     "node.zip"        = @("https://nodejs.org/dist/v22.23.4/node-v22.23.4-win-x64.zip", "cbc74b5e0982c9dbb41525fd8fb5dcd32fbee237863f7829072f4639a1ce5f20")
     "cloudflared.exe" = @("https://github.com/cloudflare/cloudflared/releases/download/2026.10.7/cloudflared-windows-amd64.exe", "2493dbc168923bb3e59e5e7716f71deced92992eea9acd6e9d74f84ac7751343")
     "ffmpeg.zip"      = @("https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-essentials_build.zip", "60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba")
+    # la voix : whisper.cpp (l'oreille, version processeur), son modele small, et Pocket TTS (la parole)
+    "whisper.zip"     = @("https://github.com/ggml-org/whisper.cpp/releases/download/b5454/whisper-bin-x64.zip", "6ba69e3482d7826214f90a6a9c84ca07782aec1e1d0c6a7c30c994fd5d816ccb")
+    "ggml-small.bin"  = @("https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.bin", "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b")
+    "pocket-tts.zip"  = @("https://github.com/kyutai-labs/pocket-tts/releases/download/v4.0.1/pocket-tts-3.3.0-x86_64-pc-windows-msvc.zip", "98753041f2e65744b989776f87bccb93f1f574a08afe1890c5427ec94cd6309c")
 }
 $VERSION_PYTHON = "3.12"
 $MODELE = "openai/gpt-oss-20b"     # le cerveau (12 Go)
@@ -175,6 +183,7 @@ Dire "  Dans $Destination (rien n'est installe pour tout Windows) :"
 Dire "   - Python $VERSION_PYTHON et Node.js $VERSION_NODE prives, n8n $VERSION_N8N (l'orchestrateur)"
 Dire "   - les outils maison d'Archi, son chateau d'exemple (sa memoire) et ses workflows"
 Dire "   - un tunnel HTTPS sans compte (Cloudflare) pour le telephone, et ffmpeg"
+if (-not $SansVoix) { Dire "   - la voix, en local : Whisper (il t'ecoute) et Pocket TTS (il te repond a voix haute), environ 1 Go" }
 if (-not $SansCerveau) {
     Dire "  Le cerveau : LM Studio (installe par winget s'il manque) et deux modeles (environ 16 Go a telecharger) :"
     Dire "   - $MODELE (le raisonnement) et $VISION (les photos)"
@@ -409,8 +418,65 @@ ReglerEnv "ARCHI_MODELE" $modeleFinal -Forcer
 ReglerEnv "ARCHI_MODELE_VISION" $visionFinale -Forcer
 ReglerEnv "CUSTOM_MODEL" $modeleFinal -Forcer
 
-# ---------------------------------------------------------------- 10. n8n : identifiants et workflows
-Titre "10. n8n : identifiants et workflows"
+# ---------------------------------------------------------------- 10. la voix : Whisper (l'oreille) et Pocket TTS (la parole)
+Titre "10. La voix (tout en local)"
+$pVoix = if ((-not $nouveauEnv) -and $PortVoix -eq 0 -and (ValeurEnv "ARCHI_VOIX_PORT") -match '^\d+$') { [int](ValeurEnv "ARCHI_VOIX_PORT") } else { ChoisirPort $PortVoix 5683 }
+if ($SansVoix) {
+    Noter "Voix non installee (option -SansVoix) : Archi repond par ecrit."
+} else {
+    # l'oreille : whisper.cpp (processeur) et son modele ; rien ne sort du PC
+    try {
+        $wh = Trouver (Join-Path $PROG "whisper\programme") "whisper-cli.exe"
+        if (-not $wh) {
+            $zip = Telecharger "whisper.zip"
+            Decompresser $zip (Join-Path $PROG "whisper\programme")
+            $wh = Trouver (Join-Path $PROG "whisper\programme") "whisper-cli.exe"
+        }
+        if (-not $wh) { throw "whisper-cli.exe introuvable dans le ZIP" }
+        $modeles = Join-Path $PROG "whisper\modeles"
+        $mo = Join-Path $modeles "ggml-small.bin"
+        if (-not ((Test-Path $mo) -and (EmpreinteBonne $mo "ggml-small.bin"))) {
+            Dire "  modele de l'oreille (environ 490 Mo)..."
+            $f = Telecharger "ggml-small.bin"
+            New-Item -ItemType Directory -Force $modeles | Out-Null
+            Move-Item $f $mo -Force
+        }
+        ReglerEnv "ARCHI_WHISPER_EXE" $wh -Forcer
+        ReglerEnv "ARCHI_WHISPER_MODELE" $mo -Forcer
+        Noter "Oreille prete : whisper.cpp et son modele (tes messages vocaux sont transcrits sur ce PC)."
+    } catch { Souci "Oreille (Whisper) : $($_.Exception.Message) (Archi lira tes messages ecrits, pas les vocaux)" }
+    # la parole : Pocket TTS, un petit serveur local lance avec Archi
+    try {
+        $pk = Trouver (Join-Path $PROG "voix\programme") "pocket-tts.exe"
+        if (-not $pk) {
+            $zip = Telecharger "pocket-tts.zip"
+            Decompresser $zip (Join-Path $PROG "voix\programme")
+            $pk = Trouver (Join-Path $PROG "voix\programme") "pocket-tts.exe"
+        }
+        if (-not $pk) { throw "pocket-tts.exe introuvable dans le ZIP" }
+        # une premiere phrase : Pocket telecharge son modele (Hugging Face) et le range dans le dossier d'Archi
+        $cacheVoix = Join-Path $PROG "voix\cache"
+        New-Item -ItemType Directory -Force $cacheVoix, $TELE | Out-Null
+        $essai = Join-Path $TELE "essai_voix.wav"
+        Remove-Item $essai -Force -ErrorAction SilentlyContinue
+        $hfAvant = $env:HF_HOME
+        $env:HF_HOME = $cacheVoix
+        try {
+            if (-not $SansReseau) { Dire "  modele de la voix (environ 430 Mo, une seule fois)..." }
+            $r = Lancer $pk @("generate", "--language", "french", "--voice", "charles", "--quiet", "--text", "Bonjour, je suis Archi.", "--output-path", $essai) 1800 -Points
+        } finally { $env:HF_HOME = $hfAvant }
+        if ($r.code -ne 0 -or -not (Test-Path $essai) -or (Get-Item $essai).Length -lt 10000) { throw "la premiere phrase n'a pas pu etre dite (code $($r.code))" }
+        Remove-Item $essai -Force -ErrorAction SilentlyContinue
+        Noter "Parole prete : Pocket TTS (Archi lit ses reponses a voix haute, sur le telephone et sur la page d'accueil)."
+    } catch { Souci "Parole (Pocket TTS) : $($_.Exception.Message) (Archi repondra par ecrit)" }
+}
+ReglerEnv "ARCHI_VOIX" $(if ($SansVoix) { "non" } else { "oui" }) -Forcer:$SansVoix
+ReglerEnv "ARCHI_VOIX_PORT" "$pVoix" -Forcer
+ReglerEnv "ARCHI_VOIX_NOM" "charles"
+ReglerEnv "ARCHI_LANGUE" "fr"
+
+# ---------------------------------------------------------------- 11. n8n : identifiants et workflows
+Titre "11. n8n : identifiants et workflows"
 try {
     if (-not (Test-Path $PY)) { throw "Python n'est pas pret (voir plus haut)" }
     if (-not (Test-Path $n8nBin)) { throw "n8n n'est pas pret (voir plus haut)" }
@@ -424,7 +490,7 @@ try {
     ($r.sortie -split "`r?`n") | Where-Object { $_.Trim() } | ForEach-Object { if ($_ -match "Echec|PAS active") { Souci $_ } else { Noter $_ } }
 } catch { Souci "n8n : $($_.Exception.Message)" }
 
-# ---------------------------------------------------------------- 11. le raccourci et le bilan
+# ---------------------------------------------------------------- 12. le raccourci et le bilan
 Titre "Bilan"
 if (-not $SansRaccourci) { try {
     $bureau = [Environment]::GetFolderPath("Desktop")
@@ -447,7 +513,7 @@ Dire "Le bilan complet est dans $Destination\installation.txt"
 Dire ""
 if ($SansLancer) { Dire "Pour lancer Archi : double-clique sur lancer_archi.bat (ou sur le raccourci 'Archi' du Bureau)."; exit ($(if ($soucis.Count) { 2 } else { 0 })) }
 Dire "MAINTENANT : Archi demarre dans une nouvelle fenetre, puis sa page d'accueil s'ouvre dans ton navigateur." "Green"
-Dire "  - ecris-lui 'Quels outils as-tu ?' ou 'Rappelle-moi dans 2 minutes de boire un verre d eau' ;"
+Dire "  - ecris-lui 'Quels outils as-tu ?', ou clique sur le micro et parle-lui ;"
 Dire "  - pour le telephone : scanne le QR code de la page d'accueil."
 Dire "Les fois suivantes : le raccourci 'Archi' du Bureau."
 Start-Process -FilePath (Join-Path $Destination "lancer_archi.bat") -WorkingDirectory $Destination

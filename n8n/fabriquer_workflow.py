@@ -52,8 +52,24 @@ return [{ json: { texte, source: 'telegram', chat_id: chat,
   lat: m.location ? m.location.latitude : undefined, lon: m.location ? m.location.longitude : undefined } }];
 """
 
-# La porte de l'appli : cle partagee (en-tete x-archi-cle), puis photo -> description par le modele de vision.
-PORTE = r"""
+# L'oreille et la voix (core/voix.js : whisper.cpp et Pocket TTS, sur ce PC). Appel SANS bloquer : n8n coupe un noeud
+# qui ne repond plus pendant 30 s. Jamais d'exception : en cas de souci, Archi repond par ecrit.
+APPEL_VOIX = r"""
+function appelVoix(entree, ms) {
+  const cpV = require('child_process'), pathV = require('path');
+  return new Promise(ok => {
+    const p = cpV.execFile('node', [pathV.join($env.ARCHI_DEPOT, 'core', 'voix.js')],
+      { timeout: ms, windowsHide: true, maxBuffer: 64 * 1024 * 1024 }, (e, out) => {
+        try { ok(JSON.parse(String(out || '').trim().split(/\r?\n/).pop())); }
+        catch (x) { ok({ ok: false, raison: 'erreur', detail: String((e && e.message) || x.message || '').slice(0, 150) }); }
+      });
+    try { p.stdin.end(JSON.stringify(entree)); } catch (x) { /* le rappel ci-dessus dira l'erreur */ }
+  });
+}
+"""
+
+# La porte de l'appli : cle partagee (en-tete x-archi-cle), puis voix -> texte (Whisper) ou photo -> description (vision).
+PORTE = APPEL_VOIX + r"""
 const crypto = require('crypto');
 const it = $input.first();
 const h = it.json.headers || {};
@@ -69,8 +85,28 @@ const bin = it.binary || {};
 const cles = Object.keys(bin);
 const cleImage = cles.find(k => /^image\//.test(bin[k].mimeType || ''));
 const cleAudio = cles.find(k => /^audio\//.test(bin[k].mimeType || '') || /\.m4a$/i.test(bin[k].fileName || ''));
+// « voix: non » : la page d'accueil a coupe son haut-parleur, inutile de fabriquer le son de la reponse
+const sans_voix = String(b.voix || '').toLowerCase() === 'non';
+let entendu = '';
 if (cleAudio && !texte) {
-  return [{ json: { direct: true, texte: "Pour la voix, il faut brancher Whisper (docs/INSTALLATION.md, etape optionnelle). En attendant, ecris-moi ton message." } }];
+  // un message vocal : le son est pose dans un fichier temporaire, transcrit sur ce PC, puis efface
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const ext = (String(bin[cleAudio].fileName || '').toLowerCase().match(/\.(m4a|mp4|webm|ogg|oga|wav|mp3|aac)$/) || ['.m4a'])[0];
+  const f = path.join(os.tmpdir(), 'archi_question_' + crypto.randomBytes(6).toString('hex') + ext);
+  let t = { ok: false, raison: 'erreur_oreille' };
+  try {
+    fs.writeFileSync(f, await this.helpers.getBinaryDataBuffer(0, cleAudio));
+    t = await appelVoix({ action: 'transcrire', fichier: f }, 320000);
+  } catch (e) { /* t garde « erreur_oreille » */ } finally { try { fs.unlinkSync(f); } catch (e) {} }
+  if (!t.ok) {
+    const quoi = t.raison === 'rien_entendu' ? "Je n'ai rien entendu. Tu peux répéter ?"
+      : (t.raison === 'oreille_absente' || t.raison === 'voix_desactivee')
+        ? "La voix n'est pas installée sur ce PC : relance installation.bat. En attendant, écris-moi ton message."
+        : "Je n'ai pas réussi à écouter ton message. Écris-le-moi, et lance verifier_archi.bat sur le PC pour voir ce qui manque.";
+    return [{ json: { direct: true, texte: quoi, sans_voix } }];
+  }
+  texte = t.texte;
+  entendu = t.texte;
 }
 if (cleImage) {
   const buf = await this.helpers.getBinaryDataBuffer(0, cleImage);
@@ -86,7 +122,21 @@ if (cleImage) {
 } else if (cles.length && !cleAudio) {
   texte += "\n(Une piece jointe a ete envoyee, mais la demo ne lit que les photos : dis-le a l'utilisateur.)";
 }
-return [{ json: { texte, source: 'appli', lat: b.lat, lon: b.lon } }];
+return [{ json: { texte, source: 'appli', lat: b.lat, lon: b.lon, entendu, sans_voix } }];
+"""
+
+# La reponse de l'appli et de la page d'accueil : le texte, ce qu'Archi a entendu, et sa voix (OGG en base64).
+VOIX = APPEL_VOIX + r"""
+const e = $input.first().json;
+const p = $('Porte').first().json;
+const reponse = { texte: String(e.texte || '') };
+if (p.entendu) reponse.entendu = p.entendu;
+if (!p.sans_voix && reponse.texte) {
+  const v = await appelVoix({ action: 'dire', texte: reponse.texte }, 200000);
+  if (v.ok) { reponse.audio_ogg_base64 = v.audio_ogg_base64; reponse.texte_dit = v.texte_dit; }
+  else reponse.erreur_voix = v.raison || 'erreur';
+}
+return [{ json: { reponse } }];
 """
 
 APPEL_PLANIF = r"""
@@ -225,8 +275,9 @@ nodes = [
     noeud("Contexte appli", "n8n-nodes-base.code", 2, 880, 600, {"jsCode": CONTEXTE}),
     *cerveau(" appli", 1100, 600, "appli"),
     noeud("Verifier appli", "n8n-nodes-base.code", 2, 1420, 600, {"jsCode": VERIFIER_APPLI}),
-    noeud("Repondre appli", "n8n-nodes-base.respondToWebhook", 1.1, 1640, 520,
-          {"respondWith": "json", "responseBody": "={{ JSON.stringify({ texte: $json.texte }) }}", "options": {}}),
+    noeud("Voix appli", "n8n-nodes-base.code", 2, 1640, 520, {"jsCode": VOIX}),
+    noeud("Repondre appli", "n8n-nodes-base.respondToWebhook", 1.1, 1860, 520,
+          {"respondWith": "json", "responseBody": "={{ JSON.stringify($json.reponse) }}", "options": {}}),
 
     noeud("Boite appli", "n8n-nodes-base.webhook", 2, 0, 900,
           {"httpMethod": "POST", "path": "telephone-boite", "responseMode": "responseNode", "options": {}}),
@@ -252,9 +303,9 @@ liens = [
     lien("Telegram", "Message Telegram"), lien("Message Telegram", "Contexte"), lien("Contexte", "Agent"),
     lien("Agent", "Verifier"), lien("Verifier", "Repondre Telegram"),
     lien("Appli telephone", "Porte"), lien("Porte", "Cle valide ?"), lien("Cle valide ?", "Reponse directe ?", 0),
-    lien("Cle valide ?", "Refuser", 1), lien("Reponse directe ?", "Repondre appli", 0),
+    lien("Cle valide ?", "Refuser", 1), lien("Reponse directe ?", "Voix appli", 0),
     lien("Reponse directe ?", "Contexte appli", 1), lien("Contexte appli", "Agent appli"),
-    lien("Agent appli", "Verifier appli"), lien("Verifier appli", "Repondre appli"),
+    lien("Agent appli", "Verifier appli"), lien("Verifier appli", "Voix appli"), lien("Voix appli", "Repondre appli"),
     lien("Boite appli", "Boite"), lien("Boite", "Repondre boite"),
     lien("Chaque minute", "Reveil planificateur"), lien("Reveil planificateur", "Rappel Telegram"),
 ]

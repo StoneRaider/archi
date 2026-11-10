@@ -41,6 +41,11 @@ foreach ($x in @(@("Python prive", "python\venv\Scripts\python.exe"), @("n8n pri
 Controle "Node.js prive" ([bool](Get-ChildItem (Join-Path $prog "node") -Recurse -Filter node.exe -File -ErrorAction SilentlyContinue | Select-Object -First 1))
 Controle "cle de l'appli (16 caracteres ou plus, jamais affichee)" ("$env:ARCHI_CLE_TELEPHONE".Length -ge 16)
 Controle "chateau (memoire)" (Test-Path (Join-Path $env:ARCHI_BASE "memoire"))
+$voixVoulue = ($env:ARCHI_VOIX -ne "non")
+if ($voixVoulue) {
+    Controle "oreille : whisper.cpp et son modele" (("$env:ARCHI_WHISPER_EXE" -ne "") -and (Test-Path "$env:ARCHI_WHISPER_EXE") -and ("$env:ARCHI_WHISPER_MODELE" -ne "") -and (Test-Path "$env:ARCHI_WHISPER_MODELE"))
+    Controle "parole : Pocket TTS" ([bool](Get-ChildItem (Join-Path $prog "voix") -Recurse -Filter pocket-tts.exe -File -ErrorAction SilentlyContinue | Select-Object -First 1))
+} else { $rapport.Add("      Voix : coupee (ARCHI_VOIX=non dans .env)") | Out-Null }
 
 Titre "2. Ce qui tourne"
 $modeles = @()
@@ -52,6 +57,21 @@ Controle "n8n repond" ((Code "http://127.0.0.1:$pN8n/healthz") -eq 200) "port $p
 $etat = $null
 try { $etat = Invoke-RestMethod -Uri "$portail/api/etat" -Headers $maison -TimeoutSec 10 } catch {}
 Controle "page d'accueil (portail)" ([bool]$etat) $portail
+if ($voixVoulue) {
+    $pVoix = if ($env:ARCHI_VOIX_PORT -match '^\d+$') { [int]$env:ARCHI_VOIX_PORT } else { 5683 }
+    Controle "la voix repond (Pocket TTS)" ((Code "http://127.0.0.1:$pVoix/") -eq 200) "127.0.0.1:$pVoix"
+    # la boucle complete, sans micro : la voix dit une phrase temoin, l'oreille la reecoute
+    $b = $null
+    try {
+        $nodeExe = Get-ChildItem (Join-Path $prog "node") -Recurse -Filter node.exe -File -ErrorAction SilentlyContinue | Select-Object -First 1
+        $nodeExe = if ($nodeExe) { $nodeExe.FullName } else { "node" }
+        try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
+        $sortie = '{"action":"boucle"}' | & $nodeExe (Join-Path $Depot "core\voix.js")
+        $b = @($sortie | Where-Object { "$_".Trim().StartsWith("{") }) | Select-Object -Last 1 | ConvertFrom-Json
+    } catch {}
+    $detail = if ($b -and $b.entendu) { "entendu : $($b.entendu) (parole $($b.ms_parole) ms, oreille $($b.ms_oreille) ms)" } elseif ($b) { "$($b.etape) : $($b.raison) $($b.detail)" } else { "pas de reponse" }
+    Controle "voix puis oreille : Archi comprend ce qu'il dit" ([bool]($b -and $b.ok)) $detail
+}
 if ($etat) {
     Controle "outils maison au registre" ($etat.outils.Count -gt 0) "$($etat.outils.Count) outils"
     Controle "adresse HTTPS du telephone" ([bool]$etat.adresse_publique) $(if ($etat.adresse_publique) { $etat.adresse_publique } else { "pas de tunnel (le PC marche seul)" })
