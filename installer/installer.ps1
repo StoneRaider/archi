@@ -136,9 +136,12 @@ try { $cartes = @(Get-CimInstance Win32_VideoController | ForEach-Object { $_.Na
 try {
     # la vraie taille de la memoire video est dans le registre (Win32_VideoController plafonne a 4 Go)
     $cle = "HKLM:\SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
+    # on ecarte les puces integrees et les ecrans virtuels : leur memoire est celle du PC, partagee
+    $integrees = '(?i)virtual|basic|remote|parsec|displaylink|intel\(r\) (u?hd|iris)|radeon\(tm\) graphics$|radeon\(tm\) \d+m? graphics$'
     Get-ChildItem $cle -ErrorAction SilentlyContinue | ForEach-Object {
-        $q = (Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue)."HardwareInformation.qwMemorySize"
-        if ($q) { $go = [math]::Round([double]$q / 1GB); if ($go -gt $vramGo) { $vramGo = $go } }
+        $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
+        $q = $p."HardwareInformation.qwMemorySize"
+        if ($q -and "$($p.DriverDesc)" -notmatch $integrees) { $go = [math]::Round([double]$q / 1GB); if ($go -gt $vramGo) { $vramGo = $go } }
     }
 } catch {}
 $ramGo = 0

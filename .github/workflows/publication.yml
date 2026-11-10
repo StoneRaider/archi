@@ -1,0 +1,50 @@
+# Fabrique ce que l'on telecharge sur la page Releases : Archi-<version>.zip (le depot + l'appli deja compilee)
+# et Archi.apk. Se lance quand on pousse une etiquette « v1.0 », ou a la main.
+name: Publication (ZIP a telecharger)
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  zip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Pas de secret ni de donnee perso dans ce qui est publie
+        run: python outils_depot/verifier_depot.py .
+      - name: Tests du coeur et du portail
+        run: node --test core/test/ portail/test/
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@v3
+      - name: Fabriquer l'appli Android (aucune cle dedans : elle se branche par QR code)
+        working-directory: appli
+        run: chmod +x gradlew && ./gradlew --no-daemon assembleDebug
+      - name: Fabriquer le ZIP
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          case "$GITHUB_REF" in refs/tags/*) ;; *) VERSION="essai" ;; esac
+          python outils_depot/faire_le_zip.py --version "$VERSION"
+          ls -l dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archi-zip
+          path: dist/*
+      - name: Publier sur la page Releases
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/Archi-*.zip dist/Archi.apk \
+            --title "Archi ${GITHUB_REF_NAME#v}" \
+            --notes "Telecharge le ZIP, extrais-le, puis double-clique sur installation.bat. Le detail est dans le README."

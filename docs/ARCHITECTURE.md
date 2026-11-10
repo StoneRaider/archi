@@ -1,8 +1,22 @@
 # Architecture d'Archi
 
+## Les pièces
+| Pièce | Rôle | Écoute |
+|---|---|---|
+| LM Studio | sert gpt-oss-20b et le modèle de vision (API compatible OpenAI) | `127.0.0.1` |
+| n8n | l'agent, ses workflows, le réveil du planificateur | `127.0.0.1` |
+| `portail/portail.js` | la page d'accueil du PC, et la seule porte ouverte au tunnel du téléphone | `127.0.0.1` |
+| tunnel HTTPS | relie le téléphone au portail (Cloudflare sans compte par défaut) | sortant |
+| `serveur/` | mails et agenda (FastAPI), appelé par n8n | `127.0.0.1` |
+| `chateau\` | la mémoire (fiches Markdown) et les outils maison | fichiers |
+
+`lancer_archi.bat` démarre le tout dans l'ordre : cerveau, portail, tunnel, serveur, puis n8n.
+`installation.bat` pose ces pièces sur un PC vide ([INSTALLATION.md](INSTALLATION.md)).
+
 ## Un tour de conversation
-1. **Entrée.** Un message arrive par Telegram (déclencheur n8n, seulement depuis les chats de `ARCHI_TELEGRAM_CHAT_ID`)
-   ou par l'appli (webhook `telephone-archi`).
+1. **Entrée.** Un message arrive par Telegram (déclencheur n8n, seulement depuis les chats de `ARCHI_TELEGRAM_CHAT_ID`),
+   par l'appli (webhook `telephone-archi`) ou par la page d'accueil du PC, qui passe par ce même webhook.
+   Le portail vérifie la clé avant de transmettre à n8n.
    Pour l'appli, le nœud *Porte* vérifie la clé partagée en temps constant. Si une photo est jointe, il la fait
    décrire par le modèle de vision local.
 2. **Contexte** (`core/contexte.js`). Il assemble, à chaque message :
@@ -20,7 +34,7 @@
 5. **Vérificateur** (`core/verifier_reponse.js`). Il signale tout nom de personne, mail ou numéro absent des
    résultats d'outils (du tour ou des dernières 24 h), du message ou du château. Il n'efface rien et ne plante
    jamais : en cas de pépin, la réponse passe telle quelle.
-6. **Sortie.** La réponse part sur Telegram, ou en JSON `{texte}` vers l'appli.
+6. **Sortie.** La réponse part sur Telegram, ou en JSON `{texte}` vers l'appli et la page d'accueil.
 
 ## Un outil maison
 ```
@@ -52,10 +66,11 @@ Elle est écrite en Java, sans bibliothèque externe. Elle propose :
 - des actions locales sur le téléphone (appel, SMS, minuteur, itinéraire, musique), lancées seulement quand le PC
   les demande.
 
-L'APK ne contient **aucune** adresse ni clé : la classe `Reglages` les demande au premier lancement.
+L'APK ne contient **aucune** adresse ni clé. La classe `Reglages` les reçoit du QR code de la page d'accueil
+(lien `archi://brancher`, avec accord dans l'appli), ou les demande au premier lancement.
 
 ## Ce qui n'est pas dans ce dépôt
-Ma version personnelle compte une vingtaine d'outils : mails Gmail et Outlook, impression 3D avec aperçu
-et accord, caméras locales, OSINT sur des lieux publics, voix (whisper.cpp et Piper), synchronisation chiffrée
-du château entre deux PC. Ils touchent à des comptes ou à des données personnelles, donc ils restent privés.
-L'architecture est la même.
+Mon château, mes comptes et mes clés. Les outils qui touchent à des comptes (mails, agenda) ou à du matériel
+(caméras, prises, imprimante 3D) sont ici, mais débranchés : chacun y met ses propres accès dans le `.env`.
+Deux choses de ma version personnelle restent à venir : la voix (whisper.cpp et synthèse locale) et la
+synchronisation chiffrée du château entre deux PC.

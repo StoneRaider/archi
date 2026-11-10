@@ -18,6 +18,10 @@ jobs:
         run: python outils_depot/test_verifier_depot.py
       - name: Tests du coeur
         run: node --test core/test/
+      - name: Tests du portail (ce qui sort du PC est une liste blanche)
+        run: node --test portail/test/
+      - name: Import des workflows (avec et sans Telegram)
+        run: python n8n/test_importer.py
       - name: Tests du planificateur
         run: cd outils/planificateur && python test_planificateur.py
       - name: Tests de l'indicateur Polymarket (hors ligne)
