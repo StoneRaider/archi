@@ -22,7 +22,8 @@
      "id": "ArchiTelegram001",
      "name": "Bot Telegram Archi"
     }
-   }
+   },
+   "webhookId": "fd9aac3c-2628-5658-b6dc-d6246b35c35c"
   },
   {
    "parameters": {
@@ -214,7 +215,8 @@
    "position": [
     0,
     520
-   ]
+   ],
+   "webhookId": "a42f1a86-7ce6-5aa7-b1b6-7346f8669dee"
   },
   {
    "parameters": {
@@ -477,7 +479,8 @@
    "position": [
     0,
     900
-   ]
+   ],
+   "webhookId": "28dda471-0c26-53ad-a928-245c92730258"
   },
   {
    "parameters": {

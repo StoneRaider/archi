@@ -9,6 +9,7 @@
 # sont importes DESACTIVES : sinon n8n refuse d'activer le workflow, et l'appli comme la page d'accueil resteraient
 # sans reponse. Quand Telegram est branche plus tard (brancher_telegram.bat), le workflow principal est reimporte.
 import glob
+import hashlib
 import json
 import os
 import sys
@@ -24,6 +25,7 @@ PRINCIPAL = "archi_demo.json"
 ID_PRINCIPAL = "ArchiDemo0000001"
 ID_BRIEF = "ArchiBrief000001"
 TYPES_TELEGRAM = ("n8n-nodes-base.telegramTrigger", "n8n-nodes-base.telegram")
+TYPES_WEBHOOK = ("n8n-nodes-base.webhook", "n8n-nodes-base.telegramTrigger")
 
 
 def telegram_branche(env):
@@ -38,9 +40,16 @@ def adapter(workflow, avec_telegram):
                 n.pop("disabled", None)
             else:
                 n["disabled"] = True
-        if n.get("type") == "n8n-nodes-base.telegramTrigger" and not n.get("webhookId"):
-            n["webhookId"] = "archi-telegram-0001"   # adresse stable : /webhook/archi-telegram-0001/webhook
+        if n.get("type") in TYPES_WEBHOOK and not n.get("webhookId"):
+            # sans webhookId, n8n range le webhook sous /webhook/<workflow>/<noeud>/<chemin> : l'appli recevrait un 404
+            n["webhookId"] = "archi-" + hashlib.sha256(n.get("name", "").encode("utf-8")).hexdigest()[:24]
     return workflow
+
+
+def empreinte(fichier):
+    """empreinte du fichier du depot : un workflow est reimporte quand une nouvelle version d'Archi le change"""
+    with open(fichier, "rb") as h:
+        return hashlib.sha256(h.read()).hexdigest()[:16]
 
 
 def importer(fichier):
@@ -61,16 +70,19 @@ def main():
     def temoin(f):
         return os.path.join(dossier_temoins, os.path.basename(f))
 
+    def marque(f):
+        # le principal depend aussi de Telegram : il est reimporte quand le bot vient d'etre branche (ou debranche)
+        return (etat_voulu if os.path.basename(f) == PRINCIPAL else "ok") + " " + empreinte(f)
+
     def deja(f):
         try:
-            vu = open(temoin(f), encoding="utf-8").read().strip()
+            return open(temoin(f), encoding="utf-8").read().strip() == marque(f)
         except OSError:
             return False
-        # le principal est reimporte quand Telegram vient d'etre branche (ou debranche)
-        return vu == etat_voulu if os.path.basename(f) == PRINCIPAL else True
 
     tous = [os.path.join(ICI, PRINCIPAL)] + sorted(glob.glob(os.path.join(ICI, "optionnels", "*.json")))
-    # un temoin par fichier : ce qui a deja ete importe n'est JAMAIS reimporte (tes modifications dans n8n restent)
+    # un temoin par fichier : ce qui a deja ete importe n'est reimporte que si le fichier du depot a change
+    # (nouvelle version d'Archi) ; sinon tes modifications dans n8n restent
     fichiers = [f for f in tous if forcer or not deja(f)]
     if not fichiers:
         print("Workflows deja importes (python n8n/importer_workflows.py --forcer pour tout reimporter et ECRASER).")
@@ -89,7 +101,7 @@ def main():
             if importer(a_importer):
                 ok += 1
                 with open(temoin(f), "w", encoding="utf-8") as h:
-                    h.write((etat_voulu if os.path.basename(f) == PRINCIPAL else "ok") + "\n")
+                    h.write(marque(f) + "\n")
             else:
                 print("Echec de l'import : %s" % os.path.basename(f))
         finally:

@@ -40,8 +40,23 @@ avec = imp.adapter(copy.deepcopy(sans), avec_telegram=True)
 verifier("avec bot : les noeuds Telegram sont rallumes",
          all("disabled" not in n for n in avec["nodes"] if n["type"] in imp.TYPES_TELEGRAM))
 declencheur = [n for n in avec["nodes"] if n["type"] == "n8n-nodes-base.telegramTrigger"][0]
-verifier("le declencheur Telegram a une adresse stable", declencheur.get("webhookId") == "archi-telegram-0001")
-verifier("le fichier d'origine n'est pas modifie", "disabled" not in json.dumps(ORIGINAL))
+verifier("le declencheur Telegram garde son adresse", bool(declencheur.get("webhookId"))
+         and declencheur["webhookId"] == [n for n in ORIGINAL["nodes"] if n["type"] == "n8n-nodes-base.telegramTrigger"][0].get("webhookId"))
+# sans webhookId, n8n sert /webhook/<workflow>/<noeud>/telephone-archi au lieu de /webhook/telephone-archi (404 pour l'appli)
+verifier("chaque webhook du workflow principal a un webhookId (sinon l'appli recoit un 404)",
+         all(n.get("webhookId") for n in ORIGINAL["nodes"] if n["type"] in imp.TYPES_WEBHOOK))
+ancien = copy.deepcopy(ORIGINAL)
+for n in ancien["nodes"]:
+    n.pop("webhookId", None)
+repare = imp.adapter(ancien, avec_telegram=False)
+verifier("un vieux fichier sans webhookId est repare a l'import",
+         all(n.get("webhookId") for n in repare["nodes"] if n["type"] in imp.TYPES_WEBHOOK))
+for f in sorted(os.listdir(os.path.join(ICI, "optionnels"))):
+    if f.endswith(".json"):
+        w = json.load(open(os.path.join(ICI, "optionnels", f), encoding="utf-8"))
+        verifier("optionnels/%s : pas de webhook sans webhookId" % f,
+                 all(n.get("webhookId") for n in w["nodes"] if n["type"] in imp.TYPES_WEBHOOK))
+verifier("le fichier d'origine n'est pas modifie", '"disabled"' not in json.dumps(ORIGINAL))
 
 verifier("Telegram branche = jeton ET numero de chat",
          imp.telegram_branche({"TELEGRAM_BOT_TOKEN": "x", "ARCHI_TELEGRAM_CHAT_ID": "1"})

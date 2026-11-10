@@ -378,7 +378,8 @@ if (-not $SansCerveau) {
                 $la = ModelesLa $lms
                 $cle = CleDuModele $la $voulu
             }
-            if ($cle) { Noter "Modele du $role : $cle" } else { Souci "Modele du $role absent ($voulu)." ; $cle = $voulu }
+            $quoi = if ($role -eq "cerveau") { "Modele du cerveau" } else { "Modele de vision" }
+            if ($cle) { Noter "$quoi : $cle" } else { Souci "$quoi absent ($voulu)." ; $cle = $voulu }
             if ($role -eq "cerveau") { $modeleFinal = $cle } else { $visionFinale = $cle }
         }
     } catch { Souci "LM Studio : $($_.Exception.Message)" }
@@ -393,7 +394,7 @@ try {
     if (-not (Test-Path $PY)) { throw "Python n'est pas pret (voir plus haut)" }
     if (-not (Test-Path $n8nBin)) { throw "n8n n'est pas pret (voir plus haut)" }
     if (-not (PortLibre $pN8n)) { throw "le port $pN8n repond deja : ferme la fenetre 'Archi' (n8n doit etre arrete pendant l'import), puis relance installation.bat" }
-    ChargerEnv
+    ChargerEnv | Out-Null
     Dire "  creation des identifiants et import des workflows (2 a 4 minutes)"
     $r = Lancer $PY @("-I", (Join-Path $Destination "n8n\creer_identifiants.py")) 600 -Points
     ($r.sortie -split "`r?`n") | Where-Object { $_.Trim() } | ForEach-Object { Noter $_ }
@@ -423,7 +424,7 @@ if ($soucis.Count) {
 } else { Dire "Tout est installe, sans aucun souci." "Green" }
 Dire "Le bilan complet est dans $Destination\installation.txt"
 Dire ""
-if ($SansLancer) { Dire "Pour lancer Archi : double-clique sur le raccourci 'Archi' du Bureau."; exit ($(if ($soucis.Count) { 2 } else { 0 })) }
+if ($SansLancer) { Dire "Pour lancer Archi : double-clique sur lancer_archi.bat (ou sur le raccourci 'Archi' du Bureau)."; exit ($(if ($soucis.Count) { 2 } else { 0 })) }
 Dire "MAINTENANT : Archi demarre dans une nouvelle fenetre, puis sa page d'accueil s'ouvre dans ton navigateur." "Green"
 Dire "  - ecris-lui 'Quels outils as-tu ?' ou 'Rappelle-moi dans 2 minutes de boire un verre d eau' ;"
 Dire "  - pour le telephone : scanne le QR code de la page d'accueil."

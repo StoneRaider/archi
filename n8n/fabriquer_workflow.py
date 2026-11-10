@@ -163,6 +163,10 @@ def noeud(nom, type_, version, x, y, params, creds=None):
          "type": type_, "typeVersion": version, "position": [x, y]}
     if creds:
         n["credentials"] = creds
+    if type_ in ("n8n-nodes-base.webhook", "n8n-nodes-base.telegramTrigger"):
+        # sans webhookId, n8n range le webhook sous /webhook/<workflow>/<noeud>/<chemin> au lieu de /webhook/<chemin> :
+        # l'appli et la page d'accueil recevraient un 404 (vu a l'essai reel du 10/11/2026)
+        n["webhookId"] = str(uuid.uuid5(uuid.NAMESPACE_URL, "archi-demo/webhook/" + nom))
     return n
 
 
