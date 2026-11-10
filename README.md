@@ -88,7 +88,8 @@ Archi écoute et parle, **sans quitter le PC** : whisper.cpp transcrit ta voix, 
 - En haut à droite, un **menu** : la visite guidée, **ses outils** (avec un nom lisible, et « à brancher » quand il faut
   ton matériel ou ton compte) et les **outils en cours de développement** (les projets pas encore aboutis). Ces listes
   viennent de `config/vitrine.json` : pour annoncer un projet, ajoute-lui une ligne.
-- Partout où le mot « Archi » est écrit sur la page, c'est son logo qui s'affiche (`portail/logo.js`).
+- Partout où le mot « Archi » est écrit sur la page, c'est son logo qui s'affiche (`portail/logo.js`). L'appli Android
+  fait pareil dans ses réponses, ses messages et ses fenêtres (`appli/.../Logo.java`, la même règle du mot).
 - Les deux tournent sur le processeur : la carte graphique reste au modèle de langage.
 - `verifier_archi.bat` le contrôle sans micro : la voix dit une phrase, l'oreille la réécoute, et les mots sont comparés.
 

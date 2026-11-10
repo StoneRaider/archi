@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Le mot « Archi » dans une phrase (Logo.java) : le meme dessin que le titre, en traits un peu plus epais
+     pour rester lisible a la taille du texte (comme la page du PC). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="120dp" android:height="34dp" android:viewportWidth="120" android:viewportHeight="34">
+    <path android:pathData="M2,32 L13,2 L24,32" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient android:type="linear" android:startX="0" android:startY="0" android:endX="120" android:endY="0">
+                <item android:offset="0" android:color="#BFF7DC" />
+                <item android:offset="1" android:color="#3DDC97" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:pathData="M8.4,25.5 L8.4,22.5" android:strokeColor="#3DDC97" android:strokeWidth="2.3" android:strokeLineCap="round" />
+    <path android:pathData="M10.7,26.5 L10.7,21.5" android:strokeColor="#3DDC97" android:strokeWidth="2.3" android:strokeLineCap="round" />
+    <path android:pathData="M13,27.5 L13,20.5" android:strokeColor="#3DDC97" android:strokeWidth="2.3" android:strokeLineCap="round" />
+    <path android:pathData="M15.3,26.5 L15.3,21.5" android:strokeColor="#3DDC97" android:strokeWidth="2.3" android:strokeLineCap="round" />
+    <path android:pathData="M17.6,25.5 L17.6,22.5" android:strokeColor="#3DDC97" android:strokeWidth="2.3" android:strokeLineCap="round" />
+    <path android:pathData="M33,32 V2 H47 A4,4 0 0 1 51,6 V13 A4,4 0 0 1 47,17 H33 M42,17 L51,32 M80,2 H64 A4,4 0 0 0 60,6 V28 A4,4 0 0 0 64,32 H80 M89,2 V32 M109,2 V32 M89,17 H109 M118,2 V32" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient android:type="linear" android:startX="0" android:startY="0" android:endX="120" android:endY="0">
+                <item android:offset="0" android:color="#BFF7DC" />
+                <item android:offset="1" android:color="#3DDC97" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>
