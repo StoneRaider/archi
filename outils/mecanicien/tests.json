@@ -1,0 +1,5 @@
+{
+ "ok": true,
+ "date": "2026-11-10",
+ "resume": "79/79 tests (test_mecanicien.py), sans reseau : recette verifiee (https, port 443, sites annonces, pas d'IP ni de nom local, pas de redirection, 1 Mo), calculs sur liste fermee sans eval, fabrication en 3 essais au plus, recette impossible ou ratee, nom libre, valider (copie du registre), retirer seulement un outil du mecanicien, tournee sur les rates, aucun appel au modele sans rate nouveau."
+}

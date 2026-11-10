@@ -261,7 +261,9 @@ function outils(r) {
     if (vus.has(nom) || !inscrit(nom)) continue;
     const d = String(reg[nom].description || '').replace(/^MODE D.?EMPLOI\s*:\s*/i, '');
     const phrase = d.split(/(?<=[.!?:])\s/)[0].replace(/[:.]\s*$/, '');
-    liste.push({ nom, titre: '', quoi: phrase.slice(0, 110), besoin: '', sensible: !!reg[nom].sensible });
+    // un outil fabrique par le mecanicien porte son titre dans le registre
+    liste.push({ nom, titre: court(reg[nom].titre, 60), quoi: phrase.slice(0, 110), besoin: '', sensible: !!reg[nom].sensible,
+      mecanicien: !!(reg[nom].mecanicien && typeof reg[nom].mecanicien === 'object') });
   }
   return liste;
 }
@@ -270,6 +272,38 @@ function outils(r) {
 function chantiers(r) {
   const L = vitrine(r).en_developpement;
   return (Array.isArray(L) ? L : []).filter(c => c && court(c.titre, 80)).slice(0, 30).map(c => ({ titre: court(c.titre, 80), quoi: court(c.quoi, 240) }));
+}
+
+/** Menu > L'atelier : les propositions du curateur et les idees du mecanicien. Lecture seule : on agit en parlant a Archi. */
+function lireObjet(f) {
+  try { const x = JSON.parse(fs.readFileSync(f, 'utf8')); return x && typeof x === 'object' && !Array.isArray(x) ? x : null; } catch (e) { return null; }
+}
+const ETATS_ATELIER = ['idee', 'construction', 'teste', 'rate', 'impossible', 'installe', 'abandonne', 'retire'];
+function recetteLisible(r, i) {
+  // la recette d'un outil teste ou installe, telle que le moteur la suit (dossier controle : jamais un chemin libre)
+  if (!/^\d{1,4}_[a-z0-9_]{1,40}$/.test(String(i.dossier || ''))) return '';
+  const x = lireObjet(path.join(r.base, 'atelier', i.dossier, 'recette.json'));
+  if (!x) return '';
+  const { essais, ...recette } = x;
+  return JSON.stringify(recette, null, 1).slice(0, 6000);
+}
+function atelier(r) {
+  const c = lireObjet(path.join(r.base, 'curateur', 'propositions.json')) || {};
+  const faites = Array.isArray(c.appliquees) ? c.appliquees : [];
+  const propositions = (Array.isArray(c.propositions) ? c.propositions : []).filter(p => p && Number.isInteger(p.n)).slice(0, 12)
+    .map(p => ({ n: p.n, titre: court(p.titre, 300), faite: faites.includes(p.n) }));   // jamais l'action : elle peut contenir un secret a retirer
+  const a = lireObjet(path.join(r.base, 'atelier', 'atelier.json')) || {};
+  const idees = (Array.isArray(a.idees) ? a.idees : []).filter(i => i && Number.isInteger(i.n) && ETATS_ATELIER.includes(i.etat)).slice(-12).reverse()
+    .map(i => ({
+      n: i.n, titre: court(i.titre, 60), quoi: court(i.quoi, 300), etat: i.etat, message: court(i.message, 300), nom: court(i.nom, 40),
+      hotes: (Array.isArray(i.hotes) ? i.hotes : []).slice(0, 3).map(h => court(h, 80)),
+      essais: (Array.isArray(i.essais) ? i.essais : []).slice(0, 3).filter(e => e && typeof e === 'object').map(e => ({
+        entree: court(Object.entries(e.parametres && typeof e.parametres === 'object' ? e.parametres : {}).map(([k, v]) => k + ' = ' + v).join(', '), 120),
+        phrase: court(e.phrase, 300), reussi: !!e.reussi })),
+      recette: (i.etat === 'teste' || i.etat === 'installe') ? recetteLisible(r, i) : '',
+    }));
+  return { curateur: { quand: court(c.cree, 25), fiches: Number(c.fiches) || 0, propositions },
+    mecanicien: { quand: court(a.derniere_tournee, 25), idees } };
 }
 
 const SAIN_DEPUIS = new WeakMap();   // par portail : depuis quand n8n repond
@@ -339,6 +373,7 @@ async function etat(r, suivi) {
     telephone: Object.assign({ maintenant: Date.now() }, suivi || nouveauSuivi()),
     outils: outils(r),
     chantiers: chantiers(r),
+    atelier: atelier(r),
     n8n_url: 'http://127.0.0.1:' + r.n8nPort,
   };
 }
@@ -474,4 +509,4 @@ if (require.main === module) {
 }
 
 module.exports = { reglages, estLocal, appelDeLaPage, routePublique, memeCle, telegramAttendu, codeCourt, creerServeurLocal, creerServeurPorte,
-  surveillerLanceur, adressePublique, outils, chantiers, nouveauSuivi, noterPassage, memoire };
+  surveillerLanceur, adressePublique, outils, chantiers, atelier, nouveauSuivi, noterPassage, memoire };

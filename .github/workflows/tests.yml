@@ -36,6 +36,10 @@ jobs:
         run: cd outils/memoire && python test_memoire.py
       - name: Tests du trader en simulation (faux prix, faux modele local, aucun reseau)
         run: cd outils/trader && python test_trader.py
+      - name: Tests du curateur (faux chateau, faux modele local)
+        run: cd outils/curateur && python test_curateur.py
+      - name: Tests du mecanicien et de son moteur de recettes (aucun reseau)
+        run: cd outils/mecanicien && python test_mecanicien.py
       - name: Tests du rangement de mails (boite simulee)
         run: cd outils/ranger_mails && python test_chercher.py
       - name: Protection SSRF de la lecture de pages

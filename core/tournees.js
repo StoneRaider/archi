@@ -1,0 +1,88 @@
+// tournees.js - le reveil des tournees du curateur (dimanche 10 h) et du mecanicien (mercredi et dimanche 10 h 30).
+// Appele chaque minute par le noeud « Reveil planificateur » de n8n (et en ligne de commande : node core/tournees.js).
+// Il RATTRAPE une tournee manquee : si le PC etait eteint a l'heure, la tournee part des qu'Archi tourne depuis 5 minutes
+// (le temps que le modele local soit charge). A la toute premiere fois, il ne lance rien : il note l'heure, et la
+// premiere tournee sera celle du prochain creneau.
+// Les tournees partent en arriere-plan (python ... --tournee) ; elles previennent l'utilisateur par une annonce.
+// Fichier : <base>\atelier\tournees.json. ARCHI_TOURNEES=non les coupe.
+'use strict';
+const cp = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+require('./env').charger();
+
+// [jour (0 = dimanche, 3 = mercredi), heure, minute]
+const CRENEAUX = { curateur: [[0, 10, 0]], mecanicien: [[3, 10, 30], [0, 10, 30]] };
+const SCRIPTS = { curateur: ['curateur', 'curateur.py'], mecanicien: ['mecanicien', 'mecanicien.py'] };
+const EVEILLE_MIN = 5 * 60000;     // Archi doit tourner depuis 5 minutes
+const ABSENCE = 3 * 60000;         // plus de 3 minutes sans reveil : Archi etait arrete
+
+/** le dernier creneau passe (Date), au plus 8 jours en arriere */
+function dernierCreneau(creneaux, maintenant) {
+  let meilleur = null;
+  for (let j = 0; j <= 8; j++) {
+    const jour = new Date(maintenant.getFullYear(), maintenant.getMonth(), maintenant.getDate() - j);
+    for (const [js, h, m] of creneaux) {
+      if (jour.getDay() !== js) continue;
+      const t = new Date(jour.getFullYear(), jour.getMonth(), jour.getDate(), h, m, 0, 0);
+      if (t <= maintenant && (!meilleur || t > meilleur)) meilleur = t;
+    }
+  }
+  return meilleur;
+}
+
+function lire(f) {
+  try { const x = JSON.parse(fs.readFileSync(f, 'utf8')); return x && typeof x === 'object' && !Array.isArray(x) ? x : null; } catch (e) { return null; }
+}
+
+function ecrire(f, x) {
+  fs.mkdirSync(path.dirname(f), { recursive: true });
+  fs.writeFileSync(f + '.tmp', JSON.stringify(x, null, 1));
+  fs.renameSync(f + '.tmp', f);
+}
+
+function lancerPython(script) {
+  cp.spawn(process.env.ARCHI_PY || (process.platform === 'win32' ? 'python' : 'python3'), [script, '--tournee'],
+    { cwd: path.dirname(script), detached: true, stdio: 'ignore', windowsHide: true }).unref();
+}
+
+/** options = {base, maintenant, lancer} (pour les tests) ; rend {lancees: [noms], raison} */
+function reveiller(options = {}) {
+  if (String(process.env.ARCHI_TOURNEES || 'oui').toLowerCase() === 'non') return { lancees: [], raison: 'coupees' };
+  const base = options.base || process.env.ARCHI_BASE || path.join(os.homedir(), '.n8n-files');
+  const maintenant = options.maintenant || new Date();
+  const lancer = options.lancer || lancerPython;
+  const f = path.join(base, 'atelier', 'tournees.json');
+  const iso = maintenant.toISOString();
+  let e = lire(f);
+  if (!e) {                                  // la premiere fois : rien tout de suite
+    ecrire(f, { premiere: iso, vu: iso, depuis: iso, curateur: iso, mecanicien: iso });
+    return { lancees: [], raison: 'premiere fois' };
+  }
+  const vu = Date.parse(e.vu || '') || 0;
+  if (!vu || maintenant - vu > ABSENCE) e.depuis = iso;     // Archi vient de (re)demarrer
+  e.vu = iso;
+  const lancees = [];
+  if (maintenant - (Date.parse(e.depuis || '') || maintenant) >= EVEILLE_MIN) {
+    for (const nom of Object.keys(CRENEAUX)) {
+      const creneau = dernierCreneau(CRENEAUX[nom], maintenant);
+      const dernier = Date.parse(e[nom] || '') || 0;
+      if (!creneau || dernier >= creneau.getTime()) continue;
+      const script = path.join(base, 'outils', ...SCRIPTS[nom]);
+      e[nom] = iso;                            // note AVANT de lancer : jamais deux tournees pour le meme creneau
+      if (!fs.existsSync(script)) continue;
+      try { lancer(script); lancees.push(nom); } catch (x) { /* la tournee attendra le prochain creneau */ }
+    }
+  }
+  ecrire(f, e);
+  return { lancees, raison: lancees.length ? 'creneau passe' : 'rien a faire' };
+}
+
+module.exports = { reveiller, dernierCreneau, CRENEAUX };
+
+if (require.main === module) {
+  let r;
+  try { r = reveiller(); } catch (x) { r = { lancees: [], raison: 'erreur : ' + String(x.message || x).slice(0, 100) }; }
+  process.stdout.write(JSON.stringify(r));
+}

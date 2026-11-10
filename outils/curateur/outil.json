@@ -1,0 +1,26 @@
+{
+ "nom": "curateur",
+ "description": "MODE D EMPLOI : le curateur relit la memoire (les fiches du chateau) et PROPOSE du rangement, numerote : lien casse, fait en double, secret, fiche vide, projet endormi, faits qui se contredisent. Il ne change rien tout seul. action=examiner (« curateur, fais ta tournee ») ; action=propositions (relire celles en attente) ; action=appliquer avec numeros (« 1 et 3 », « tout ») SEULEMENT quand l'utilisateur les a choisis, avec accord=oui ; action=annuler (accord=oui) remet comme avant. Repete sa phrase_pour_utilisateur telle quelle.",
+ "script": "curateur.py",
+ "parametres": [
+  {
+   "nom": "action",
+   "description": "examiner, propositions, appliquer ou annuler"
+  },
+  {
+   "nom": "numeros",
+   "description": "appliquer : les numeros choisis par l'utilisateur, ex. \"1 et 3\" ou \"tout\""
+  }
+ ],
+ "timeout_s": 150,
+ "touche": [
+  "memoire",
+  "appliquer ou annuler : accord=oui"
+ ],
+ "sensible_si": {
+  "action": [
+   "appliquer",
+   "annuler"
+  ]
+ }
+}

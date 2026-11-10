@@ -1,0 +1,35 @@
+{
+ "nom": "mecanicien",
+ "description": "MODE D EMPLOI : le mecanicien fabrique de NOUVEAUX outils dans son atelier (une recette : un site public sans cle, un calcul, une phrase), les essaie, et ne les installe qu'apres le « valide » de l'utilisateur. action=construire avec texte (ce que l'outil doit faire) ou numero d'une idee, accord=oui quand l'utilisateur l'a demande ; action=valider avec numero, accord=oui apres son « valide » ; action=etat (l'atelier) ; action=voir avec numero ; action=idee avec texte (noter sans fabriquer) ; action=abandonner avec numero ; action=retirer avec nom, accord=oui. Repete sa phrase_pour_utilisateur telle quelle.",
+ "script": "mecanicien.py",
+ "parametres": [
+  {
+   "nom": "action",
+   "description": "etat, idee, construire, voir, valider, abandonner ou retirer"
+  },
+  {
+   "nom": "texte",
+   "description": "idee ou construire : ce que l'outil doit faire, avec les mots de l'utilisateur"
+  },
+  {
+   "nom": "numero",
+   "description": "le numero d'une idee de l'atelier"
+  },
+  {
+   "nom": "nom",
+   "description": "retirer : le nom de l'outil installe"
+  }
+ ],
+ "timeout_s": 60,
+ "touche": [
+  "nouveaux outils",
+  "construire, valider ou retirer : accord=oui"
+ ],
+ "sensible_si": {
+  "action": [
+   "construire",
+   "valider",
+   "retirer"
+  ]
+ }
+}

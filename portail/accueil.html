@@ -146,6 +146,25 @@
   #outils b { color: var(--vert); font-size: 15px; font-weight: 700; }
   #chantiers b { color: var(--pale); font-size: 15px; font-weight: 700; }
   #outils em { display: block; font-style: normal; font-size: 12.5px; color: var(--ambre); margin-top: 2px; }
+  /* --- l'atelier : le curateur et le mecanicien --- */
+  #cur-props, #meca-idees { list-style: none; margin: 0; padding: 0; }
+  #cur-props li, #meca-idees li { padding: 10px 0; border-top: 1px solid var(--trait); } #cur-props li:first-child, #meca-idees li:first-child { border-top: 0; }
+  #cur-props .num { color: var(--pale); font-weight: 800; margin-right: 6px; }
+  #cur-props li.faite { opacity: .55; } #cur-props li.faite::after { content: ' · appliquée'; color: var(--vert); font-weight: 700; }
+  #meca-idees b { color: var(--pale); font-size: 15px; font-weight: 700; }
+  .puce { display: inline-block; font-size: 11.5px; font-weight: 700; border: 1px solid currentColor; border-radius: 999px; padding: 0 9px; margin-left: 8px; vertical-align: 2px; }
+  .etat-idee, .etat-abandonne, .etat-retire { color: var(--doux); }
+  .etat-construction { color: var(--ambre); animation: battement 1.6s ease-in-out infinite; }
+  .etat-teste { color: var(--pale); background: rgba(191,247,220,.08); }
+  .etat-installe { color: var(--vert); }
+  .etat-rate, .etat-impossible { color: var(--corail); }
+  @keyframes battement { 50% { opacity: .4; } }
+  .essai { display: block; font-size: 12.5px; margin-top: 4px; overflow-wrap: anywhere; }
+  .essai.ok::before { content: '✓ '; color: var(--vert); font-weight: 800; } .essai.ko::before { content: '✗ '; color: var(--corail); font-weight: 800; }
+  .lit { display: block; font-size: 12.5px; color: var(--ambre); margin-top: 3px; }
+  .volet details { margin-top: 6px; } .volet summary { cursor: pointer; color: var(--pale); font-size: 12.5px; }
+  .volet pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 11.5px/1.45 Consolas, monospace; color: var(--pale); background: rgba(255,255,255,.04); padding: 8px; border-radius: 6px; max-height: 260px; overflow: auto; margin: 6px 0 0; }
+  .volet p.astuce { font-size: 13px; margin-top: 12px; }
   .accord { color: var(--ambre); font-size: 11.5px; border: 1px solid var(--ambre); border-radius: 4px; padding: 0 4px; margin-left: 6px; }
 
   /* --- la visite guidee : un voile, un element mis en lumiere, quelques mots --- */
@@ -180,7 +199,7 @@
     .astre canvas { position: static; flex: none; width: min(86vw, 46vh); height: auto; max-width: none; margin: 0 auto; }
     .parole { grid-row: auto; padding: 8px 22px; } .saisie { grid-row: auto; padding: 16px 22px 14px; flex-wrap: wrap; } .magie { width: 100%; text-align: left; }
   }
-  @media (prefers-reduced-motion: reduce) { .ruban span, .micro.ouvert, .logo .egal path, .volet, .voile, .lune.pointe i { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .etat-construction, .ruban span, .micro.ouvert, .logo .egal path, .volet, .voile, .lune.pointe i { animation: none; } }
 </style>
 </head>
 <body>
@@ -213,6 +232,7 @@
     <div class="menu" id="menu" role="menu" hidden>
       <button type="button" role="menuitem" id="b-visite">Visite guidée<small>Le tour d'Archi, en sept étapes</small></button>
       <button type="button" role="menuitem" id="b-coulisses">Ses outils<small>Ce qu'il sait faire aujourd'hui</small></button>
+      <button type="button" role="menuitem" id="b-atelier">L'atelier<small>Le curateur et le mécanicien au travail</small></button>
       <button type="button" role="menuitem" id="b-chantier">Outils en cours de développement<small>Ce qui arrive ensuite</small></button>
     </div>
   </nav>
@@ -278,6 +298,21 @@
   <p>Modèle : <code id="c-modele">…</code><br>Vision : <code id="c-vision">…</code><br>
     Workflows : <a id="c-n8n" href="#" target="_blank" rel="noopener">ouvrir n8n</a> (sur ce PC seulement)<br>
     Telegram : <span id="c-tg">…</span></p>
+</aside>
+
+<aside class="volet" id="volet-atelier" hidden aria-label="L'atelier d'Archi">
+  <button type="button" class="fermer" data-fermer aria-label="Fermer">&#10005;</button>
+  <h2>L'atelier</h2>
+  <p>Ici, Archi s'entretient lui-même. Il propose ; <b>rien ne change sans ton accord</b>.</p>
+  <h3>Le curateur</h3>
+  <p id="cur-quand">Pas encore de tournée : la première aura lieu dimanche à 10 h.</p>
+  <ol id="cur-props"></ol>
+  <p class="astuce">Dis « <b>curateur, fais ta tournée</b> » pour qu'il relise la mémoire, puis « <b>curateur, 1 et 3</b> » pour appliquer.
+    Il garde une copie avant, et « <b>curateur, annule</b> » remet tout comme avant.</p>
+  <h3>Le mécanicien</h3>
+  <ul id="meca-idees"></ul>
+  <p class="astuce">Dis « <b>mécanicien, fabrique-moi un outil qui…</b> ». Il n'écrit pas de programme : il écrit une recette (un site public
+    sans clé, un calcul, une phrase), que suit un moteur fixe. Il l'essaie, puis attend ton « <b>valide</b> ».</p>
 </aside>
 
 <aside class="volet" id="volet-chantier" hidden aria-label="Les outils en cours de développement">
@@ -415,6 +450,10 @@ async function majEtat() {
       }
     }
   }
+  // l'atelier : redessine seulement quand quelque chose change
+  const at = e.atelier || { curateur: {}, mecanicien: {} };
+  const cleAt = JSON.stringify(at);
+  if ($('volet-atelier').dataset.cle !== cleAt) { $('volet-atelier').dataset.cle = cleAt; dessinerAtelier(at); }
   // les projets pas encore aboutis (config/vitrine.json) : sans projet, la ligne du menu disparait
   const chantiers = e.chantiers || [];
   $('b-chantier').hidden = !chantiers.length;
@@ -654,13 +693,49 @@ async function rappels() {
   } catch (x) { /* le prochain passage reessaiera */ }
 }
 
+// ---- l'atelier : les propositions du curateur, les idees du mecanicien (tout en textContent : rien n'est interprete)
+const ETAT_DIT = { idee: 'idée', construction: 'en construction', teste: 'testé · attend ton accord', rate: 'raté', impossible: 'pas faisable',
+  installe: 'installé', abandonne: 'abandonné', retire: 'retiré' };
+function quandDit(iso) { const m = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)/.exec(String(iso || '')); return m ? 'le ' + m[3] + '/' + m[2] + ' à ' + m[4] + 'h' + m[5] : ''; }
+function element(nom, classe, texte) { const x = document.createElement(nom); if (classe) x.className = classe; if (texte != null) x.textContent = texte; return x; }
+function dessinerAtelier(at) {
+  const c = at.curateur || {}, P = c.propositions || [];
+  $('cur-quand').textContent = c.quand
+    ? 'Dernière tournée ' + quandDit(c.quand) + ' : ' + c.fiches + ' fiches relues, ' + (P.length ? P.length + ' proposition(s).' : 'tout est en ordre.')
+    : 'Pas encore de tournée : la première aura lieu dimanche à 10 h.';
+  $('cur-props').textContent = '';
+  for (const p of P) {
+    const li = element('li', p.faite ? 'faite' : '');
+    li.appendChild(element('span', 'num', p.n + '.')); li.appendChild(document.createTextNode(p.titre));
+    $('cur-props').appendChild(li);
+  }
+  const I = (at.mecanicien || {}).idees || [];
+  $('meca-idees').textContent = '';
+  if (!I.length) $('meca-idees').appendChild(element('li', '', "L'atelier est vide pour l'instant."));
+  for (const i of I) {
+    const li = element('li');
+    li.appendChild(element('b', '', 'n° ' + i.n + ' · ' + i.titre));
+    li.appendChild(element('span', 'puce etat-' + i.etat, ETAT_DIT[i.etat] || i.etat));
+    if (i.quoi && i.quoi !== i.titre) { li.appendChild(document.createElement('br')); li.appendChild(document.createTextNode(i.quoi)); }
+    if (i.hotes && i.hotes.length) li.appendChild(element('span', 'lit', 'Lit : ' + i.hotes.join(', ')));
+    for (const e of i.essais || []) li.appendChild(element('span', 'essai ' + (e.reussi ? 'ok' : 'ko'), (e.entree ? e.entree + ' → ' : 'Essai → ') + e.phrase));
+    if (i.message) li.appendChild(element('span', 'essai ko', i.message));
+    if (i.recette) {
+      const d = element('details'); d.appendChild(element('summary', '', 'Voir la recette')); d.appendChild(element('pre', '', i.recette));
+      li.appendChild(d);
+    }
+    if (i.etat === 'teste') li.appendChild(element('span', 'lit', 'Dis « mécanicien, valide la ' + i.n + " » pour l'installer."));
+    $('meca-idees').appendChild(li);
+  }
+}
+
 // ---- les volets (telephone, outils) : ils se ferment a la croix, a la touche Echap ou en cliquant ailleurs
 function volet(id) {
   for (const v of document.querySelectorAll('.volet')) v.hidden = v.id !== id || !v.hidden;
 }
 for (const b of document.querySelectorAll('[data-fermer]')) b.onclick = () => volet(null);
 document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { if (!$('visite').hidden) finVisite(); else if (!$('menu').hidden) { menu(false); $('b-menu').focus(); } else volet(null); } });
-$('scene').addEventListener('click', ev => { if (!ev.target.closest('#v-tel, #ruban, #b-coulisses, #b-chantier')) volet(null); });
+$('scene').addEventListener('click', ev => { if (!ev.target.closest('#v-tel, #ruban, #b-coulisses, #b-chantier, #b-atelier')) volet(null); });
 
 // ---- le menu (visite guidee, ses outils, outils en cours de developpement) : il se replie au choix, a Echap ou en cliquant ailleurs
 function menu(ouvert) { $('menu').hidden = !ouvert; $('b-menu').setAttribute('aria-expanded', ouvert ? 'true' : 'false'); }
@@ -724,6 +799,7 @@ $('v-tel').onclick = () => volet('volet-tel');
 $('ruban').onclick = () => volet('volet-outils');
 $('b-coulisses').onclick = () => { menu(false); volet('volet-outils'); };
 $('b-chantier').onclick = () => { menu(false); volet('volet-chantier'); };
+$('b-atelier').onclick = () => { menu(false); volet('volet-atelier'); };
 $('sphere').onclick = () => { if (lecteur) taire(); else if (!$('b-micro').hidden) ouvrirMicro(); };
 $('photo').onchange = () => { const f = $('photo').files[0]; if (f) note('info', 'Photo jointe : ' + f.name + ' (elle reste sur ce PC).'); };
 $('saisie').onsubmit = ev => {

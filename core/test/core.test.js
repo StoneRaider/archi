@@ -236,3 +236,62 @@ test('contexte : une grosse memoire ne noie pas le modele (la fiche de l utilisa
   assert.ok(lignes.length < 30, 'les 60 fiches ne passent pas toutes');
   for (let i = 0; i < 60; i++) fs.unlinkSync(path.join(M, 'ami' + i + '.md'));
 });
+
+test('curateur et mecanicien : les phrases qui les appellent', () => {
+  const ai = contexte.chargerAiguillages();
+  for (const q of ['Curateur, fais ta tournée', 'curateur, 1 et 3', 'range un peu ta mémoire', 'fais le ménage dans ta mémoire'])
+    assert.match(contexte.aiguiller(q, ai), /outil curateur/, q);
+  for (const q of ['Mécanicien, où en est l\'atelier ?', 'fabrique-moi un outil qui donne la météo', 'crée-toi un outil pour les marées', 'il te faudrait un nouvel outil'])
+    assert.match(contexte.aiguiller(q, ai), /outil mecanicien/, q);
+  for (const q of ['je vais à l\'atelier de poterie', 'ma mémoire flanche', 'le garagiste a réparé la voiture'])
+    assert.doesNotMatch(contexte.aiguiller(q, ai), /outil (curateur|mecanicien)/, q);
+  assert.match(contexte.construire({ texte: 'salut' }).profil, /RÈGLE CAPACITÉS[^\n]*mécanicien/);
+});
+
+test('outils : ce qui rate est note pour le mecanicien (nom et erreur, jamais les parametres)', { skip: !pythonDispo() }, () => {
+  const f = path.join(BASE, 'atelier', 'rates.jsonl');
+  try { fs.unlinkSync(f); } catch (e) {}
+  outils.lancer({ action: 'lancer', outil: 'meteo', parametres: { ville: 'Annecy' } }, { base: BASE, registre: REG });
+  outils.lancer({ action: 'lancer', outil: 'echo', parametres: { plante: true, secret: 'abc' } }, { base: BASE, registre: REG, python: PY });
+  outils.lancer({ action: 'lancer', outil: 'echo', parametres: { x: 1 } }, { base: BASE, registre: REG, python: PY });
+  const lignes = fs.readFileSync(f, 'utf8').trim().split('\n').map(l => JSON.parse(l));
+  assert.deepStrictEqual(lignes.map(l => [l.type, l.outil]), [['inconnu', 'meteo'], ['echec', 'echo']]);
+  assert.doesNotMatch(fs.readFileSync(f, 'utf8'), /Annecy|abc/);
+});
+
+test('outils : un outil du mecanicien est dit avec son titre', () => {
+  const r = outils.lancer({ action: 'liste' }, { registre: { position_iss: { nom: 'position_iss', titre: 'Position de la station spatiale', description: 'x' } }, vitrine: [] });
+  assert.match(r.phrase_pour_utilisateur, /Position de la station spatiale/);
+});
+
+test('tournees : creneaux, premiere fois, rattrapage apres 5 minutes, jamais deux fois', () => {
+  const tournees = require('../tournees');
+  const B = fs.mkdtempSync(path.join(os.tmpdir(), 'archi-tournees-'));
+  for (const [d, s] of [['curateur', 'curateur.py'], ['mecanicien', 'mecanicien.py']]) {
+    fs.mkdirSync(path.join(B, 'outils', d), { recursive: true });
+    fs.writeFileSync(path.join(B, 'outils', d, s), '');
+  }
+  const lancees = [];
+  const r = (y, mo, j, h, mi) => tournees.reveiller({ base: B, maintenant: new Date(y, mo - 1, j, h, mi), lancer: s => lancees.push(path.basename(s)) });
+  assert.strictEqual(r(2026, 11, 1, 9, 0).raison, 'premiere fois');            // dimanche 1er, avant 10 h : rien
+  for (let m = 1; m <= 6; m++) r(2026, 11, 1, 9, m);
+  assert.deepStrictEqual(lancees, []);
+  for (let m = 0; m <= 31; m++) r(2026, 11, 1, 10, m);                         // 10 h : le curateur, 10 h 30 : le mecanicien
+  assert.deepStrictEqual(lancees, ['curateur.py', 'mecanicien.py']);
+  // PC eteint du samedi 7 au mardi 10 : le dimanche 8 est rattrape, mais seulement apres 5 minutes de marche
+  lancees.length = 0;
+  assert.deepStrictEqual(r(2026, 11, 10, 18, 0).lancees, []);
+  for (let m = 1; m <= 4; m++) r(2026, 11, 10, 18, m);
+  assert.deepStrictEqual(lancees, []);
+  r(2026, 11, 10, 18, 5);
+  assert.deepStrictEqual(lancees, ['curateur.py', 'mecanicien.py']);
+  for (let m = 6; m <= 20; m++) r(2026, 11, 10, 18, m);
+  assert.strictEqual(lancees.length, 2, 'jamais deux tournees pour le meme creneau');
+  // mercredi 11 a 10 h 30 : le mecanicien seulement
+  for (let m = 0; m <= 40; m++) r(2026, 11, 11, 10, m);
+  assert.deepStrictEqual(lancees, ['curateur.py', 'mecanicien.py', 'mecanicien.py']);
+  process.env.ARCHI_TOURNEES = 'non';
+  assert.strictEqual(tournees.reveiller({ base: B }).raison, 'coupees');
+  delete process.env.ARCHI_TOURNEES;
+  fs.rmSync(B, { recursive: true, force: true });
+});

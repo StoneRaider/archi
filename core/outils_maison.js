@@ -30,7 +30,8 @@ function liste(reg, vitrine) {
   const L = Object.values(reg).map(o => ({ nom: o.nom, description: o.description, parametres: o.parametres, sensible: !!o.sensible }));
   const fiches = Array.isArray(vitrine) ? vitrine : lireVitrine();
   // ce que l'utilisateur entend : des noms lisibles (« Rappels et taches »), pas des noms techniques (« planificateur »)
-  const lisible = nom => { const f = fiches.find(x => x.nom === nom); return String((f && f.titre) || String(nom).replace(/_/g, ' ')).slice(0, 60); };
+  // un outil fabrique par le mecanicien n'est pas dans la vitrine : il porte son titre dans le registre
+  const lisible = nom => { const f = fiches.find(x => x.nom === nom); const o = reg[nom]; return String((f && f.titre) || (o && typeof o.titre === 'string' && o.titre) || String(nom).replace(/_/g, ' ')).slice(0, 60); };
   // les outils branches directement sur l'agent (les enquetes) : ils ne passent pas par outils_maison, mais ils font partie de ses outils
   const A = fiches.filter(f => f.agent === true && !Object.prototype.hasOwnProperty.call(reg, f.nom))
     .map(f => ({ nom: f.nom.slice(0, 40), titre: lisible(f.nom), quoi: String(f.quoi || '').slice(0, 200) }));
@@ -77,6 +78,20 @@ function lireParametres(p) {
 }
 const normaliser = v => String(v == null ? '' : v).normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
 
+/** Ce qui rate (un outil demande qui n'existe pas, un outil qui plante) : le mecanicien le relit pour proposer de
+ *  nouveaux outils. Un fichier local, <base>\atelier\rates.jsonl : le nom de l'outil et l'erreur, jamais les parametres. */
+function noterRate(base, type, outil, erreur) {
+  try {
+    const f = path.join(base, 'atelier', 'rates.jsonl');
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.appendFileSync(f, JSON.stringify({ quand: Date.now(), type, outil: String(outil || '').slice(0, 40), erreur: String(erreur || '').slice(0, 160) }) + '\n');
+    if (fs.statSync(f).size > 200000) {
+      const lignes = fs.readFileSync(f, 'utf8').split(/\r?\n/).filter(Boolean).slice(-300);
+      fs.writeFileSync(f, lignes.join('\n') + '\n');
+    }
+  } catch (e) { /* le journal ne doit jamais faire echouer un outil */ }
+}
+
 /** demande = {action, outil, parametres, accord} ; options = {base, python, executer} (executer : pour les tests). */
 function lancer(demande, options = {}) {
   const base = options.base || BASE_DEFAUT;
@@ -88,6 +103,7 @@ function lancer(demande, options = {}) {
 
   const nom = String(d.outil || '').trim().toLowerCase();
   if (!NOM_VALIDE.test(nom) || !Object.prototype.hasOwnProperty.call(reg, nom)) {
+    if (nom) noterRate(base, 'inconnu', nom.replace(/[^a-z0-9_ -]/g, ''), '');
     return { ok: false, phrase_pour_utilisateur: 'Outil maison inconnu ou pas encore branché : « ' + nom.slice(0, 40) + ' ». Fais action=liste.' };
   }
   const o = reg[nom];
@@ -120,8 +136,10 @@ function lancer(demande, options = {}) {
     r = JSON.parse(derniere);
     if (!r || typeof r !== 'object') throw new Error('sortie non JSON');
     baliserResultat(r);
+    if (r.ok === false && r.erreur) noterRate(base, 'echec', nom, r.erreur);
   } catch (e) {
     r = { ok: false, phrase_pour_utilisateur: "L'outil maison « " + nom + ' » a échoué.', erreur: String(e.message || e).slice(0, 200) };
+    noterRate(base, 'echec', nom, (e.code === 'ETIMEDOUT' || e.signal) ? 'trop long' : String(e.message || e).split(/\r?\n/)[0].slice(0, 120));
   } finally {
     try { fs.unlinkSync(fichier); } catch (e) {}
   }
