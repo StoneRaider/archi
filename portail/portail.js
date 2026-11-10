@@ -314,7 +314,17 @@ async function etat(r, suivi) {
   };
 }
 
-const CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
+const CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
+// Les fichiers de la page d'accueil, servis depuis ce dossier : une liste fermee (aucun chemin ne vient de la demande).
+const FICHIERS_PAGE = {
+  '/qrcode.js': ['qrcode.js', 'text/javascript; charset=utf-8'],
+  '/sphere.js': ['sphere.js', 'text/javascript; charset=utf-8'],     // la sphere d'Archi, comme sur le telephone
+  '/ecoute.js': ['ecoute.js', 'text/javascript; charset=utf-8'],     // le micro continu et son mot magique
+  '/polices/fraunces.woff2': ['polices/fraunces.woff2', 'font/woff2'],
+  '/polices/fraunces-italique.woff2': ['polices/fraunces-italique.woff2', 'font/woff2'],
+  '/polices/nunito.woff2': ['polices/nunito.woff2', 'font/woff2'],
+};
+let fileEcoute = Promise.resolve();   // une transcription a la fois : Whisper prend tous les coeurs du processeur
 function fichier(res, nom, type, extra) {
   try {
     repondre(res, 200, fs.readFileSync(path.join(ICI, nom)), type, Object.assign({ 'Content-Security-Policy': CSP, 'X-Frame-Options': 'DENY' }, extra || {}));
@@ -337,11 +347,32 @@ function creerServeurLocal(r, suivi) {
     // un relais, un autre nom d'hote (page piegee, DNS rebinding) : cette porte n'existe pas pour eux
     if (!estLocal(req, r.port)) return repondre(res, 404, 'Introuvable.');
     if (methode === 'GET' && (chemin === '/' || chemin === '/index.html')) return fichier(res, 'accueil.html', 'text/html; charset=utf-8');
-    if (methode === 'GET' && chemin === '/qrcode.js') return fichier(res, 'qrcode.js', 'text/javascript; charset=utf-8');
+    if (methode === 'GET' && Object.prototype.hasOwnProperty.call(FICHIERS_PAGE, chemin)) {
+      const [nom, type] = FICHIERS_PAGE[chemin];
+      // les polices ne changent jamais : le navigateur peut les garder (le reste n'est jamais mis en cache)
+      return fichier(res, nom, type, type === 'font/woff2' ? { 'Cache-Control': 'max-age=604800, immutable' } : null);
+    }
     if (methode === 'GET' && chemin === '/telephone') return fichier(res, 'telephone.html', 'text/html; charset=utf-8');
     if (chemin.startsWith('/api/')) {
       if (!appelDeLaPage(req, r.port)) return json(res, 403, { erreur: 'appel refuse' });
       if (methode === 'GET' && chemin === '/api/etat') return json(res, 200, await etat(r, suivi));
+      if (methode === 'POST' && chemin === '/api/ecouter') {
+        // le micro continu : une phrase a transcrire sur ce PC (whisper.cpp). Rien n'est envoye a l'agent ici :
+        // la page met les phrases bout a bout et n'envoie le message qu'au mot magique.
+        const son = await lireCorps(req, 6 * 1024 * 1024);
+        if (son.length < 800) return json(res, 200, { ok: false, raison: 'rien_entendu' });
+        const type = String(req.headers['content-type'] || '');
+        const ext = /ogg/.test(type) ? '.ogg' : /mp4|m4a/.test(type) ? '.m4a' : /wav/.test(type) ? '.wav' : '.webm';
+        const f = path.join(os.tmpdir(), 'archi_question_' + crypto.randomBytes(6).toString('hex') + ext);
+        const transcrire = r.transcrire || (x => voix.transcrire(x, r.voix));
+        const tour = fileEcoute.then(async () => {
+          try { fs.writeFileSync(f, son); return await transcrire(f); }
+          catch (e) { return { ok: false, raison: 'erreur_oreille' }; }
+          finally { try { fs.unlinkSync(f); } catch (e) { /* deja efface */ } }
+        });
+        fileEcoute = tour.catch(() => null);
+        return json(res, 200, await tour);
+      }
       if (methode === 'POST' && chemin === '/api/message') {
         return relayer(req, res, r, '/webhook/telephone-archi', await lireCorps(req, MAX_CORPS), { 'x-archi-cle': r.cle });
       }

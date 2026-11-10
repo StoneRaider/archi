@@ -103,7 +103,11 @@ Sans tunnel (`ARCHI_TUNNEL=non`), Archi marche sur le PC seul.
   quelques jours (14 par défaut). Cette base ne quitte pas le PC.
 - **Aucun clonage** : Archi utilise une voix du catalogue de Pocket TTS, et le modèle qu'il télécharge est la version
   « sans clonage de voix ».
-- **Le micro de la page d'accueil** ne s'ouvre que sur ton clic, et il est rendu dès que le message part.
+- **Le micro de la page d'accueil** ne s'ouvre que sur ton clic, et reste ouvert jusqu'à ce que tu le refermes. Ce
+  qu'il entend est transcrit sur le PC et s'écrit dans la ligne de saisie : rien ne part vers l'agent avant « fin de
+  transmission » ou la touche Entrée. Pendant qu'Archi réfléchit ou parle, il n'écoute pas.
+- **La page d'accueil ne charge rien depuis Internet** : ses polices (Fraunces et Nunito, licence OFL, dans
+  `portail/polices`) et ses scripts viennent du PC.
 
 ## L'installation
 - **Rien pour tout Windows** : Python, Node.js, n8n, le tunnel et ffmpeg sont posés dans le dossier d'Archi.

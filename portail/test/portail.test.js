@@ -382,11 +382,15 @@ test('porte : seule l appli declenche l alerte « mauvaise cle », et les robots
 
 test('page d accueil : le micro ne peut pas s ouvrir deux fois, et il est toujours rendu', () => {
   const page = fs.readFileSync(path.join(__dirname, '..', 'accueil.html'), 'utf8');
-  const micro = page.slice(page.indexOf('async function micro()'), page.indexOf('async function envoyer('));
-  assert.ok(micro.includes('if (occupe || microEnOuverture) return;'), 'drapeau pose avant la demande d autorisation');
+  const micro = page.slice(page.indexOf('async function ouvrirMicro()'), page.indexOf('function grandir()'));
+  assert.ok(micro.length > 200 && micro.includes('if (microEnOuverture) return;'), 'drapeau pose avant la demande d autorisation');
   assert.ok(micro.indexOf('microEnOuverture = true') < micro.indexOf('getUserMedia'));
   assert.ok(micro.includes('finally { microEnOuverture = false; }'));
-  assert.ok((micro.match(/rendre\(\)/g) || []).length >= 4, 'le micro est rendu a l arret, a l erreur, au delai et si le demarrage echoue');
+  assert.ok(micro.includes('rendre();   // l\'enregistreur n\'a pas pu demarrer'), 'le micro est rendu si le demarrage echoue');
+  const fermer = page.slice(page.indexOf('function fermerMicro()'), page.indexOf('async function ouvrirMicro()'));
+  assert.ok(fermer.includes('m.flux.getTracks().forEach(t => t.stop())') && fermer.includes('m.contexte.close()'), 'le micro est rendu a la fermeture');
+  // pendant qu'Archi reflechit ou parle, on n'ecoute pas : il ne doit pas s'entendre lui-meme
+  assert.ok(page.includes('if (occupe || lecteur) { if (m.enregistreur) couper(m, false); return; }'));
 });
 
 test('etat : « agent pret » seulement quand le workflow est active, pas des que n8n repond', async () => {
@@ -415,9 +419,89 @@ test('etat : « agent pret » seulement quand le workflow est active, pas des qu
     active = true;
     assert.equal((await etat()).n8n, true);
     const page = fs.readFileSync(path.join(__dirname, '..', 'accueil.html'), 'utf8');
-    assert.ok(page.includes("if (!pret) { bulle('souci', 'Archi finit de démarrer"), 'la page n envoie rien tant que ce n est pas pret');
+    assert.ok(page.includes("if (!pret) { note('souci', 'Archi finit de démarrer"), 'la page n envoie rien tant que ce n est pas pret');
   } finally {
     local.close(); n8n.close();
     fs.rmSync(d, { recursive: true, force: true });
+  }
+});
+
+test('page d accueil : sphere, mot magique et polices sont servis au PC seulement, jamais par la porte du telephone', async () => {
+  const d = chateau(false);
+  const r = { port: 0, portPorte: 0, n8nPort: 1, depot: d, base: d, etat: d, cle: CLE, lmUrl: 'http://127.0.0.1:1', modele: 'm', modeleVision: 'v', utilisateur: '', telegram: false };
+  const local = P.creerServeurLocal(r), porte = P.creerServeurPorte(r);
+  await new Promise(x => local.listen(0, '127.0.0.1', x));
+  await new Promise(x => porte.listen(0, '127.0.0.1', x));
+  r.port = local.address().port;
+  const voir = (serveur, chemin) => new Promise((ok, non) => {
+    http.get({ host: '127.0.0.1', port: serveur.address().port, path: chemin, headers: serveur === local ? { host: '127.0.0.1:' + r.port } : {} }, rep => {
+      const m = []; rep.on('data', x => m.push(x)); rep.on('end', () => ok({ code: rep.statusCode, type: rep.headers['content-type'], cache: rep.headers['cache-control'], corps: Buffer.concat(m) }));
+    }).on('error', non);
+  });
+  try {
+    for (const [chemin, type, debut] of [['/sphere.js', 'text/javascript', '// sphere.js'], ['/ecoute.js', 'text/javascript', '// ecoute.js'],
+      ['/polices/fraunces.woff2', 'font/woff2', 'wOF2'], ['/polices/fraunces-italique.woff2', 'font/woff2', 'wOF2'], ['/polices/nunito.woff2', 'font/woff2', 'wOF2']]) {
+      const f = await voir(local, chemin);
+      assert.equal(f.code, 200, chemin);
+      assert.ok(String(f.type).startsWith(type), chemin + ' : ' + f.type);
+      assert.ok(f.corps.toString('latin1').startsWith(debut), chemin);
+      assert.equal((await voir(porte, chemin)).code, 404, chemin + ' ne sort pas du PC');
+    }
+    assert.match((await voir(local, '/polices/nunito.woff2')).cache, /max-age/);
+    // aucun chemin ne vient de la demande : pas de fichier hors de la liste
+    for (const chemin of ['/polices/../portail.js', '/polices/OFL-Nunito.txt', '/portail.js', '/polices/', '/sphere.js/..%2f..%2f.env']) {
+      assert.equal((await voir(local, chemin)).code, 404, chemin);
+    }
+    // la page n'appelle aucun autre site : polices et scripts viennent du PC
+    const page = fs.readFileSync(path.join(__dirname, '..', 'accueil.html'), 'utf8');
+    assert.doesNotMatch(page, /https?:\/\/(?!www\.w3\.org)[a-z0-9.-]+\.[a-z]{2,}/i, 'aucune adresse exterieure dans la page');
+    assert.ok(page.includes('url("/polices/fraunces.woff2")') && page.includes('<script src="/sphere.js">') && page.includes('<script src="/ecoute.js">'));
+  } finally {
+    local.close(); porte.close();
+    await new Promise(x => setTimeout(x, 200));   // la porte finit d'ecrire son journal dans ce dossier
+    fs.rmSync(d, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
+
+test('micro continu : /api/ecouter transcrit une phrase sur le PC, pour la page seulement, sans rien garder', async () => {
+  const d = chateau(false);
+  const vus = [];
+  const r = { port: 0, portPorte: 0, n8nPort: 1, depot: d, base: d, etat: d, cle: CLE, lmUrl: 'http://127.0.0.1:1', modele: 'm', modeleVision: 'v', utilisateur: '', telegram: false,
+    transcrire: async f => { vus.push({ f, existe: fs.existsSync(f), taille: fs.statSync(f).size }); return { ok: true, texte: 'Bonjour Archi. Fin de transmission.' }; } };
+  const local = P.creerServeurLocal(r), porte = P.creerServeurPorte(r);
+  await new Promise(x => local.listen(0, '127.0.0.1', x));
+  await new Promise(x => porte.listen(0, '127.0.0.1', x));
+  r.port = local.address().port;
+  const envoyer = (serveur, entetes, corps) => new Promise((ok, non) => {
+    const q = http.request({ host: '127.0.0.1', port: serveur.address().port, method: 'POST', path: '/api/ecouter',
+      headers: Object.assign(serveur === local ? { host: '127.0.0.1:' + r.port } : {}, entetes) }, rep => {
+      const m = []; rep.on('data', x => m.push(x)); rep.on('end', () => ok({ code: rep.statusCode, corps: Buffer.concat(m).toString('utf8') }));
+    });
+    q.on('error', non); q.end(corps);
+  });
+  const son = Buffer.alloc(4000, 7);
+  try {
+    const bon = await envoyer(local, { 'X-Archi-Portail': '1', 'Content-Type': 'audio/webm;codecs=opus' }, son);
+    assert.equal(bon.code, 200);
+    assert.deepEqual(JSON.parse(bon.corps), { ok: true, texte: 'Bonjour Archi. Fin de transmission.' });
+    assert.equal(vus.length, 1);
+    assert.ok(vus[0].existe && vus[0].taille === 4000 && vus[0].f.endsWith('.webm') && path.dirname(vus[0].f) === os.tmpdir(), JSON.stringify(vus[0]));
+    assert.equal(fs.existsSync(vus[0].f), false, 'le son est efface aussitot transcrit');
+    // un bout de silence n'est pas transcrit
+    assert.deepEqual(JSON.parse((await envoyer(local, { 'X-Archi-Portail': '1' }, Buffer.alloc(100))).corps), { ok: false, raison: 'rien_entendu' });
+    assert.equal(vus.length, 1);
+    // une autre page web du navigateur, ou la porte du telephone : rien
+    assert.equal((await envoyer(local, { 'Content-Type': 'audio/webm' }, son)).code, 403);
+    assert.equal((await envoyer(local, { 'X-Archi-Portail': '1', Origin: 'https://exemple.invalid' }, son)).code, 403);
+    assert.equal((await envoyer(porte, { 'X-Archi-Portail': '1', 'x-archi-cle': CLE }, son)).code, 404);
+    assert.equal(vus.length, 1);
+    // la transcription echoue : une raison, pas un plantage, et le fichier est efface quand meme
+    r.transcrire = async f => { vus.push({ f }); throw new Error('whisper absent'); };
+    assert.deepEqual(JSON.parse((await envoyer(local, { 'X-Archi-Portail': '1' }, son)).corps), { ok: false, raison: 'erreur_oreille' });
+    assert.equal(fs.existsSync(vus[1].f), false);
+  } finally {
+    local.close(); porte.close();
+    await new Promise(x => setTimeout(x, 200));   // la porte finit d'ecrire son journal dans ce dossier
+    fs.rmSync(d, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });

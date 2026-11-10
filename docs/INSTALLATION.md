@@ -146,7 +146,9 @@ Rien à installer : l'outil `memoire` est posé avec les autres outils maison.
 | ffmpeg | convertit le son (WAV 16 kHz pour l'oreille, OGG/Opus pour l'appli et la page) | `programmes\ffmpeg\` |
 
 - **Sur le téléphone** : touche la sphère et parle. La réponse s'affiche et se fait entendre.
-- **Sur la page d'accueil du PC** : clique sur le micro, parle, reclique pour envoyer. Le haut-parleur coupe ou remet la voix.
+- **Sur la page d'accueil du PC** : clique sur le micro, il t'écoute en continu. Ce qu'il entend s'écrit dans la ligne de
+  saisie ; dis « fin de transmission » (ou appuie sur Entrée) pour envoyer, « Archi, annule » pour effacer. Reclique sur le
+  micro pour le fermer. Le haut-parleur coupe ou remet la voix.
 - **Les réglages** (`.env`, section 9) : `ARCHI_VOIX=non` coupe tout ; `ARCHI_WHISPER_MODELE` accepte un modèle plus gros
   (plus juste, plus lent) ; `ARCHI_VOIX_NOM` choisit une autre voix du catalogue de Pocket TTS ; `ARCHI_LANGUE` change de langue.
   Une autre voix ou une autre langue est téléchargée par Pocket TTS au lancement suivant (quelques centaines de Mo).

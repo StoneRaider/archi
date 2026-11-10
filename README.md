@@ -82,7 +82,9 @@ Dis-lui « mon chien s'appelle Médor » : Archi le range tout seul dans une fic
 ### La voix : parle-lui, il te répond
 Archi écoute et parle, **sans quitter le PC** : whisper.cpp transcrit ta voix, Pocket TTS lit la réponse.
 - **Sur le téléphone** : touche la sphère et parle.
-- **Sur la page d'accueil du PC** : clique sur le micro, parle, reclique. Le haut-parleur coupe ou remet la voix.
+- **Sur la page d'accueil du PC** : clique sur le micro, il t'écoute **en continu**, comme dans une conversation. Dis
+  « fin de transmission » pour envoyer, « Archi, annule » pour effacer. Le haut-parleur coupe ou remet la voix.
+- La même sphère que sur le téléphone respire, écoute, réfléchit et parle. Une visite guidée s'ouvre au premier lancement.
 - Les deux tournent sur le processeur : la carte graphique reste au modèle de langage.
 - `verifier_archi.bat` le contrôle sans micro : la voix dit une phrase, l'oreille la réécoute, et les mots sont comparés.
 
