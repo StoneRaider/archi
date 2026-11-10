@@ -53,6 +53,15 @@ test('contexte : aiguillages', () => {
   assert.match(contexte.aiguiller('fais-moi un pdf du compte rendu', ai), /creer_pdf/);
   assert.match(contexte.aiguiller('lis le pdf facture', ai), /lire_pdf/);
   assert.doesNotMatch(contexte.aiguiller('bonjour', ai), /CONSIGNE/);
+  // « demain » dans une phrase ordinaire ne programme rien (essai reel du 10/11 : un rappel « verifier le nom du chien »)
+  assert.doesNotMatch(contexte.aiguiller('Demain, si je te reparle de mon chien, tu ne sauras plus comment il s appelle.', ai), /planificateur/);
+  assert.doesNotMatch(contexte.aiguiller('Je pars en vacances demain.', ai), /planificateur/);
+  assert.match(contexte.aiguiller('demain matin, réunion avec le notaire', ai), /planificateur/);
+  assert.match(contexte.aiguiller('demain 9h le dentiste', ai), /planificateur/);
+  assert.match(contexte.aiguiller('préviens-moi demain quand le colis arrive', ai), /planificateur/);
+  assert.match(contexte.aiguiller('pense à me dire demain de sortir les poubelles', ai), /planificateur/);
+  assert.match(contexte.aiguiller('rappelle-moi dans 2 minutes de boire un verre d eau', ai), /planificateur/);
+  assert.match(contexte.aiguiller('Oublie ce que je t ai dit sur mon chien', ai), /outil memoire, action=oublier/);
 });
 
 test('contexte : un fichier recu est balise comme contenu exterieur', () => {
