@@ -1,14 +1,16 @@
-// portail.js - la porte d'entree d'Archi sur le PC. Aucune dependance : Node seul.
+// portail.js - les deux portes d'Archi sur le PC. Aucune dependance : Node seul.
 //
-//  1. EN LOCAL (http://127.0.0.1:5680) : la page d'accueil. On y parle a Archi, on voit son etat,
-//     et on y trouve le QR code qui branche le telephone.
-//  2. DEPUIS INTERNET (le tunnel HTTPS pointe ici, jamais sur n8n) : seuls passent
+//  1. LA PAGE D'ACCUEIL (http://127.0.0.1:5680, ARCHI_PORTAIL_PORT) : pour le navigateur DU PC seulement.
+//     On y parle a Archi, on voit son etat, et on y trouve le QR code qui branche le telephone.
+//  2. LA PORTE DU TELEPHONE (127.0.0.1:5681, ARCHI_PORTE_PORT) : c'est ELLE que vise le tunnel HTTPS, jamais n8n
+//     ni la page d'accueil. Elle ne connait qu'une liste blanche :
 //       - POST /webhook/telephone-archi et /webhook/telephone-boite, avec la bonne cle (verifiee ICI, avant n8n) ;
-//       - POST /webhook/... de Telegram (si un bot est branche ; n8n verifie son jeton secret) ;
+//       - POST du webhook Telegram : le chemin ET le jeton secret propres a cette installation, verifies ICI ;
 //       - GET /telephone (page d'installation, sans aucun secret) et GET /Archi.apk.
-//     Tout le reste repond 404 : l'editeur n8n, ses identifiants et cette page d'accueil ne sortent jamais du PC.
+//     Tout le reste repond 404 : l'editeur n8n, son API et la page d'accueil ne sont pas derriere cette porte.
 //
 // Lance par lancer_archi.ps1 (les reglages viennent du .env, deja charges dans l'environnement).
+// Si le lanceur disparait (fenetre fermee a la croix), le portail arrete le tunnel et le serveur, puis s'arrete.
 'use strict';
 const http = require('http');
 const fs = require('fs');
@@ -18,6 +20,7 @@ const crypto = require('crypto');
 
 const ICI = __dirname;
 const MAX_CORPS = 30 * 1024 * 1024;          // une photo du telephone tient largement
+const MAX_CORPS_TELEGRAM = 1024 * 1024;      // un message Telegram est petit
 const DELAI_AGENT_MS = 10 * 60 * 1000;       // un petit modele local peut reflechir longtemps
 const RELAIS = ['cf-connecting-ip', 'cf-ray', 'cdn-loop', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto',
   'forwarded', 'x-real-ip', 'via'];
@@ -25,8 +28,10 @@ const RELAIS = ['cf-connecting-ip', 'cf-ray', 'cdn-loop', 'x-forwarded-for', 'x-
 function reglages(env) {
   env = env || process.env;
   const depot = env.ARCHI_DEPOT || path.join(ICI, '..');
+  const port = parseInt(env.ARCHI_PORTAIL_PORT || '5680', 10);
   return {
-    port: parseInt(env.ARCHI_PORTAIL_PORT || '5680', 10),
+    port,
+    portPorte: parseInt(env.ARCHI_PORTE_PORT || String(port + 1), 10),
     n8nPort: parseInt(env.N8N_PORT || '5678', 10),
     depot,
     base: env.ARCHI_BASE || path.join(os.homedir(), '.n8n-files'),
@@ -61,13 +66,28 @@ function appelDeLaPage(req, port) {
   return h['x-archi-portail'] === '1';
 }
 
+/** Comparaison en temps constant ; refuse une valeur attendue de moins de 16 caracteres. */
 function memeCle(recue, attendue) {
   const e = s => crypto.createHash('sha256').update(String(s || ''), 'utf8').digest();
   return String(attendue || '').length >= 16 && crypto.timingSafeEqual(e(recue), e(attendue));
 }
 
 /**
- * Que faire d'une demande venue d'Internet ? -> {action: 'relayer' | 'page' | 'apk' | 'refuser', code}
+ * Le webhook Telegram de CETTE installation : {chemin, jeton}, ou null.
+ * importer_workflows.py tire au hasard l'identifiant du noeud et celui du webhook, puis les note dans ce fichier.
+ * n8n donne a Telegram le jeton secret « <workflow>_<noeud> » : sans ce tirage, il serait le meme pour tout le monde.
+ */
+function telegramAttendu(r) {
+  try {
+    const t = JSON.parse(fs.readFileSync(path.join(r.base, '.workflows_archi_importes', 'telegram.json'), 'utf8'));
+    const ok = v => typeof v === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(v);
+    if (!ok(t.webhook_id) || !ok(t.node_id) || !ok(t.workflow_id)) return null;
+    return { chemin: '/webhook/' + t.webhook_id + '/webhook', jeton: (t.workflow_id + '_' + t.node_id).replace(/[^a-zA-Z0-9_-]+/g, '') };
+  } catch (e) { return null; }
+}
+
+/**
+ * Que faire d'une demande arrivee a la porte du telephone ? -> {action: 'relayer' | 'page' | 'apk' | 'refuser', code, max}
  * La regle est une liste blanche : ce qui n'est pas ecrit ici est refuse.
  */
 function routePublique(methode, chemin, entetes, r) {
@@ -77,12 +97,13 @@ function routePublique(methode, chemin, entetes, r) {
   if (methode === 'GET' && chemin === '/Archi.apk') return { action: 'apk' };
   if (methode !== 'POST') return refus(404);
   if (chemin === '/webhook/telephone-archi' || chemin === '/webhook/telephone-boite') {
-    return memeCle(entetes['x-archi-cle'], r.cle) ? { action: 'relayer' } : refus(403);
+    return memeCle(entetes['x-archi-cle'], r.cle) ? { action: 'relayer', max: MAX_CORPS } : refus(403);
   }
-  // le declencheur Telegram de n8n : /webhook/<identifiant>/webhook (ou /webhook/<workflow>/<noeud>/webhook),
-  // avec le jeton secret que n8n a donne a Telegram
-  if (r.telegram && /^\/webhook\/[A-Za-z0-9_-]{8,64}(\/[A-Za-z0-9_-]{1,64})?\/webhook$/.test(chemin) && entetes['x-telegram-bot-api-secret-token']) {
-    return { action: 'relayer' };
+  if (r.telegram) {
+    const tg = telegramAttendu(r);
+    if (tg && chemin === tg.chemin) {
+      return memeCle(entetes['x-telegram-bot-api-secret-token'], tg.jeton) ? { action: 'relayer', max: MAX_CORPS_TELEGRAM } : refus(403);
+    }
   }
   return refus(404);
 }
@@ -159,6 +180,11 @@ function adressePublique(r) {
   } catch (e) { return ''; }
 }
 
+/** Code court derive de la cle : affiche sur le PC ET dans l'appli au moment du branchement, pour comparer a l'oeil. */
+function codeCourt(cle) {
+  return crypto.createHash('sha256').update(String(cle || ''), 'utf8').digest('hex').slice(0, 4).toUpperCase();
+}
+
 function outils(r) {
   // la vitrine : nom + premiere phrase de chaque outil maison inscrit au registre
   try {
@@ -179,6 +205,7 @@ async function etat(r) {
   let modeles = [];
   try { modeles = (JSON.parse(lm.corps).data || []).map(m => String(m.id)); } catch (e) { modeles = []; }
   const pub = adressePublique(r);
+  const pret = pub && r.cle.length >= 16;
   return {
     utilisateur: r.utilisateur,
     n8n: !!(n8n && n8n.code === 200),
@@ -187,7 +214,8 @@ async function etat(r) {
     cle_ok: r.cle.length >= 16,
     adresse_publique: pub,
     // le lien du QR code : la cle est dans le « # », que le navigateur du telephone n'envoie jamais sur le reseau
-    lien_telephone: pub && r.cle.length >= 16 ? pub + '/telephone#k=' + encodeURIComponent(r.cle) : '',
+    lien_telephone: pret ? pub + '/telephone#k=' + encodeURIComponent(r.cle) : '',
+    code_telephone: pret ? codeCourt(r.cle) : '',
     apk: fs.existsSync(path.join(r.depot, 'appli', 'Archi.apk')),
     outils: outils(r),
     n8n_url: 'http://127.0.0.1:' + r.n8nPort,
@@ -201,60 +229,88 @@ function fichier(res, nom, type, extra) {
   } catch (e) { repondre(res, 500, 'fichier manquant : ' + nom); }
 }
 
-// ---------------------------------------------------------------- le serveur
-function creerServeur(r) {
+function enveloppe(traiter) {
   return http.createServer(async (req, res) => {
-    try {
-      const chemin = String(req.url || '/').split('?')[0];
-      const methode = req.method || 'GET';
-
-      if (!estLocal(req, r.port)) {
-        // ----- demande venue d'Internet (tunnel) ou d'une page piegee : liste blanche stricte
-        const route = routePublique(methode, chemin, req.headers, r);
-        if (route.action === 'page') return fichier(res, 'telephone.html', 'text/html; charset=utf-8');
-        if (route.action === 'apk') {
-          const apk = path.join(r.depot, 'appli', 'Archi.apk');
-          if (!fs.existsSync(apk)) return repondre(res, 404, "L'appli n'est pas sur ce PC.");
-          res.writeHead(200, { 'Content-Type': 'application/vnd.android.package-archive', 'Content-Length': fs.statSync(apk).size,
-            'Content-Disposition': 'attachment; filename="Archi.apk"', 'X-Content-Type-Options': 'nosniff' });
-          return fs.createReadStream(apk).pipe(res);
-        }
-        if (route.action === 'relayer') return relayer(req, res, r, chemin, await lireCorps(req, MAX_CORPS));
-        if (route.code === 403) await new Promise(x => setTimeout(x, 400));   // mauvaise cle : on ne repond pas a toute vitesse
-        return repondre(res, route.code, route.code === 403 ? 'Cle refusee.' : 'Introuvable.');
-      }
-
-      // ----- navigateur du PC
-      if (methode === 'GET' && (chemin === '/' || chemin === '/index.html')) return fichier(res, 'accueil.html', 'text/html; charset=utf-8');
-      if (methode === 'GET' && chemin === '/qrcode.js') return fichier(res, 'qrcode.js', 'text/javascript; charset=utf-8');
-      if (methode === 'GET' && chemin === '/telephone') return fichier(res, 'telephone.html', 'text/html; charset=utf-8');
-      if (chemin.startsWith('/api/')) {
-        if (!appelDeLaPage(req, r.port)) return json(res, 403, { erreur: 'appel refuse' });
-        if (methode === 'GET' && chemin === '/api/etat') return json(res, 200, await etat(r));
-        if (methode === 'POST' && chemin === '/api/message') {
-          return relayer(req, res, r, '/webhook/telephone-archi', await lireCorps(req, MAX_CORPS), { 'x-archi-cle': r.cle });
-        }
-        if (methode === 'POST' && chemin === '/api/annonces') {
-          // les rappels du planificateur, comme pour l'appli (sans accuse de reception : le telephone les recoit aussi)
-          return relayer(req, res, r, '/webhook/telephone-boite', Buffer.from('{}'), { 'x-archi-cle': r.cle, 'content-type': 'application/json' });
-        }
-      }
-      return repondre(res, 404, 'Introuvable.');
-    } catch (e) {
+    try { await traiter(req, res, String(req.url || '/').split('?')[0], req.method || 'GET'); }
+    catch (e) {
       if (!res.headersSent) repondre(res, e && e.message === 'trop gros' ? 413 : 500, 'Erreur.');
       else res.end();
     }
   });
 }
 
-if (require.main === module) {
-  const r = reglages();
-  const serveur = creerServeur(r);
-  serveur.requestTimeout = DELAI_AGENT_MS;
-  serveur.headersTimeout = 30000;
-  serveur.on('error', e => { console.error('Portail : ' + (e.code === 'EADDRINUSE' ? 'le port ' + r.port + ' est deja pris.' : e.message)); process.exit(1); });
-  // 127.0.0.1 seulement : ni le reseau local ni Internet n'arrivent ici, sauf par le tunnel
-  serveur.listen(r.port, '127.0.0.1', () => console.log('Portail Archi : http://127.0.0.1:' + r.port));
+// ---------------------------------------------------------------- 1. la page d'accueil (navigateur du PC)
+function creerServeurLocal(r) {
+  return enveloppe(async (req, res, chemin, methode) => {
+    // un relais, un autre nom d'hote (page piegee, DNS rebinding) : cette porte n'existe pas pour eux
+    if (!estLocal(req, r.port)) return repondre(res, 404, 'Introuvable.');
+    if (methode === 'GET' && (chemin === '/' || chemin === '/index.html')) return fichier(res, 'accueil.html', 'text/html; charset=utf-8');
+    if (methode === 'GET' && chemin === '/qrcode.js') return fichier(res, 'qrcode.js', 'text/javascript; charset=utf-8');
+    if (methode === 'GET' && chemin === '/telephone') return fichier(res, 'telephone.html', 'text/html; charset=utf-8');
+    if (chemin.startsWith('/api/')) {
+      if (!appelDeLaPage(req, r.port)) return json(res, 403, { erreur: 'appel refuse' });
+      if (methode === 'GET' && chemin === '/api/etat') return json(res, 200, await etat(r));
+      if (methode === 'POST' && chemin === '/api/message') {
+        return relayer(req, res, r, '/webhook/telephone-archi', await lireCorps(req, MAX_CORPS), { 'x-archi-cle': r.cle });
+      }
+      if (methode === 'POST' && chemin === '/api/annonces') {
+        // les rappels du planificateur, comme pour l'appli (sans accuse de reception : le telephone les recoit aussi)
+        return relayer(req, res, r, '/webhook/telephone-boite', Buffer.from('{}'), { 'x-archi-cle': r.cle, 'content-type': 'application/json' });
+      }
+    }
+    return repondre(res, 404, 'Introuvable.');
+  });
 }
 
-module.exports = { reglages, estLocal, appelDeLaPage, routePublique, memeCle, creerServeur, adressePublique, outils };
+// ---------------------------------------------------------------- 2. la porte du telephone (cible du tunnel)
+function creerServeurPorte(r) {
+  return enveloppe(async (req, res, chemin, methode) => {
+    const route = routePublique(methode, chemin, req.headers, r);
+    if (route.action === 'page') return fichier(res, 'telephone.html', 'text/html; charset=utf-8');
+    if (route.action === 'apk') {
+      const apk = path.join(r.depot, 'appli', 'Archi.apk');
+      if (!fs.existsSync(apk)) return repondre(res, 404, "L'appli n'est pas sur ce PC.");
+      res.writeHead(200, { 'Content-Type': 'application/vnd.android.package-archive', 'Content-Length': fs.statSync(apk).size,
+        'Content-Disposition': 'attachment; filename="Archi.apk"', 'X-Content-Type-Options': 'nosniff' });
+      return fs.createReadStream(apk).pipe(res);
+    }
+    if (route.action === 'relayer') return relayer(req, res, r, chemin, await lireCorps(req, route.max));
+    if (route.code === 403) await new Promise(x => setTimeout(x, 400));   // mauvaise cle : on ne repond pas a toute vitesse
+    return repondre(res, route.code, route.code === 403 ? 'Cle refusee.' : 'Introuvable.');
+  });
+}
+
+// ---------------------------------------------------------------- le chien de garde
+/** Quand le lanceur disparait, on arrete les aides notees dans pids.txt (tunnel, serveur), puis soi-meme. */
+function surveillerLanceur(pid, r, sortir) {
+  const vivant = () => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
+  return setInterval(() => {
+    if (vivant()) return;
+    try {
+      for (const ligne of fs.readFileSync(path.join(r.etat, 'pids.txt'), 'utf8').split(/\r?\n/)) {
+        const p = parseInt(ligne.trim(), 10);
+        if (p && p !== process.pid) { try { process.kill(p); } catch (e) { /* deja arrete */ } }
+      }
+    } catch (e) { /* pas de fichier : rien a arreter */ }
+    try { fs.unlinkSync(path.join(r.etat, 'adresse_publique.txt')); } catch (e) { /* deja absent */ }
+    sortir();
+  }, 3000);
+}
+
+if (require.main === module) {
+  const r = reglages();
+  const demarrer = (serveur, port, nom) => {
+    serveur.requestTimeout = DELAI_AGENT_MS;
+    serveur.headersTimeout = 30000;
+    serveur.on('error', e => { console.error(nom + ' : ' + (e.code === 'EADDRINUSE' ? 'le port ' + port + ' est deja pris.' : e.message)); process.exit(1); });
+    // 127.0.0.1 seulement : ni le reseau local ni Internet n'arrivent ici, sauf par le tunnel (porte du telephone)
+    serveur.listen(port, '127.0.0.1', () => console.log(nom + ' : 127.0.0.1:' + port));
+  };
+  demarrer(creerServeurLocal(r), r.port, "Page d'accueil");
+  demarrer(creerServeurPorte(r), r.portPorte, 'Porte du telephone');
+  const lanceur = parseInt(process.env.ARCHI_PID_LANCEUR || '0', 10);
+  if (lanceur > 0) surveillerLanceur(lanceur, r, () => process.exit(0));
+}
+
+module.exports = { reglages, estLocal, appelDeLaPage, routePublique, memeCle, telegramAttendu, codeCourt, creerServeurLocal, creerServeurPorte,
+  surveillerLanceur, adressePublique, outils };

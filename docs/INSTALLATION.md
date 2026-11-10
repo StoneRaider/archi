@@ -14,11 +14,11 @@ l'installateur, à régler un souci, ou à installer Archi à la main (Linux, ma
 |---|---|---|
 | 1. Ton PC | lit la carte graphique, la mémoire vidéo et la place libre | sous 12 Go de mémoire vidéo, Archi marche mais lentement |
 | 3. Fichiers | copie le dépôt dans `%USERPROFILE%\Archi` | relance avec `-Destination C:\Archi` si ton nom de session a des accents |
-| 4. Python | `uv` télécharge un Python 3.12 privé, puis les modules des outils et du serveur | pare-feu : autorise `github.com` et `pypi.org` |
+| 4. Python | `uv` (empreinte vérifiée) télécharge un Python 3.12 privé, puis les modules des outils et du serveur | pare-feu : autorise `github.com` et `pypi.org` |
 | 5. Node.js et n8n | Node.js 22 (zip officiel), puis `npm install n8n@1.123.92` dans `programmes\n8n` | c'est l'étape la plus longue (3 à 10 minutes) |
 | 6. Tunnel et ffmpeg | `cloudflared.exe` et ffmpeg, en privé | sans tunnel, le PC marche, pas le téléphone |
 | 7. Château | copie `chateau_exemple\` dans `chateau\` (jamais par-dessus un château existant) et les outils | |
-| 8. `.env` | crée le fichier, deux clés aléatoires, des ports libres | tes valeurs déjà remplies sont gardées |
+| 8. `.env` | crée le fichier, deux clés aléatoires, les premiers ports libres | tes valeurs déjà remplies sont gardées |
 | 9. Cerveau | LM Studio par `winget` s'il manque, puis `lms get` des deux modèles | pas de `winget` : installe LM Studio depuis lmstudio.ai, ouvre-le une fois, relance |
 | 10. n8n | crée les identifiants, importe les 10 workflows, active le principal | `installation.txt` dit lequel a échoué |
 
@@ -30,6 +30,7 @@ Options utiles (`installation.bat -Option`) : `-Destination <dossier>`, `-Oui` (
 |---|---|
 | `lancer_archi.bat` (raccourci « Archi » du Bureau) | démarre le cerveau, la page d'accueil, le tunnel et n8n. Fermer sa fenêtre arrête Archi. |
 | `brancher_telegram.bat` | ajoute ton bot Telegram, pas à pas |
+| `verifier_archi.bat` | contrôle tout de bout en bout pendant qu'Archi tourne : programmes, cerveau, liste blanche, vraie question |
 | `.env` | toutes les clés et tous les réglages, commentés. Jamais publié, jamais affiché. |
 | `chateau\memoire\` | la mémoire d'Archi : des fiches Markdown que tu peux lire et corriger |
 | `chateau\outils\` | les outils maison et leur registre |
@@ -45,8 +46,8 @@ Chaque section du `.env` est commentée. Après un changement, relance Archi.
 - **Caméras, imprimante 3D, musique, Œil** : sections 6 à 9 du `.env`.
 - **Boîte Docker** (globe de l'Œil, SearXNG, Presenton) : `ARCHI_DOCKER=oui` dans le `.env`, avec Docker installé.
 - **Adresse fixe pour le téléphone** : mets l'adresse HTTPS de ton tunnel dans `WEBHOOK_URL` (avec le `/` final).
-  Ton tunnel doit viser **le portail** (`ARCHI_PORTAIL_PORT`, 5680 par défaut), pas n8n :
-  `ngrok http 5680` ou `tailscale funnel 5680`.
+  Ton tunnel doit viser **la porte du téléphone** (`ARCHI_PORTE_PORT`, 5681 par défaut), jamais n8n :
+  `ngrok http 5681` ou `tailscale funnel 5681`.
 
 ### En cas de souci
 | Symptôme | Cause probable |
@@ -56,7 +57,7 @@ Chaque section du `.env` est commentée. Après un changement, relance Archi.
 | La photo reste sans réponse | Le modèle de vision n'est pas téléchargé, ou `ARCHI_MODELE_VISION` ne correspond pas à son nom dans LM Studio. |
 | « Téléphone : pas d'adresse » | Le tunnel n'a pas pu s'ouvrir (pas d'Internet, pare-feu). Le détail est dans `donnees\etat\tunnel.log`. |
 | L'appli affiche « Clé refusée » | Le PC a été réinstallé : rescanne le QR code. |
-| « Le port … est déjà pris » | Un autre programme l'utilise : change `N8N_PORT` ou `ARCHI_PORTAIL_PORT` dans le `.env`. |
+| « Le port … est déjà pris » | Un autre programme l'utilise : change `N8N_PORT`, `ARCHI_PORTAIL_PORT` ou `ARCHI_PORTE_PORT` dans le `.env`. |
 | Un nœud Code affiche « Cannot find module child_process » | n8n n'a pas été lancé par `lancer_archi.bat` (qui charge `NODE_FUNCTION_ALLOW_BUILTIN`). |
 
 ## À la main (Linux, macOS, ou pour tout comprendre)
@@ -75,7 +76,9 @@ Il faut Node.js 22, Python 3.12 ou plus récent, et LM Studio.
 git clone <ce dépôt> archi-agent-local && cd archi-agent-local
 mkdir -p ~/.n8n-files && cp -r chateau_exemple/* ~/.n8n-files/
 mkdir -p ~/.n8n-files/outils && cp -r outils/* ~/.n8n-files/outils/
+python -m venv venv && . venv/bin/activate
 python -m pip install -r outils/requirements.txt -r serveur/requirements.txt
+python archi_env.py --brancher              # ce Python relira le .env tout seul : n8n ne le transmet pas aux outils
 node --test core/test portail/test
 ```
 
@@ -95,14 +98,14 @@ Pour vérifier sans rien afficher : `python archi_env.py` dit, section par secti
 set -a; . ./.env; set +a                    # charge le .env dans ce terminal
 python n8n/creer_identifiants.py            # identifiants « LM Studio (local) » et « Bot Telegram Archi »
 python n8n/importer_workflows.py            # les 10 workflows, avec leurs ID fixes, puis active le principal
-node portail/portail.js &                   # la page d'accueil : http://127.0.0.1:5680
+node portail/portail.js &                   # la page d'accueil (5680) et la porte du téléphone (5681)
 npx n8n@1                                   # l'agent
 ```
 Sous Windows, `lancer_archi.bat` fait tout cela.
 
 ### 5. L'adresse HTTPS du téléphone
-L'appli et Telegram doivent joindre ton PC en **HTTPS**. Ouvre un tunnel vers **le portail**, pas vers n8n :
-`cloudflared tunnel --url http://127.0.0.1:5680`, `ngrok http 5680` ou `tailscale funnel 5680`.
+L'appli et Telegram doivent joindre ton PC en **HTTPS**. Ouvre un tunnel vers **la porte du téléphone**
+(port 5681), jamais vers n8n : `cloudflared tunnel --url http://127.0.0.1:5681`, `ngrok http 5681` ou `tailscale funnel 5681`.
 Mets l'adresse dans `WEBHOOK_URL` du `.env` (avec le `/` final), écris-la aussi dans
 `donnees/etat/adresse_publique.txt` (sans le `/`), puis relance n8n : le QR code de la page d'accueil apparaît.
 

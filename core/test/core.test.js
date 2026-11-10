@@ -36,7 +36,7 @@ test('contexte : faits du chateau et regles toujours presents', () => {
   assert.match(r.profil, /RÈGLE SOURCES/);
   assert.match(r.profil, /RÈGLE CONTENU EXTÉRIEUR/);
   assert.match(r.outils, /planificateur/);
-  assert.match(r.outils, /imprimante_3d \(accord=oui exigé si action = envoyer/);
+  assert.match(r.outils, /imprimante_3d \(sans accord ; accord=oui seulement si action = envoyer/);
 });
 
 test('contexte : la bibliotheque remonte la bonne note', () => {
@@ -132,6 +132,31 @@ test('verificateur : un nom invente est signale, un nom sourcé passe', () => {
   assert.ok(invente.alertes.length >= 1, JSON.stringify(invente));
   const source = lancer({ reponse: "L'ambassadeur est Marie Durand.", steps: [{ observation: 'Résultat : Marie Durand, ambassadrice depuis 2025' }], msg: 'qui est l ambassadeur ?' });
   assert.equal(source.alertes.length, 0, JSON.stringify(source));
+});
+
+test('verificateur : pas de « C\'est programmé » sans la reponse du planificateur', () => {
+  const V = path.join(DEPOT, 'core', 'verifier_reponse.js');
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'archi_verif_'));   // jamais le vrai chateau
+  const lancer = o => JSON.parse(cp.execFileSync('node', [V], { input: JSON.stringify(o), env: Object.assign({}, process.env, { ARCHI_BASE: base }) }).toString());
+  // le cas vu a l'essai reel : une promesse, aucun appel d'outil
+  const invente = lancer({ reponse: "D'accord ! Veux-tu que je te rappelle dans 2 minutes de boire un verre d'eau ? (C’est programmé)", steps: [], msg: 'rappelle-moi dans 2 minutes de boire un verre d eau' });
+  assert.deepEqual(invente.alertes, ['promesse sans planificateur']);
+  assert.match(invente.reponse, /rien de nouveau n'est programmé/);
+  const promis = lancer({ reponse: 'Pas de souci, je te le rappellerai demain matin.', steps: [], msg: 'rappelle-le-moi demain' });
+  assert.deepEqual(promis.alertes, ['promesse sans planificateur']);
+  // le planificateur a vraiment repondu : rien a signaler
+  const vrai = lancer({ reponse: "C'est programmé ! t1 · le mardi 10/11 à 6 h 11 · sortir le gâteau.",
+    steps: [{ action: { tool: 'outils_maison' }, observation: JSON.stringify({ ok: true, phrase_pour_utilisateur: "C'est programmé ! t1 · le mardi 10/11 à 6 h 11 · sortir le gâteau." }) }],
+    msg: 'rappelle-moi dans 20 min de sortir le gâteau' });
+  assert.deepEqual(vrai.alertes, []);
+  assert.doesNotMatch(vrai.reponse, /À vérifier/);
+  // une liste de rappels n'est pas une promesse
+  const liste = lancer({ reponse: 'Tu as 2 rappels programmés : sortir le gâteau, appeler le garagiste.', steps: [{ observation: '{"ok":true,"phrase_pour_utilisateur":"2 rappels"}' }], msg: 'quels rappels ?' });
+  assert.deepEqual(liste.alertes, []);
+  // un autre outil a repondu, mais pas le planificateur : la promesse reste sans preuve
+  const autre = lancer({ reponse: "C'est programmé, je te préviendrai.", steps: [{ observation: '{"ok":true,"phrase_pour_utilisateur":"PDF cree"}' }], msg: 'rappelle-moi' });
+  assert.deepEqual(autre.alertes, ['promesse sans planificateur']);
+  fs.rmSync(base, { recursive: true, force: true });
 });
 
 test('outils : accord strict (« oui » seul) et faux marqueur accentue neutralise', () => {

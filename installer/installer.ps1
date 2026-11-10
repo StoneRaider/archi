@@ -15,7 +15,7 @@
 #   -SansModeles             LM Studio oui, mais aucun modele telecharge
 #   -SansLancer              ne lance pas Archi a la fin
 #   -SansRaccourci           ne pose pas le raccourci sur le Bureau
-#   -PortN8n, -PortPortail, -PortServeur   ports imposes (0 = le premier libre)
+#   -PortN8n, -PortPortail, -PortPorte, -PortServeur   ports imposes (0 = le premier libre)
 param(
     [string]$Destination = (Join-Path $env:USERPROFILE "Archi"),
     [switch]$Oui,
@@ -28,6 +28,7 @@ param(
     [switch]$SansRaccourci,
     [int]$PortN8n = 0,
     [int]$PortPortail = 0,
+    [int]$PortPorte = 0,
     [int]$PortServeur = 0
 )
 
@@ -40,6 +41,13 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $VERSION_ARCHI = "1.0"
 $VERSION_N8N = "1.123.92"          # la serie 1.x, celle avec laquelle les workflows ont ete faits
 $VERSION_NODE = "22"               # Node.js LTS (n8n 1.x demande Node 20.19 a 24)
+# Les programmes telecharges : une version precise, et son empreinte SHA-256 verifiee avant usage.
+$TELECHARGEMENTS = @{
+    "uv.zip"          = @("https://github.com/astral-sh/uv/releases/download/0.13.7/uv-x86_64-pc-windows-msvc.zip", "0cdc5b38fe5a8168ed6a25814f5ba43c21d313dd3187314fccb37b7cec46e021")
+    "node.zip"        = @("https://nodejs.org/dist/v22.23.4/node-v22.23.4-win-x64.zip", "cbc74b5e0982c9dbb41525fd8fb5dcd32fbee237863f7829072f4639a1ce5f20")
+    "cloudflared.exe" = @("https://github.com/cloudflare/cloudflared/releases/download/2026.10.7/cloudflared-windows-amd64.exe", "2493dbc168923bb3e59e5e7716f71deced92992eea9acd6e9d74f84ac7751343")
+    "ffmpeg.zip"      = @("https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-essentials_build.zip", "60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba")
+}
 $VERSION_PYTHON = "3.12"
 $MODELE = "openai/gpt-oss-20b"     # le cerveau (12 Go)
 $VISION_GRANDE = "google/gemma-3-12b"   # 8 Go : cartes de 24 Go et plus
@@ -67,20 +75,27 @@ function Demander([string]$question, [bool]$defaut = $true) {
 }
 
 # ---------------------------------------------------------------- telechargements et programmes
-function Telecharger([string]$url, [string]$nom) {
+function EmpreinteBonne([string]$fichier, [string]$nom) {
+    $attendue = $TELECHARGEMENTS[$nom][1]
+    return ((Get-FileHash -Algorithm SHA256 -LiteralPath $fichier).Hash.ToLower() -eq $attendue)
+}
+# Telecharge un programme de la liste $TELECHARGEMENTS et verifie son empreinte. Un fichier abime n'est jamais garde.
+function Telecharger([string]$nom) {
     New-Item -ItemType Directory -Force $TELE | Out-Null
+    $url = $TELECHARGEMENTS[$nom][0]
     $cible = Join-Path $TELE $nom
-    if ($Cache -and (Test-Path (Join-Path $Cache $nom))) {
-        Copy-Item (Join-Path $Cache $nom) $cible -Force
-        return $cible
+    if ($Cache -and (Test-Path (Join-Path $Cache $nom))) { Copy-Item (Join-Path $Cache $nom) $cible -Force }
+    if (Test-Path $cible) {
+        if (EmpreinteBonne $cible $nom) { return $cible }
+        Remove-Item $cible -Force
     }
-    if ((Test-Path $cible) -and (Get-Item $cible).Length -gt 0) { return $cible }
     if ($SansReseau) { throw "pas de reseau (mode essai) pour $nom" }
     Dire "  telechargement de $nom ..."
     $tmp = "$cible.partiel"
     for ($essai = 1; $essai -le 3; $essai++) {
         try {
             Invoke-WebRequest -Uri $url -OutFile $tmp -UseBasicParsing -Headers $UA
+            if (-not (EmpreinteBonne $tmp $nom)) { Remove-Item $tmp -Force; throw "empreinte SHA-256 inattendue (fichier abime ou modifie)" }
             Move-Item $tmp $cible -Force
             return $cible
         } catch {
@@ -180,6 +195,9 @@ if ($SOURCE.TrimEnd('\') -ne $Destination) {
     $exclus = @(".git", "programmes", "donnees", "chateau", "telechargements", "node_modules", "build", ".gradle", ".local", "__pycache__", "venv")
     & robocopy $SOURCE $Destination /E /XD $exclus /XF ".env" "installation.txt" "*.pyc" /NFL /NDL /NJH /NJS /NP /R:1 /W:1 | Out-Null
     if ($LASTEXITCODE -ge 8) { Dire "La copie des fichiers a echoue (robocopy $LASTEXITCODE)." "Red"; exit 1 }
+    # les fichiers viennent d'un ZIP telecharge : on leve la marque 'vient d Internet', sinon Windows redemande a chaque lancement
+    Get-ChildItem -Path $Destination -Recurse -File -Include *.bat, *.ps1 -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -notlike "$PROG\*" } | Unblock-File -ErrorAction SilentlyContinue
     Noter "Fichiers copies dans $Destination"
 } else { Noter "Installation sur place (les fichiers sont deja dans $Destination)." }
 $nouveauEnv = -not (Test-Path $ENVF)
@@ -196,7 +214,7 @@ $PY = Join-Path $PROG "python\venv\Scripts\python.exe"
 try {
     $uvExe = Join-Path $PROG "python\uv.exe"
     if (-not (Test-Path $uvExe)) {
-        $zip = Telecharger "https://github.com/astral-sh/uv/releases/latest/download/uv-x86_64-pc-windows-msvc.zip" "uv.zip"
+        $zip = Telecharger "uv.zip"
         Decompresser $zip (Join-Path $PROG "uv")
         New-Item -ItemType Directory -Force (Join-Path $PROG "python") | Out-Null
         Copy-Item (Trouver (Join-Path $PROG "uv") "uv.exe") $uvExe -Force
@@ -226,13 +244,7 @@ $node = $null; $n8nBin = Join-Path $PROG "n8n\node_modules\n8n\bin\n8n"
 try {
     $node = Trouver (Join-Path $PROG "node") "node.exe"
     if (-not $node) {
-        $url = ""
-        if (-not ($Cache -and (Test-Path (Join-Path $Cache "node.zip"))) -and -not $SansReseau) {
-            $index = Invoke-RestMethod -Uri "https://nodejs.org/dist/index.json" -UseBasicParsing -Headers $UA
-            $v = ($index | Where-Object { $_.version -match "^v$VERSION_NODE\." -and $_.files -contains "win-x64-zip" } | Select-Object -First 1).version
-            $url = "https://nodejs.org/dist/$v/node-$v-win-x64.zip"
-        }
-        Decompresser (Telecharger $url "node.zip") (Join-Path $PROG "node")
+        Decompresser (Telecharger "node.zip") (Join-Path $PROG "node")
         $node = Trouver (Join-Path $PROG "node") "node.exe"
     }
     if (-not $node) { throw "node.exe introuvable" }
@@ -261,7 +273,7 @@ Titre "6. Tunnel HTTPS (telephone) et ffmpeg"
 try {
     $cf = Join-Path $PROG "cloudflared\cloudflared.exe"
     if (-not (Test-Path $cf)) {
-        $f = Telecharger "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" "cloudflared.exe"
+        $f = Telecharger "cloudflared.exe"
         New-Item -ItemType Directory -Force (Split-Path $cf) | Out-Null
         Copy-Item $f $cf -Force
     }
@@ -273,7 +285,7 @@ $ffDir = ""
 try {
     $ff = Trouver (Join-Path $PROG "ffmpeg") "ffmpeg.exe"
     if (-not $ff) {
-        $zip = Telecharger "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" "ffmpeg.zip"
+        $zip = Telecharger "ffmpeg.zip"
         Decompresser $zip (Join-Path $PROG "ffmpeg")
         $ff = Trouver (Join-Path $PROG "ffmpeg") "ffmpeg.exe"
     }
@@ -310,10 +322,13 @@ try {
 
 # ---------------------------------------------------------------- 8. les reglages (.env)
 Titre "8. Les reglages (.env)"
-$dejaPorts = (ValeurEnv "ARCHI_PORTAIL_PORT") -ne ""
+# installation neuve : les premiers ports libres ; reinstallation : ceux du .env (l'appli et les raccourcis les connaissent)
+$dejaPorts = (-not $nouveauEnv) -and ((ValeurEnv "ARCHI_PORTAIL_PORT") -match '^\d+$') -and ((ValeurEnv "N8N_PORT") -match '^\d+$')
 $pN8n = if ($dejaPorts -and $PortN8n -eq 0) { [int](ValeurEnv "N8N_PORT") } else { ChoisirPort $PortN8n 5678 }
 $pPortail = if ($dejaPorts -and $PortPortail -eq 0) { [int](ValeurEnv "ARCHI_PORTAIL_PORT") } else { ChoisirPort $PortPortail 5680 }
-$pServeur = if ($dejaPorts -and $PortServeur -eq 0) { [int](ValeurEnv "ARCHI_SERVEUR_PORT") } else { ChoisirPort $PortServeur 8765 }
+$pServeur = if ($dejaPorts -and $PortServeur -eq 0 -and (ValeurEnv "ARCHI_SERVEUR_PORT") -match '^\d+$') { [int](ValeurEnv "ARCHI_SERVEUR_PORT") } else { ChoisirPort $PortServeur 8765 }
+$pPorte = if ($dejaPorts -and $PortPorte -eq 0 -and (ValeurEnv "ARCHI_PORTE_PORT") -match '^\d+$') { [int](ValeurEnv "ARCHI_PORTE_PORT") } else { ChoisirPort $PortPorte ($pPortail + 1) }
+if ($pPorte -eq $pPortail -or $pPorte -eq $pN8n) { $pPorte = ChoisirPort 0 ($pPortail + 2) }
 ReglerEnv "ARCHI_UTILISATEUR" $Prenom -Forcer:$nouveauEnv
 ReglerEnv "ARCHI_DEPOT" $Destination -Forcer
 ReglerEnv "ARCHI_BASE" $BASE -Forcer
@@ -323,6 +338,7 @@ ReglerEnv "ARCHI_CLE_TELEPHONE" (CleAleatoire)          # deux cles aleatoires, 
 ReglerEnv "ARCHI_CLE_OEIL" (CleAleatoire)
 ReglerEnv "N8N_PORT" "$pN8n" -Forcer
 ReglerEnv "ARCHI_PORTAIL_PORT" "$pPortail" -Forcer
+ReglerEnv "ARCHI_PORTE_PORT" "$pPorte" -Forcer
 ReglerEnv "ARCHI_SERVEUR_PORT" "$pServeur" -Forcer
 ReglerEnv "ARCHI_N8N_VERSION" $VERSION_N8N -Forcer
 # n8n : sa base et ses identifiants restent dans le dossier d'Archi ; il n'ecoute que ce PC ; aucune telemetrie
@@ -338,7 +354,7 @@ ReglerEnv "N8N_PERSONALIZATION_ENABLED" "false"
 ReglerEnv "N8N_HIRING_BANNER_ENABLED" "false"
 # le tunnel du telephone : rapide = Cloudflare sans compte ; non = aucun ; ou remplis WEBHOOK_URL avec ton propre tunnel
 ReglerEnv "ARCHI_TUNNEL" "rapide"
-Noter "Fichier .env pret (deux cles aleatoires, creees a la premiere installation ; aucune valeur n'est affichee). Ports : n8n $pN8n, page d'accueil $pPortail, serveur $pServeur."
+Noter "Fichier .env pret (deux cles aleatoires, creees a la premiere installation ; aucune valeur n'est affichee). Ports : n8n $pN8n, page d'accueil $pPortail, porte du telephone $pPorte, serveur $pServeur."
 
 # ---------------------------------------------------------------- 9. le cerveau : LM Studio et les modeles
 function ModelesLa([string]$lms) {

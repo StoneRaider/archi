@@ -28,32 +28,67 @@ sont dans un fichier local ignoré par git (`.local/mots_perso.txt`) : ils ne so
 l'envoi. Les positions GPS se vérifient à la main.
 
 ## Le portail : ce qui sort du PC, et rien d'autre
-Le tunnel HTTPS du téléphone ne mène pas à n8n. Il mène au **portail** (`portail/portail.js`, Node seul, sans
-dépendance), qui applique une liste blanche. Depuis Internet, seuls passent :
+`portail/portail.js` (Node seul, sans dépendance) ouvre **deux portes distinctes**, toutes deux sur `127.0.0.1` :
+
+| Porte | Port | Pour qui | Ce qu'elle sert |
+|---|---|---|---|
+| Page d'accueil | `ARCHI_PORTAIL_PORT` (5680) | le navigateur du PC | la discussion, l'état, le QR code |
+| Porte du téléphone | `ARCHI_PORTE_PORT` (5681) | le tunnel HTTPS | une liste blanche, et rien d'autre |
+
+Le tunnel vise la porte du téléphone, jamais n8n ni la page d'accueil. Cette porte ne connaît que :
 
 | Demande | Condition |
 |---|---|
 | `POST /webhook/telephone-archi` et `/webhook/telephone-boite` | la clé de l'appli, vérifiée **par le portail**, en temps constant, avant n8n |
-| `POST /webhook/…/webhook` (Telegram) | seulement si un bot est branché ; n8n vérifie le jeton secret de Telegram |
+| `POST` du webhook Telegram | seulement si un bot est branché : le chemin **et** le jeton secret de cette installation, vérifiés par le portail |
 | `GET /telephone` | page d'installation de l'appli, sans aucun secret |
 | `GET /Archi.apk` | l'appli |
 
-Tout le reste répond 404 : l'éditeur n8n, son API, ses identifiants et la page d'accueil ne sont pas joignables
-de l'extérieur, même avec l'adresse du tunnel. `portail/test/portail.test.js` le vérifie de bout en bout.
+Tout le reste répond 404 : l'éditeur n8n, son API, ses identifiants et la page d'accueil ne sont pas derrière cette
+porte. Elle ne se fie à aucun en-tête pour décider : même un relais mal réglé ne lui fait rien servir de plus.
+`portail/test/portail.test.js` le vérifie de bout en bout, et `verifier_archi.bat` le revérifie sur le PC installé.
 
-La **page d'accueil** (`http://127.0.0.1:5680`) n'est servie qu'au navigateur du PC. Elle n'accepte que ses
-propres appels : même origine et en-tête maison. Une page web piégée ouverte dans le même navigateur ne peut donc
-ni lire la clé, ni parler à Archi à ta place, y compris en faisant pointer son nom de domaine sur `127.0.0.1`.
+**Telegram** : n8n donne à Telegram un jeton secret calculé à partir des identifiants du workflow et du nœud.
+Dans un dépôt public, ces identifiants sont connus de tous. `n8n/importer_workflows.py` tire donc au hasard, à
+l'installation, l'identifiant du nœud et celui du webhook : le chemin et le jeton sont propres à chaque PC.
 
-**Le QR code** contient l'adresse du tunnel et la clé de l'appli. La clé est placée après le `#` du lien : le
-navigateur du téléphone ne l'envoie jamais sur le réseau, elle passe seulement du QR code à l'appli. L'appli
-affiche l'adresse et demande un accord avant de s'y brancher : un lien piégé ne peut pas la rediriger en douce.
+La **page d'accueil** n'est servie qu'au navigateur du PC. Elle n'accepte que ses propres appels : même origine et
+en-tête maison. Une page web piégée ouverte dans le même navigateur ne peut donc ni lire la clé, ni parler à Archi
+à ta place, y compris en faisant pointer son nom de domaine sur `127.0.0.1`.
+
+**Le QR code** contient l'adresse du tunnel et la clé de l'appli.
+- Il est caché par défaut sur la page d'accueil et se recache au bout de 2 minutes : une capture d'écran ou une
+  vidéo de démonstration ne le publie pas.
+- La clé est placée après le `#` du lien : le navigateur du téléphone ne l'envoie jamais sur le réseau, et la page
+  l'efface de la barre d'adresse.
+- Avant de se brancher, l'appli affiche l'adresse et un **code de 4 caractères**. La page d'accueil du PC affiche
+  les mêmes. S'ils diffèrent, le lien ne vient pas de ton PC : on annule. L'appli dit aussi quand un branchement
+  existant va être remplacé, et refuse une adresse qui n'est pas en lettres simples (pas de sosie en Unicode).
+- Pour changer la clé : vide `ARCHI_CLE_TELEPHONE` dans le `.env`, relance `installation.bat`, puis rescanne.
+
+**Fermer la fenêtre « Archi » ferme tout** : le portail surveille le lanceur. S'il disparaît, il arrête le tunnel
+et le serveur, puis s'arrête. L'adresse publique ne reste pas ouverte derrière toi.
 
 **Ce que voit le tunnel** : par défaut, c'est un tunnel Cloudflare « rapide », sans compte. Le trafic entre le
 téléphone et le PC est chiffré, mais le chiffrement se termine chez Cloudflare, qui pourrait donc lire les
-messages. C'est le prix du « sans compte ». Pour un chiffrement de bout en bout, utilise Tailscale Funnel et
-mets son adresse dans `WEBHOOK_URL` : le tunnel rapide n'est alors plus lancé. Sans tunnel (`ARCHI_TUNNEL=non`),
-Archi marche sur le PC seul.
+messages. C'est le prix du « sans compte ». Pour un chiffrement de bout en bout, utilise Tailscale Funnel
+(`tailscale funnel 5681`) et mets son adresse dans `WEBHOOK_URL` : le tunnel rapide n'est alors plus lancé.
+Sans tunnel (`ARCHI_TUNNEL=non`), Archi marche sur le PC seul.
+
+## L'installation
+- **Rien pour tout Windows** : Python, Node.js, n8n, le tunnel et ffmpeg sont posés dans le dossier d'Archi.
+- **Téléchargements vérifiés** : uv, Node.js, cloudflared et ffmpeg sont pris dans une version précise, et leur
+  empreinte SHA-256 est comparée à celle écrite dans `installer/installer.ps1`. Un fichier différent est refusé.
+- **Le `.env` gagne** : les variables `N8N_…` ou `WEBHOOK_URL` d'un autre n8n du PC sont retirées de la fenêtre
+  d'Archi. Elles ne changent pas son comportement en silence.
+- **Le code des workflows** tourne dans le « task runner » de n8n, un processus séparé.
+
+## Limites connues
+- L'appli publiée est un build « debug », signé par une clé créée à chaque fabrication. Une version signée par une
+  clé stable est la prochaine étape : aujourd'hui, une nouvelle version ne s'installe pas par-dessus l'ancienne.
+- n8n n'a pas de compte propriétaire tant que tu n'as pas ouvert son éditeur. Il n'écoute que `127.0.0.1` et
+  n'est pas derrière le tunnel, mais crée ce compte si tu utilises l'éditeur.
+- Les modèles de LM Studio et les paquets Python et npm ne sont pas vérifiés par empreinte.
 
 ## Appli
 - La clé partagée est comparée en temps constant côté n8n, par empreinte sha256, avec 16 caractères au minimum.

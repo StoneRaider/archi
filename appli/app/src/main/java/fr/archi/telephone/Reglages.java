@@ -49,26 +49,31 @@ public final class Reglages {
     }
 
     /**
-     * Lien du QR code : on montre l'adresse et on demande l'accord AVANT d'enregistrer quoi que ce soit.
-     * Un lien piege ne peut donc pas rebrancher l'appli en douce sur un autre serveur.
+     * Lien du QR code : on montre l'adresse et un code court, et on demande l'accord AVANT d'enregistrer quoi que ce soit.
+     * Le meme code est affiche sur la page d'accueil du PC : s'il differe, ce lien ne vient pas de ton PC.
      */
     public static void proposer(Activity a, String u, String k) {
         u = u == null ? "" : u.trim();
         k = k == null ? "" : k.trim();
-        Uri adresse = Uri.parse(u);
-        String hote = adresse.getHost();
-        boolean valide = u.startsWith("https://") && u.length() <= 300 && hote != null && !hote.isEmpty()
-                && adresse.getUserInfo() == null && k.length() >= 16 && k.length() <= 128;
-        if (!valide) {
+        // adresse : https, un nom d'hote en lettres simples (pas de sosie en Unicode), un chemin simple ;
+        // cle : lettres, chiffres, - et _ seulement
+        boolean valide = u.length() <= 200 && u.matches("^https://[a-z0-9.-]{4,120}(:\\d{1,5})?/[A-Za-z0-9/_-]{0,60}$")
+                && k.matches("^[A-Za-z0-9_-]{16,128}$");
+        String hote = valide ? Uri.parse(u).getHost() : null;
+        if (hote == null || hote.isEmpty()) {
             Toast.makeText(a, "Lien Archi invalide : scanne de nouveau le QR code du PC.", Toast.LENGTH_LONG).show();
             if (!pret(a)) demander(a, null);
             return;
         }
+        String message = "Adresse : " + hote + "\nCode : " + codeCourt(k)
+                + "\n\nLe même code est affiché sur la page d'accueil de ton PC. S'il est différent, annule."
+                + "\n\nTes messages, tes photos et ta position (pour les rappels de lieu) iront à cette adresse.";
+        String ancien = pret(a) ? Uri.parse(url(a)).getHost() : null;
+        if (ancien != null && !ancien.equals(hote)) message += "\n\nCela remplace le branchement actuel (" + ancien + ").";
         final String url = u, cle = k;
         new AlertDialog.Builder(a)
                 .setTitle("Brancher Archi sur ce PC ?")
-                .setMessage("Adresse : " + hote + "\n\nTes messages, tes photos et ta position (pour les rappels de lieu) "
-                        + "iront à cette adresse. Accepte seulement si tu viens de scanner le QR code de TON PC.")
+                .setMessage(message)
                 .setCancelable(false)
                 .setNegativeButton("Annuler", (d, x) -> {
                     if (!pret(a)) demander(a, null);
@@ -78,6 +83,16 @@ public final class Reglages {
                     Toast.makeText(a, "Appli branchée sur ton PC.", Toast.LENGTH_SHORT).show();
                 })
                 .show();
+    }
+
+    /** 4 caracteres tires de l'empreinte SHA-256 de la cle : la page d'accueil du PC affiche les memes. */
+    static String codeCourt(String cle) {
+        try {
+            byte[] e = java.security.MessageDigest.getInstance("SHA-256").digest(cle.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return String.format("%02X%02X", e[0] & 0xff, e[1] & 0xff);
+        } catch (Exception x) {
+            return "????";
+        }
     }
 
     /** Fenetre de saisie ; apres « Enregistrer », l'appli parle a ce serveur. */

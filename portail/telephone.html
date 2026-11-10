@@ -48,6 +48,8 @@
 'use strict';
 // La cle arrive dans le « # » du lien : le navigateur ne l'envoie jamais sur le reseau, elle ne passe que du QR code a l'appli.
 const cle = new URLSearchParams(location.hash.slice(1)).get('k') || '';
+// ... et on l'efface de la barre d'adresse : elle ne reste pas dans l'historique du telephone
+try { history.replaceState(null, '', location.pathname); } catch (e) { /* tant pis */ }
 const adresse = location.origin + '/webhook/telephone-archi';
 const brancher = document.getElementById('brancher'), secours = document.getElementById('secours');
 if (cle.length >= 16 && location.protocol === 'https:') {

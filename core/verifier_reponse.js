@@ -123,6 +123,15 @@ function telPresent(tel, numsCorpus) {
   return numsCorpus.some(c => c === d || d.endsWith(c) || c.endsWith(d));
 }
 
+// Garde-fou « plus tard » : Archi n'annonce pas « C'est programmé » si le planificateur ne l'a pas dit lui-meme
+// dans ce tour. Vu a l'essai reel : le modele a repondu « (C'est programmé) » sans avoir appele l'outil.
+const PROMESSE = /c'est programme|je te (le |la |les )?rappell?erai|je te previendrai|je t'avertirai/;
+const CONFIRMATION = /c'est programme|rappel[^.]{0,40}(ajoute|enregistre|programme)/;
+function promesseSansPlanificateur(reponse, obs) {
+  if (!PROMESSE.test(norm(reponse))) return false;
+  return !obs.some(o => CONFIRMATION.test(norm(o)));
+}
+
 function main() {
   const inp = lireEntree();
   const propre = t => String(t || '').replace(/[\u2010\u2011\u2012\u2013\u2212]/g, '-').replace(/[\u00a0\u202f\u2009]/g, ' ');
@@ -155,6 +164,12 @@ function main() {
   cacheEcrire(anciens, obs);
 
   let sortie = reponse;
+  if (promesseSansPlanificateur(reponse, obs)) {
+    alertes.push('promesse sans planificateur');
+    sortie += "\n\n⚠️ À vérifier : je n'ai pas appelé le planificateur à l'instant, donc rien de nouveau n'est programmé. Si c'est un nouveau rappel, redemande-le-moi.";
+    process.stdout.write(JSON.stringify({ reponse: sortie, alertes }));
+    return;
+  }
   if (alertes.length) {
     const liste = alertes.slice(0, 12);
     const reste = alertes.length > 12 ? ' et ' + (alertes.length - 12) + ' autres' : '';

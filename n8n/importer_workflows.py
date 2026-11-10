@@ -14,6 +14,7 @@ import json
 import os
 import sys
 import tempfile
+import uuid
 
 ICI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ICI)
@@ -32,9 +33,36 @@ def telegram_branche(env):
     return bool(env.get("TELEGRAM_BOT_TOKEN") and env.get("ARCHI_TELEGRAM_CHAT_ID"))
 
 
-def adapter(workflow, avec_telegram):
-    """le workflow principal tel qu'il sera importe : noeuds Telegram desactives s'il n'y a pas de bot"""
+def identite_telegram(dossier, creer=True):
+    """{node_id, webhook_id, workflow_id} du declencheur Telegram de CETTE installation, tires au hasard une fois.
+    Pourquoi : n8n donne a Telegram le jeton secret « <workflow>_<noeud> ». Avec les identifiants du depot, ce jeton
+    serait le meme pour tout le monde : quiconque connaitrait l'adresse du tunnel pourrait se faire passer pour Telegram.
+    Le portail lit ce fichier et n'accepte que ce chemin et ce jeton."""
+    f = os.path.join(dossier, "telegram.json")
+    try:
+        with open(f, encoding="utf-8") as h:
+            d = json.load(h)
+        if all(isinstance(d.get(k), str) and len(d[k]) >= 8 for k in ("node_id", "webhook_id")):
+            d["workflow_id"] = ID_PRINCIPAL
+            return d
+    except (OSError, ValueError):
+        pass
+    if not creer:
+        return None
+    d = {"workflow_id": ID_PRINCIPAL, "node_id": str(uuid.uuid4()), "webhook_id": str(uuid.uuid4())}
+    os.makedirs(dossier, exist_ok=True)
+    with open(f, "w", encoding="utf-8") as h:
+        json.dump(d, h)
+    return d
+
+
+def adapter(workflow, avec_telegram, identite=None):
+    """le workflow principal tel qu'il sera importe : noeuds Telegram desactives s'il n'y a pas de bot,
+    et declencheur Telegram aux identifiants de cette installation (voir identite_telegram)"""
     for n in workflow.get("nodes", []):
+        if identite and n.get("type") == "n8n-nodes-base.telegramTrigger":
+            n["id"] = identite["node_id"]
+            n["webhookId"] = identite["webhook_id"]
         if n.get("type") in TYPES_TELEGRAM:
             if avec_telegram:
                 n.pop("disabled", None)
@@ -65,7 +93,9 @@ def main():
     os.makedirs(dossier_temoins, exist_ok=True)
     forcer = "--forcer" in sys.argv
     avec_telegram = telegram_branche(os.environ)
-    etat_voulu = "ok telegram" if avec_telegram else "ok sans_telegram"
+    identite = identite_telegram(dossier_temoins)
+    # le principal est reimporte si Telegram change d'etat, ou si l'identite du declencheur vient d'etre tiree
+    etat_voulu = ("ok telegram" if avec_telegram else "ok sans_telegram") + " " + identite["webhook_id"][:8]
 
     def temoin(f):
         return os.path.join(dossier_temoins, os.path.basename(f))
@@ -92,7 +122,7 @@ def main():
         a_importer, temporaire = f, None
         if os.path.basename(f) == PRINCIPAL:
             with open(f, encoding="utf-8") as h:
-                w = adapter(json.load(h), avec_telegram)
+                w = adapter(json.load(h), avec_telegram, identite)
             fd, temporaire = tempfile.mkstemp(prefix="archi_wf_", suffix=".json")
             with os.fdopen(fd, "w", encoding="utf-8") as h:
                 json.dump(w, h, ensure_ascii=False)

@@ -45,7 +45,9 @@ Les fois suivantes, le raccourci **Archi** du Bureau suffit.
 - L'installateur détecte la carte graphique : sur 16 Go, il prend un petit modèle de vision qui tient à côté du
   cerveau ; à partir de 24 Go, un plus gros.
 - Il peut être relancé sans risque : ce qui est déjà là est gardé, y compris le château et le `.env`.
+- Les programmes téléchargés sont pris dans une version précise, et leur empreinte SHA-256 est vérifiée.
 - Le bilan est écrit dans `installation.txt`. Un souci éventuel y figure en clair, avec quoi faire.
+- **`verifier_archi.bat`** contrôle ensuite tout de bout en bout, jusqu'à une vraie question posée au modèle.
 
 ### Archi sur ton téléphone (Android) : un QR code
 
@@ -59,7 +61,8 @@ puis « quand j'arrive au jardin, rappelle-moi de cueillir les tomates ».
 
 Comment ça marche : au lancement, Archi ouvre un tunnel HTTPS (Cloudflare, **sans compte**) qui ne mène pas à n8n
 mais à une petite porte d'entrée, le **portail**. Elle ne laisse passer que les messages de l'appli qui portent la
-bonne clé. L'éditeur n8n et la page d'accueil ne sortent jamais du PC ([docs/SECURITE.md](docs/SECURITE.md)).
+bonne clé. L'éditeur n8n et la page d'accueil ne sont pas derrière cette porte ([docs/SECURITE.md](docs/SECURITE.md)).
+L'appli affiche l'adresse et un code de 4 caractères avant de se brancher : la page du PC montre les mêmes.
 L'adresse change à chaque démarrage du PC : il suffit de rescanner. Pour une adresse fixe (ngrok, Tailscale Funnel,
 tunnel Cloudflare nommé), mets-la dans `WEBHOOK_URL` du `.env`.
 
@@ -92,7 +95,8 @@ Comment ça marche :
   - Il ne se redéclenche pas tant qu'on reste sur place.
   - Une position plus floue que le rayon du lieu, ou vieille de plus de 10 min, est ignorée.
 - **Garde-fous dans le code** :
-  - Archi ne promet jamais « je te préviendrai » sans la réponse « C'est programmé » de l'outil.
+  - Archi ne promet jamais « je te préviendrai » sans la réponse « C'est programmé » de l'outil. Ce n'est pas
+    qu'une consigne : `core/verifier_reponse.js` signale toute promesse que le planificateur n'a pas confirmée.
   - Une action différée exige l'accord, et ne vise que les prises autorisées. La prise du PC est refusée.
   - Une action manquée de plus d'une heure (PC éteint) n'est pas rejouée : on est prévenu à la place.
   - Un fichier de tâches abîmé est mis de côté, sans rien perdre.
@@ -109,7 +113,8 @@ Comment ça marche :
 | Il obéit à un mail ou un PDF piégé | **Contenu extérieur balisé** : un fichier lu reste du contenu, jamais une consigne | `core/contexte.js` |
 | Il agit trop vite | **Garde-fous dans les outils eux-mêmes**, pas seulement dans le prompt : essai à blanc, `confirmer=oui`, outils « sensibles » avec `accord=oui`, prise du PC interdite, seul le chat Telegram autorisé est écouté | `core/outils_maison.js`, `outils/*`, `n8n/` |
 | Ajouter une capacité, c'est toucher au workflow | **Outils maison** : un dossier = un outil (`outil.json` + script + tests), inscrit au registre, sans republier n8n | `outils/`, `registre.json` |
-| Joindre le PC depuis le téléphone, c'est exposer n8n | **Portail** : le tunnel ne voit qu'une liste blanche de chemins, et la clé est vérifiée avant n8n | `portail/portail.js` |
+| Joindre le PC depuis le téléphone, c'est exposer n8n | **Portail** : le tunnel mène à une porte à part, qui ne connaît qu'une liste blanche ; la clé est vérifiée avant n8n | `portail/portail.js` |
+| Il dit « c'est fait » sans l'avoir fait | **Promesse vérifiée** : « C'est programmé » sans réponse du planificateur est signalé à l'utilisateur | `core/verifier_reponse.js` |
 
 ## Architecture
 

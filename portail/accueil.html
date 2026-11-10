@@ -60,6 +60,10 @@
   h2 { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--texte2); margin: 0 0 10px; font-weight: 600; }
   #qr { background: #fff; border-radius: 10px; padding: 8px; width: 196px; height: 196px; margin: 4px auto 10px; display: none; }
   #qr svg { width: 100%; height: 100%; display: block; }
+  #b-qr { display: none; width: 100%; margin: 4px 0 10px; padding: 10px; border-radius: 10px; border: 1px solid var(--vert); background: transparent;
+          color: var(--vert); font: inherit; font-weight: 600; cursor: pointer; }
+  #b-qr:focus-visible { outline: 2px solid var(--vert); outline-offset: 2px; }
+  #tel-code { font-family: Consolas, monospace; font-size: 12.5px; color: var(--texte); margin: 0 0 8px; overflow-wrap: anywhere; }
   ol { margin: 0; padding-left: 20px; color: var(--texte2); font-size: 13.5px; } ol li { margin: 3px 0; } ol b { color: var(--texte); font-weight: 600; }
   .note { color: var(--texte2); font-size: 13px; margin: 0; }
   #outils { list-style: none; margin: 0; padding: 0; font-size: 13px; max-height: 260px; overflow-y: auto; }
@@ -100,7 +104,9 @@
   <aside>
     <div class="carte">
       <h2>Sur ton téléphone</h2>
+      <button type="button" id="b-qr" title="Le QR code contient la clé de l'appli : il reste caché tant que tu n'en as pas besoin">Afficher le QR code</button>
       <div id="qr" role="img" aria-label="QR code à scanner avec le téléphone"></div>
+      <p id="tel-code"></p>
       <div id="tel-texte"><p class="note">Ouverture de l'adresse HTTPS du PC…</p></div>
     </div>
     <div class="carte">
@@ -125,7 +131,7 @@ const IDEES = [
   'Quels outils as-tu ?',
   'Rappelle-moi dans 2 minutes de boire un verre d\'eau',
   'Que sais-tu sur le four solaire ?',
-  'Où en est mon projet de drone ?',
+  'Que sais-tu sur moi ?',
   'Fais-moi un PDF qui résume ce que tu sais faire',
 ];
 let occupe = false, lienActuel = null, pret = false;
@@ -165,13 +171,15 @@ async function majEtat() {
     if (lienActuel) {
       const qr = qrcode(0, 'M'); qr.addData(lienActuel); qr.make();
       $('qr').innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
-      $('qr').style.display = 'block';
+      // le QR code contient la cle : cache par defaut (capture d'ecran, video de demonstration), montre sur demande
+      montrerQr(false); $('b-qr').style.display = 'block';
+      $('tel-code').textContent = 'Adresse : ' + e.adresse_publique.replace('https://', '') + '  ·  Code : ' + e.code_telephone;
       t.innerHTML = '<ol><li><b>Scanne ce QR code</b> avec l\'appareil photo du téléphone (Android).</li>' +
         (e.apk ? '<li><b>Installe l\'appli</b> depuis la page qui s\'ouvre.</li>' : '<li>L\'appli (APK) n\'est pas sur ce PC : prends-la dans la page « Releases » du dépôt.</li>') +
-        '<li>Touche <b>« Brancher l\'appli »</b> : l\'adresse et la clé se règlent toutes seules.</li></ol>' +
+        '<li>Touche <b>« Brancher l\'appli »</b> : elle affiche l\'adresse et le code ci-dessus. S\'ils sont identiques, confirme.</li></ol>' +
         '<p class="note" style="margin-top:8px">L\'adresse change à chaque démarrage du PC : il suffit de rescanner.</p>';
     } else {
-      $('qr').style.display = 'none';
+      montrerQr(false); $('b-qr').style.display = 'none'; $('tel-code').textContent = '';
       t.innerHTML = '<p class="note">Pas encore d\'adresse HTTPS pour le téléphone. Elle s\'ouvre toute seule au lancement ' +
         '(tunnel Cloudflare, sans compte). Regarde la fenêtre « Archi » si elle ne vient pas.</p>';
     }
@@ -188,6 +196,14 @@ async function majEtat() {
     }
     $('nb-outils').textContent = e.outils.length;
   }
+}
+
+let minuteurQr = null;
+function montrerQr(oui) {
+  clearTimeout(minuteurQr);
+  $('qr').style.display = oui ? 'block' : 'none';
+  $('b-qr').textContent = oui ? 'Cacher le QR code' : 'Afficher le QR code';
+  if (oui) minuteurQr = setTimeout(() => montrerQr(false), 120000);   // il se recache tout seul au bout de 2 minutes
 }
 
 async function envoyer(texte, fichier) {
@@ -232,6 +248,7 @@ for (const i of IDEES) {
   b.onclick = () => envoyer(i); $('idees').appendChild(b);
 }
 $('b-photo').onclick = () => $('photo').click();
+$('b-qr').onclick = () => montrerQr($('qr').style.display === 'none');
 $('photo').onchange = () => { const f = $('photo').files[0]; $('jointe').style.display = f ? 'block' : 'none'; $('jointe').textContent = f ? 'Photo jointe : ' + f.name + ' (elle reste sur ce PC)' : ''; };
 $('saisie').onsubmit = ev => {
   ev.preventDefault();

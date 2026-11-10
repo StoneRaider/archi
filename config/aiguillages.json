@@ -1,7 +1,7 @@
 [
  {
-  "si": "\\b(rappelle|rappel|plus tard|demain|dans \\d+ ?min|tous les (jours|lundis?|mois)|quand j.arrive)\\b",
-  "dire": "Faire quelque chose PLUS TARD ou a l'arrivee sur un lieu : outil planificateur (action=ajouter, texte, et UN moment : a, tous_les ou lieu). Ne promets rien sans sa reponse « C'est programme »."
+  "si": "\\b(rappel\\w*|plus tard|demain|dans \\d+ ?(min|h|heure|jour)\\w*|tous les (jours|lundis?|mardis?|mercredis?|jeudis?|vendredis?|samedis?|dimanches?|mois|matins?|soirs?)|quand j.arrive)\\b",
+  "dire": "Rappel ou tache PLUS TARD (ou a l'arrivee sur un lieu) : appelle TOUT DE SUITE l'outil planificateur (action=ajouter, texte, et UN moment : a, tous_les ou lieu). Un simple rappel ne demande AUCUN accord : ne pose pas de question, appelle l'outil. Tu ne dis « C'est programme » que si l'outil vient de le repondre."
  },
  {
   "si": "\\b(prise|radiateur|chauffage|allume|eteins|[eé]teindre)\\b",

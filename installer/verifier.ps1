@@ -11,7 +11,9 @@ if (-not (Test-Path $ENVF)) { Dire "Pas de fichier .env dans $Depot : lance d'ab
 ChargerEnv | Out-Null
 $pN8n = if ($env:N8N_PORT) { [int]$env:N8N_PORT } else { 5678 }
 $pPortail = if ($env:ARCHI_PORTAIL_PORT) { [int]$env:ARCHI_PORTAIL_PORT } else { 5680 }
+$pPorte = if ($env:ARCHI_PORTE_PORT) { [int]$env:ARCHI_PORTE_PORT } else { $pPortail + 1 }
 $portail = "http://127.0.0.1:$pPortail"
+$porte = "http://127.0.0.1:$pPorte"
 $maison = @{ "X-Archi-Portail" = "1" }
 $rapport = New-Object System.Collections.Generic.List[string]
 $script:rates = 0
@@ -60,6 +62,13 @@ if ($etat) {
 Titre "3. Ce qui sort du PC (liste blanche du portail)"
 Controle "la page d'accueil refuse un appel sans l'en-tete maison" ((Code "$portail/api/etat") -eq 403)
 Controle "une autre page web ne peut pas parler a Archi" ((Code "$portail/api/message" "POST" @{ "X-Archi-Portail" = "1"; "Origin" = "https://exemple.invalid" } '{"texte":"x"}') -eq 403)
+Controle "la page d'accueil n'existe pas pour un relais" ((Code "$portail/" "GET" @{ "X-Forwarded-For" = "203.0.113.9" }) -eq 404)
+# la porte du telephone (la cible du tunnel), essayee ici directement : seule la liste blanche repond
+Controle "porte du telephone : ni page d'accueil, ni etat, ni n8n" (((Code "$porte/") -eq 404) -and ((Code "$porte/api/etat" "GET" $maison) -eq 404) -and ((Code "$porte/rest/login") -eq 404) -and ((Code "$porte/healthz") -eq 404))
+Controle "porte du telephone : un message sans la cle est refuse" ((Code "$porte/webhook/telephone-archi" "POST" @{} '{"texte":"x"}') -eq 403)
+Controle "porte du telephone : un faux message Telegram est refuse" ((Code "$porte/webhook/ArchiDemo0000001/telegram/webhook" "POST" @{ "X-Telegram-Bot-Api-Secret-Token" = "x" } '{}') -eq 404)
+Controle "porte du telephone : avec la cle, la boite repond" ((Code "$porte/webhook/telephone-boite" "POST" @{ "x-archi-cle" = $env:ARCHI_CLE_TELEPHONE } '{}') -eq 200)
+Controle "porte du telephone : la page d'installation s'ouvre" ((Code "$porte/telephone") -eq 200)
 if ($etat -and $etat.adresse_publique) {
     $pub = $etat.adresse_publique
     # l'adresse vient d'etre creee : on laisse a Internet le temps de la connaitre

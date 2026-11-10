@@ -58,6 +58,25 @@ for f in sorted(os.listdir(os.path.join(ICI, "optionnels"))):
                  all(n.get("webhookId") for n in w["nodes"] if n["type"] in imp.TYPES_WEBHOOK))
 verifier("le fichier d'origine n'est pas modifie", '"disabled"' not in json.dumps(ORIGINAL))
 
+# l'identite du declencheur Telegram : tiree au hasard une fois par installation, puis stable
+import tempfile
+dossier = tempfile.mkdtemp()
+verifier("pas d'identite Telegram tant qu'on ne la cree pas", imp.identite_telegram(dossier, creer=False) is None)
+i1 = imp.identite_telegram(dossier)
+i2 = imp.identite_telegram(dossier)
+autre = imp.identite_telegram(tempfile.mkdtemp())
+verifier("identite Telegram : stable pour une installation", i1 == i2 and i1["workflow_id"] == imp.ID_PRINCIPAL)
+verifier("identite Telegram : differente d'une installation a l'autre",
+         i1["node_id"] != autre["node_id"] and i1["webhook_id"] != autre["webhook_id"])
+perso = imp.adapter(copy.deepcopy(ORIGINAL), True, i1)
+dt = [n for n in perso["nodes"] if n["type"] == "n8n-nodes-base.telegramTrigger"][0]
+d0 = [n for n in ORIGINAL["nodes"] if n["type"] == "n8n-nodes-base.telegramTrigger"][0]
+verifier("le declencheur importe porte l'identite de l'installation, pas celle (publique) du depot",
+         dt["id"] == i1["node_id"] and dt["webhookId"] == i1["webhook_id"] and dt["id"] != d0["id"] and dt["webhookId"] != d0["webhookId"])
+verifier("les autres noeuds gardent leur identifiant",
+         all(a["id"] == b["id"] for a, b in zip(perso["nodes"], ORIGINAL["nodes"]) if a["type"] != "n8n-nodes-base.telegramTrigger"))
+verifier("les liens du workflow ne dependent pas de l'identifiant du noeud", perso["connections"] == ORIGINAL["connections"])
+
 verifier("Telegram branche = jeton ET numero de chat",
          imp.telegram_branche({"TELEGRAM_BOT_TOKEN": "x", "ARCHI_TELEGRAM_CHAT_ID": "1"})
          and not imp.telegram_branche({"TELEGRAM_BOT_TOKEN": "x"})
