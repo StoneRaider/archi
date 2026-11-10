@@ -54,28 +54,50 @@ function reveiller(options = {}) {
   const maintenant = options.maintenant || new Date();
   const lancer = options.lancer || lancerPython;
   const f = path.join(base, 'atelier', 'tournees.json');
+  // un seul reveil a la fois (deux appels de n8n qui se croisent ne lancent pas deux fois la meme tournee)
+  const verrou = path.join(base, 'atelier', '.verrou_tournees');
+  try {
+    fs.mkdirSync(path.dirname(verrou), { recursive: true });
+    fs.mkdirSync(verrou);
+  } catch (x) {
+    try { if (Date.now() - fs.statSync(verrou).mtimeMs < 60000) return { lancees: [], raison: 'occupe' }; } catch (y) { return { lancees: [], raison: 'occupe' }; }
+    try { fs.rmdirSync(verrou); fs.mkdirSync(verrou); } catch (y) { return { lancees: [], raison: 'occupe' }; }
+  }
+  try {
+    return reveillerSousVerrou(f, base, maintenant, lancer);
+  } finally {
+    try { fs.rmdirSync(verrou); } catch (x) {}
+  }
+}
+
+function reveillerSousVerrou(f, base, maintenant, lancer) {
   const iso = maintenant.toISOString();
+  // une date notee plus tard que maintenant (l'horloge est revenue en arriere) ne compte pas : sinon plus rien ne partirait
+  const date = v => { const x = Date.parse(v || '') || 0; return x > maintenant.getTime() ? 0 : x; };
   let e = lire(f);
   if (!e) {                                  // la premiere fois : rien tout de suite
     ecrire(f, { premiere: iso, vu: iso, depuis: iso, curateur: iso, mecanicien: iso });
     return { lancees: [], raison: 'premiere fois' };
   }
-  const vu = Date.parse(e.vu || '') || 0;
-  if (!vu || maintenant - vu > ABSENCE) e.depuis = iso;     // Archi vient de (re)demarrer
+  const vu = date(e.vu);
+  if (!vu || maintenant - vu > ABSENCE || !date(e.depuis)) e.depuis = iso;     // Archi vient de (re)demarrer
   e.vu = iso;
-  const lancees = [];
-  if (maintenant - (Date.parse(e.depuis || '') || maintenant) >= EVEILLE_MIN) {
+  const aLancer = [];
+  if (maintenant - date(e.depuis) >= EVEILLE_MIN) {
     for (const nom of Object.keys(CRENEAUX)) {
       const creneau = dernierCreneau(CRENEAUX[nom], maintenant);
-      const dernier = Date.parse(e[nom] || '') || 0;
-      if (!creneau || dernier >= creneau.getTime()) continue;
+      if (!creneau || date(e[nom]) >= creneau.getTime()) continue;
+      e[nom] = iso;
       const script = path.join(base, 'outils', ...SCRIPTS[nom]);
-      e[nom] = iso;                            // note AVANT de lancer : jamais deux tournees pour le meme creneau
-      if (!fs.existsSync(script)) continue;
-      try { lancer(script); lancees.push(nom); } catch (x) { /* la tournee attendra le prochain creneau */ }
+      if (fs.existsSync(script)) aLancer.push([nom, script]);
     }
   }
+  // l'etat est ecrit AVANT de lancer : s'il ne peut pas l'etre, rien ne part (sinon la tournee repartirait chaque minute)
   ecrire(f, e);
+  const lancees = [];
+  for (const [nom, script] of aLancer) {
+    try { lancer(script); lancees.push(nom); } catch (x) { /* la tournee attendra le prochain creneau */ }
+  }
   return { lancees, raison: lancees.length ? 'creneau passe' : 'rien a faire' };
 }
 

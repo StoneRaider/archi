@@ -199,8 +199,8 @@ node --test core/test portail/test                      # cœur (contexte, lance
 cd outils/planificateur && python test_planificateur.py # 90 tests, dans un faux dossier personnel
 cd outils/memoire && python test_memoire.py             # 40 tests, avec un faux modèle local
 cd outils/trader && python test_trader.py               # 77 tests, faux prix et faux modèle, aucun réseau
-cd outils/curateur && python test_curateur.py           # 54 tests, faux château et faux modèle
-cd outils/mecanicien && python test_mecanicien.py       # 79 tests, faux sites et faux modèle, aucun réseau
+cd outils/curateur && python test_curateur.py           # 86 tests, faux château et faux modèle
+cd outils/mecanicien && python test_mecanicien.py       # 117 tests, faux sites et faux modèle, aucun réseau
 python outils_depot/verifier_depot.py .                 # aucun secret ni donnée perso dans le dépôt
 ```
 

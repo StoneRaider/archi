@@ -18,17 +18,18 @@
 # autre que sa recette, et ne lit aucun reglage d'Archi.
 import argparse
 import ast
+import http.client
 import ipaddress
 import json
 import math
 import os
 import re
 import socket
+import ssl
 import sys
+import time
 import unicodedata
-import urllib.error
 import urllib.parse
-import urllib.request
 
 NOM = re.compile(r"^[a-z][a-z0-9_]{2,30}$")
 NOM_VALEUR = re.compile(r"^[a-z][a-z0-9_]{0,30}$")
@@ -111,7 +112,9 @@ def calculer(expr, valeurs):
         if isinstance(n, ast.Call):
             args = [ev(a) for a in n.args]
             if n.func.id == "round" and len(args) == 2:
-                args[1] = int(args[1])
+                if abs(args[1]) > 15:           # round(entier, -1e9) calculerait 10**(10**9) : sans fin
+                    raise Erreur("arrondi trop grand")
+                args = [float(args[0]), int(args[1])]
             return FONCTIONS[n.func.id](*args)
         raise Erreur("calcul refusé")
     try:
@@ -121,6 +124,14 @@ def calculer(expr, valeurs):
     if isinstance(r, complex) or (isinstance(r, float) and (math.isnan(r) or math.isinf(r))):
         raise Erreur("le calcul n'a pas abouti")
     return r
+
+
+def propre(v):
+    """un texte lu sur un site : court, sur une ligne, sans signes de commande. Il finit dans une phrase que l'agent
+    repete : il ne doit pas pouvoir y glisser une consigne bien formee (a=b, {...}, [[...]], retour a la ligne)."""
+    s = re.sub(r"\s+", " ", str(v))
+    s = "".join(c for c in s if c.isalnum() or c in " .,'’-()/°%+")
+    return re.sub(r"\s+", " ", s).strip()[:80]
 
 
 def nombre(v):
@@ -252,34 +263,68 @@ def verifier_recette(r):
 
 
 # ---------------------------------------------------------------- suivre la recette
-class SansRedirection(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        raise Erreur("le site renvoie ailleurs : refusé")
+class ConnexionVerifiee(http.client.HTTPSConnection):
+    """https vers l'adresse DEJA verifiee : pas de seconde resolution du nom (qui pourrait viser le reseau local).
+    Le certificat reste verifie pour le nom du site. Pas de proxy, pas de redirection (http.client n'en suit aucune)."""
+
+    def __init__(self, hote, ip, delai):
+        super().__init__(hote, 443, timeout=delai, context=ssl.create_default_context())
+        self._ip = ip
+
+    def connect(self):
+        s = socket.create_connection((self._ip, 443), self.timeout)
+        self.sock = self._context.wrap_socket(s, server_hostname=self.host)
 
 
-OUVREUR = urllib.request.build_opener(SansRedirection, urllib.request.ProxyHandler({}))
+def lire_reponse(rep, regler_delai, debut):
+    """lit par morceaux, avec un delai TOTAL (un site qui envoie un octet toutes les 9 s est coupe a DELAI)"""
+    morceaux, total = [], 0
+    while True:
+        reste = DELAI - (time.monotonic() - debut)
+        if reste <= 0:
+            raise Erreur("le site est trop lent")
+        regler_delai(reste)
+        m = rep.read1(65536)
+        if not m:
+            return b"".join(morceaux)
+        total += len(m)
+        if total > MAX_OCTETS:
+            raise Erreur("réponse trop grosse")
+        morceaux.append(m)
 
 
-def lire_api(url, hotes, ouvrir=None):
+def lire_api(url, hotes, ouvrir=None, connexion=None):
     u = urllib.parse.urlsplit(url)
-    if u.scheme != "https" or (u.hostname or "") not in hotes:
+    if u.scheme != "https" or (u.hostname or "") not in hotes or u.port not in (None, 443) or u.username or u.password:
         raise Erreur("site non déclaré")
     if ouvrir is None:
+        debut = time.monotonic()
         try:
             infos = socket.getaddrinfo(u.hostname, 443, type=socket.SOCK_STREAM)
         except OSError:
             raise Erreur("site injoignable (%s)" % u.hostname)
-        for i in infos:
-            if not ipaddress.ip_address(i[4][0].split("%")[0]).is_global:
+        ips = [i[4][0].split("%")[0] for i in infos]
+        if not ips:
+            raise Erreur("site injoignable (%s)" % u.hostname)
+        for ip in ips:
+            if not ipaddress.ip_address(ip).is_global:
                 raise Erreur("adresse interne refusée")
-        req = urllib.request.Request(url, headers={"User-Agent": "Archi-mecanicien/1.0", "Accept": "application/json"})
+        c = (connexion or ConnexionVerifiee)(u.hostname, ips[0], DELAI)
         try:
-            with OUVREUR.open(req, timeout=DELAI) as rep:
-                brut = rep.read(MAX_OCTETS + 1)
-        except urllib.error.HTTPError as e:
-            raise Erreur("le site répond %d" % e.code)
-        except (urllib.error.URLError, OSError) as e:
+            c.request("GET", (u.path or "/") + ("?" + u.query if u.query else ""),
+                      headers={"User-Agent": "Archi-mecanicien/1.0", "Accept": "application/json"})
+            rep = c.getresponse()
+            if 300 <= rep.status < 400:
+                raise Erreur("le site renvoie ailleurs : refusé")
+            if rep.status != 200:
+                raise Erreur("le site répond %d" % rep.status)
+            brut = lire_reponse(rep, lambda s: c.sock.settimeout(s), debut)
+        except Erreur:
+            raise
+        except (OSError, http.client.HTTPException, ValueError) as e:
             raise Erreur("site injoignable (%s)" % type(e).__name__)
+        finally:
+            c.close()
     else:
         brut = ouvrir(url)              # les tests : un faux site
     if len(brut) > MAX_OCTETS:
@@ -318,7 +363,7 @@ def executer(recette, demande, ouvrir=None):
                     v = extraire(rep, ch)
                     if v is None:
                         return {"ok": False, "phrase_pour_utilisateur": remplir(e.get("si_vide") or "Je n'ai pas trouvé la réponse.", valeurs)}
-                    valeurs[k] = v if isinstance(v, (int, float)) and not isinstance(v, bool) else str(v)[:200]
+                    valeurs[k] = v if isinstance(v, (int, float)) and not isinstance(v, bool) else propre(v)
             else:
                 for k, expr in e["garder"].items():
                     valeurs[k] = calculer(expr, valeurs)
@@ -329,7 +374,9 @@ def executer(recette, demande, ouvrir=None):
         return {"ok": False, "phrase_pour_utilisateur": "L'outil n'a pas pu répondre (%s)." % type(x).__name__}
 
 
-def main():
+def main(recette_json=None):
+    """recette_json : la recette d'un outil installe (son lanceur outil_recette.py passe la sienne : le moteur reste ici,
+    en un seul exemplaire, et une correction du moteur vaut pour tous les outils deja installes)"""
     pa = argparse.ArgumentParser()
     pa.add_argument("--fichier")
     a = pa.parse_args()
@@ -339,7 +386,7 @@ def main():
         pass
     ici = os.path.dirname(os.path.abspath(__file__))
     try:
-        with open(os.path.join(ici, "recette.json"), encoding="utf-8") as h:
+        with open(recette_json or os.path.join(ici, "recette.json"), encoding="utf-8") as h:
             recette = json.load(h)
         demande = {}
         if a.fichier:
