@@ -8,6 +8,7 @@
 // en cas de pepin, il rend la reponse telle quelle.
 const fs = require('fs');
 const path = require('path');
+require('./env').charger();   // les reglages du .env : le processus de n8n qui nous lance ne les transmet pas
 const BASE = path.join(process.env.ARCHI_BASE || path.join(require('os').homedir(), '.n8n-files'), '/');
 const CACHE = path.join(BASE, 'pc', 'verifier_cache.jsonl');   // resultats d'outils recents (24 h), pour les tours sans outil
 const CONNUS = path.join(BASE, 'pc', 'verifier_connus.txt');   // noms a ne jamais signaler (un par ligne)

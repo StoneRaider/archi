@@ -214,6 +214,9 @@ try {
     if ($r.code -ne 0) { throw "uv pip : $($r.erreur)" }
     $r = Lancer $PY @("-c", "import reportlab, PIL, pypdfium2, fastapi, uvicorn, requests; print('ok')") 120
     if ($r.sortie.Trim() -ne "ok") { throw "les bibliotheques ne se chargent pas : $($r.erreur)" }
+    # ce Python prive relit le .env a chaque demarrage : n8n ne transmet pas les reglages aux outils qu'il lance
+    $r = Lancer $PY @("-I", (Join-Path $Destination "archi_env.py"), "--brancher") 60
+    if ($r.code -ne 0) { throw "archi_env --brancher : $($r.erreur)" }
     Noter "Python pret : $PY"
 } catch { Souci "Python : $($_.Exception.Message)" }
 
@@ -325,6 +328,8 @@ ReglerEnv "ARCHI_N8N_VERSION" $VERSION_N8N -Forcer
 # n8n : sa base et ses identifiants restent dans le dossier d'Archi ; il n'ecoute que ce PC ; aucune telemetrie
 ReglerEnv "N8N_USER_FOLDER" (Join-Path $Destination "donnees\n8n") -Forcer
 ReglerEnv "N8N_LISTEN_ADDRESS" "127.0.0.1" -Forcer
+# le code des workflows tourne dans le task runner de n8n (le bac a sable integre refuse desormais child_process)
+ReglerEnv "N8N_RUNNERS_ENABLED" "true" -Forcer
 ReglerEnv "N8N_RESTRICT_FILE_ACCESS_TO" "$BASE;$Destination" -Forcer
 ReglerEnv "N8N_DIAGNOSTICS_ENABLED" "false"
 ReglerEnv "N8N_VERSION_NOTIFICATIONS_ENABLED" "false"
@@ -333,7 +338,7 @@ ReglerEnv "N8N_PERSONALIZATION_ENABLED" "false"
 ReglerEnv "N8N_HIRING_BANNER_ENABLED" "false"
 # le tunnel du telephone : rapide = Cloudflare sans compte ; non = aucun ; ou remplis WEBHOOK_URL avec ton propre tunnel
 ReglerEnv "ARCHI_TUNNEL" "rapide"
-Noter "Fichier .env pret (deux cles aleatoires creees ; aucune valeur n'est affichee). Ports : n8n $pN8n, page d'accueil $pPortail, serveur $pServeur."
+Noter "Fichier .env pret (deux cles aleatoires, creees a la premiere installation ; aucune valeur n'est affichee). Ports : n8n $pN8n, page d'accueil $pPortail, serveur $pServeur."
 
 # ---------------------------------------------------------------- 9. le cerveau : LM Studio et les modeles
 function ModelesLa([string]$lms) {

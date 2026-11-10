@@ -13,6 +13,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+require('./env').charger();   // les reglages du .env : le processus de n8n qui nous lance ne les transmet pas
 
 const BASE = process.env.ARCHI_BASE || path.join(os.homedir(), '.n8n-files');
 const MEM = path.join(BASE, 'memoire');

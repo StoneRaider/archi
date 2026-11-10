@@ -2,7 +2,9 @@
 # Sans bibliotheque. Une variable deja definie dans l'environnement n'est JAMAIS ecrasee.
 # Les valeurs ne sont jamais affichees.
 #   import archi_env; archi_env.charger()            # dans un script Python
-#   python archi_env.py --verifier                    # dit quelles sections sont remplies (sans les valeurs)
+#   python archi_env.py                               # dit quelles sections sont remplies (sans les valeurs)
+#   python archi_env.py --brancher                    # CE Python chargera le .env a chaque demarrage (voir brancher)
+#   python archi_env.py --debrancher                  # l'inverse
 import os
 import re
 import sys
@@ -44,6 +46,68 @@ def charger(chemin=None):
     return n
 
 
+NOM_AUTO = "archi_env_auto"
+MODELE_AUTO = '''# Pose par « python archi_env.py --brancher » (installation.bat le fait). Supprimer : python archi_env.py --debrancher
+# Charge le fichier .env d'Archi au demarrage de CE Python, sans ecraser une variable deja definie.
+# Pourquoi : n8n lance le code des workflows dans un processus a part, qui ne transmet pas les reglages d'Archi
+# aux outils qu'il demarre. Sans ce fichier, un outil retomberait en silence sur les dossiers par defaut.
+# Rien n'est charge pour un test (script test*.py) ni avec ARCHI_SANS_ENV=1 : un test ne travaille jamais dans le vrai chateau.
+import os
+import sys
+
+DEPOT = %r
+
+
+def _charger():
+    if os.environ.get("ARCHI_SANS_ENV") == "1":
+        return
+    script = os.path.basename((getattr(sys, "argv", None) or [""])[0]).lower()
+    if script.startswith("test"):
+        return
+    sys.path.insert(0, DEPOT)
+    try:
+        import archi_env
+        archi_env.charger(os.path.join(DEPOT, ".env"))
+    finally:
+        try:
+            sys.path.remove(DEPOT)
+        except ValueError:
+            pass
+
+
+try:
+    _charger()
+except Exception:   # un .env illisible ne doit jamais empecher Python de demarrer
+    pass
+'''
+
+
+def _dossier_site():
+    import sysconfig
+    return sysconfig.get_paths()["purelib"]
+
+
+def brancher(dossier=None):
+    """Fait charger le .env par CE Python a chaque demarrage (un fichier .pth dans son site-packages).
+    A reserver a un Python prive d'Archi (venv) : tous ses scripts recevront les reglages. Rend le dossier utilise."""
+    dossier = dossier or _dossier_site()
+    with open(os.path.join(dossier, NOM_AUTO + ".py"), "w", encoding="utf-8") as f:
+        f.write(MODELE_AUTO % ICI)
+    with open(os.path.join(dossier, NOM_AUTO + ".pth"), "w", encoding="utf-8") as f:
+        f.write("import %s\n" % NOM_AUTO)
+    return dossier
+
+
+def debrancher(dossier=None):
+    dossier = dossier or _dossier_site()
+    for nom in (NOM_AUTO + ".pth", NOM_AUTO + ".py"):
+        try:
+            os.remove(os.path.join(dossier, nom))
+        except OSError:
+            pass
+    return dossier
+
+
 SECTIONS = {
     "Telegram": ["TELEGRAM_BOT_TOKEN", "ARCHI_TELEGRAM_CHAT_ID", "WEBHOOK_URL"],
     "Appli Android": ["ARCHI_CLE_TELEPHONE"],
@@ -51,6 +115,12 @@ SECTIONS = {
 }
 
 if __name__ == "__main__":
+    if "--brancher" in sys.argv:
+        print("Ce Python chargera le .env d'Archi a chaque demarrage (%s)." % brancher())
+        sys.exit(0)
+    if "--debrancher" in sys.argv:
+        print("Ce Python ne charge plus le .env d'Archi (%s)." % debrancher())
+        sys.exit(0)
     v = lire(os.environ.get("ARCHI_ENV") or os.path.join(ICI, ".env"))
     if not v:
         print("Pas de .env : copie .env.example en .env puis remplis-le.")
