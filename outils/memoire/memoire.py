@@ -1,0 +1,478 @@
+# memoire.py - outil maison d'Archi : sa memoire long terme, en fiches Markdown dans le chateau (memoire\<piece>\<sujet>.md).
+# Tout reste sur le PC : c'est le modele local (LM Studio) qui repere ce qu'il faut retenir.
+#   python memoire.py --fichier demande.json
+#   demande.json : {"action": "...", ...}
+#     retenir : texte=<le message de l'utilisateur>. Le modele local releve les faits DURABLES que l'utilisateur affirme
+#               sur lui, ses proches, ses projets, ses lieux et ses gouts ; l'outil les verifie puis les range.
+#               Appele TOUT SEUL par le workflow a chaque message, en arriere-plan (--menage) : l'agent n'a pas a y penser,
+#               et la reponse n'attend pas. a_blanc=oui : ne range rien. Les faits retenus sont notes dans memoire\.retenu.jsonl.
+#     ecrire  : piece=, sujet=, fait=           un fait dicte tel quel (« retiens que... »)
+#     lister  : piece= (facultatif)             les fiches et leur nombre de faits
+#     lire    : sujet= (piece= facultatif)      les faits d'une fiche ; sans sujet : tout ce qu'Archi sait
+#     oublier : texte=<mots a retrouver>        ESSAI A BLANC : montre les faits concernes ; confirmer=oui : les retire
+# Garde-fous : jamais de mot de passe, de code, de numero de carte, d'IBAN, d'adresse postale ni de numero de telephone ;
+# un fait doit reprendre des mots du message (rien d'invente) ; au plus 3 faits par message ; pas de doublon.
+
+import argparse
+import datetime
+import json
+import os
+import re
+import sys
+import time
+import unicodedata
+import urllib.error
+import urllib.request
+
+PIECES = ("moi", "personnes", "projets", "lieux", "preferences")
+FICHE_UNIQUE = {"moi": "moi", "preferences": "mes_preferences"}   # ces deux pieces tiennent en une seule fiche
+MAX_FAITS = 3
+MAX_FAIT = 220
+VIDES = set(("avec avoir dans pour plus mais tout tous toute toutes cette celle celui ceux sont etre fait faire peux peut veux "
+             "vais vous nous elle elles leur leurs quoi quel quelle quels quelles comment quand alors donc aussi tres bien "
+             "comme encore parce depuis chez entre sans sous vers votre notre cela ceci moins autre autres meme "
+             "utilisateur utilisatrice appelle "
+             "est les des une aux par sur que qui son ses mes ton tes pas ont eux lui ils mon ces pour moi toi").split())
+# ce qu'on ne retient JAMAIS tout seul
+SECRETS = re.compile(r"mot\s+de\s+passe|password|passe\s*:|code\s+(pin|secret|de\s+la\s+carte|d'acces)|\biban\b|\bcvv\b|"
+                     r"numero\s+de\s+(carte|compte|securite)|cle\s+(api|secrete|privee)|\btoken\b|\bjeton\b|\b\d{13,19}\b|"
+                     r"\b[a-z]{2}\d{2}(\s?\d{4}){3,}", re.I)
+TELEPHONE = re.compile(r"(\+\d[\d .-]{7,})|(\b0\d([ .-]?\d\d){4}\b)")
+ADRESSE = re.compile(r"\b\d{1,4}(\s?(bis|ter))?,?\s+(rue|avenue|av\.|boulevard|bd|chemin|impasse|allee|place|route|quai|cours)\b", re.I)
+PREMIERE_PERSONNE = re.compile(r"(^|[^a-z])(je|j|me|m|moi|mon|ma|mes|nous|notre|nos|on)([^a-z]|$)")
+
+CONSIGNE = """Reasoning: low
+Tu es le greffier de la mémoire d'un assistant personnel. On te donne UN message écrit par l'utilisateur{prenom}.
+Relève les faits DURABLES que l'utilisateur affirme sur lui-même, ses proches (famille, amis, animaux), ses projets, ses lieux, ses goûts et ses habitudes : ce qui sera encore vrai dans un mois.
+Peu importe la forme du message : même une question ou une demande peut contenir au passage une information sur lui (« mon chien, qui s'appelle Rex, … ») ; relève-la.
+Réponds {{"faits":[]}} seulement quand le message n'apprend rien de durable sur lui : un ordre, un rappel à programmer, une humeur ou une activité du moment, la météo.
+N'invente rien, ne déduis rien : reprends les mots du message. Jamais de mot de passe, de code, de numéro de carte, d'IBAN, d'adresse postale ni de numéro de téléphone.
+Réponds UNIQUEMENT par un objet JSON : {{"faits":[{{"piece":"...","sujet":"...","fait":"..."}}]}}
+- piece : personnes (un proche ou un animal), projets, lieux, preferences (ce qu'il aime, déteste ou préfère), moi (le reste : identité, métier, santé, habitudes).
+- sujet : un mot du message, le prénom de la personne ou de l'animal, le nom du projet ou du lieu. Pour moi et preferences : "moi".
+- fait : une phrase complète à la troisième personne, qui se comprend seule{appelle}.
+Exemples :
+« Si je te parle de mon chien, qui s'appelle Rex, tu t'en souviendras ? » -> {{"faits":[{{"piece":"personnes","sujet":"Rex","fait":"Rex est le chien de l'utilisateur."}}]}}
+« J'adore le jazz mais je déteste le rap. » -> {{"faits":[{{"piece":"preferences","sujet":"moi","fait":"L'utilisateur adore le jazz et déteste le rap."}}]}}
+« Mon grand projet, c'est de restaurer un voilier. » -> {{"faits":[{{"piece":"projets","sujet":"voilier","fait":"L'utilisateur a pour projet de restaurer un voilier."}}]}}
+« Réponds-moi toujours en deux phrases maximum. » -> {{"faits":[{{"piece":"preferences","sujet":"moi","fait":"L'utilisateur veut des réponses de deux phrases maximum."}}]}}
+« Rappelle-moi d'appeler le dentiste demain. » -> {{"faits":[]}}
+« Je suis crevé, quelle journée ! » -> {{"faits":[]}}"""
+
+
+SCHEMA = {"type": "json_schema", "json_schema": {"name": "faits_a_retenir", "strict": True, "schema": {
+    "type": "object", "required": ["faits"], "additionalProperties": False, "properties": {"faits": {"type": "array", "items": {
+        "type": "object", "required": ["piece", "sujet", "fait"], "additionalProperties": False, "properties": {
+            "piece": {"type": "string", "enum": list(PIECES)}, "sujet": {"type": "string"}, "fait": {"type": "string"}}}}}}}}
+
+
+class Erreur(Exception):
+    pass
+
+
+def repondre(ok, phrase, **extra):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+    print(json.dumps(dict(ok=ok, phrase_pour_utilisateur=phrase, **extra), ensure_ascii=False))
+
+
+def oui(v):
+    return str(v or "").strip().lower() in ("oui", "o", "yes", "true", "1", "vrai")
+
+
+def plat(t):
+    """minuscules, sans accents : pour comparer"""
+    t = unicodedata.normalize("NFD", str(t or "").lower()).replace("œ", "oe").replace("æ", "ae")
+    return "".join(c for c in t if unicodedata.category(c) != "Mn").replace("’", "'")
+
+
+def mots(t, mini=4):
+    return [m for m in re.split(r"[^a-z0-9]+", plat(t)) if len(m) >= mini and m not in VIDES]
+
+
+def nom_de_fiche(sujet):
+    """un nom de fichier sur : lettres, chiffres et tirets bas ; jamais de chemin"""
+    s = re.sub(r"[^a-z0-9]+", "_", plat(sujet)).strip("_")[:40].strip("_")
+    return s
+
+
+def base_memoire():
+    base = os.environ.get("ARCHI_BASE") or os.path.join(os.path.expanduser("~"), ".n8n-files")
+    return os.path.join(base, "memoire")
+
+
+def chemin_fiche(piece, sujet):
+    if piece not in PIECES:
+        raise Erreur("piece inconnue : " + str(piece)[:30])
+    nom = FICHE_UNIQUE.get(piece) or nom_de_fiche(sujet)
+    if not nom:
+        raise Erreur("sujet manquant")
+    return os.path.join(base_memoire(), piece, nom + ".md")
+
+
+# ---------------------------------------------------------------- le verrou et le journal
+class Verrou:
+    """un seul greffier a la fois ecrit dans les fiches (deux messages rapproches lancent deux greffiers)"""
+
+    def __enter__(self):
+        os.makedirs(base_memoire(), exist_ok=True)
+        self.dossier = os.path.join(base_memoire(), ".verrou_memoire")
+        fin = time.time() + 8
+        while True:
+            try:
+                os.mkdir(self.dossier)
+                return self
+            except OSError:
+                try:   # un verrou oublie par un greffier interrompu ne bloque pas les suivants
+                    if time.time() - os.path.getmtime(self.dossier) > 60:
+                        os.rmdir(self.dossier)
+                        continue
+                except OSError:
+                    pass
+                if time.time() > fin:
+                    raise Erreur("la memoire est occupee")
+                time.sleep(0.1)
+
+    def __exit__(self, *a):
+        try:
+            os.rmdir(self.dossier)
+        except OSError:
+            pass
+
+
+def journal():
+    return os.path.join(base_memoire(), ".retenu.jsonl")
+
+
+def noter_au_journal(retenu):
+    """les derniers faits retenus : la page d'accueil les montre au fur et a mesure (50 lignes au plus)"""
+    if not retenu:
+        return
+    f = journal()
+    lignes = []
+    try:
+        with open(f, encoding="utf-8") as h:
+            lignes = [l for l in h.read().splitlines() if l.strip()]
+    except OSError:
+        pass
+    maintenant = int(time.time() * 1000)
+    for r in retenu:
+        lignes.append(json.dumps({"quand": maintenant, "piece": r["piece"], "sujet": r["sujet"], "fait": r["fait"]}, ensure_ascii=False))
+    tmp = f + ".tmp"
+    with open(tmp, "w", encoding="utf-8", newline="\n") as h:
+        h.write("\n".join(lignes[-50:]) + "\n")
+    os.replace(tmp, f)
+
+
+# ---------------------------------------------------------------- lire et ecrire les fiches
+def faits_de(texte):
+    """les puces du bloc « **Faits :** » d'une fiche"""
+    faits = []
+    for bloc in re.split(r"\*\*Faits :\*\*", texte)[1:]:
+        for ligne in re.split(r"\n\*\*", bloc)[0].splitlines():
+            ligne = ligne.strip()
+            if ligne.startswith("- "):
+                faits.append(ligne[2:].strip())
+    return faits
+
+
+def sans_date(fait):
+    return re.sub(r"^\(\d{2}/\d{2}/\d{4}\)\s*", "", fait)
+
+
+def fiches(piece=None):
+    """[(piece, nom, chemin, [faits])] de toutes les fiches de la memoire vive"""
+    sortie = []
+    for p in ([piece] if piece else PIECES):
+        d = os.path.join(base_memoire(), p)
+        try:
+            noms = sorted(f for f in os.listdir(d) if f.endswith(".md"))
+        except OSError:
+            continue
+        for f in noms:
+            c = os.path.join(d, f)
+            try:
+                with open(c, encoding="utf-8") as h:
+                    sortie.append((p, f[:-3], c, faits_de(h.read())))
+            except OSError:
+                continue
+    return sortie
+
+
+def doublon(fait, existants):
+    a = set(mots(fait))
+    if not a:
+        return False
+    for e in existants:
+        b = set(mots(sans_date(e)))
+        if plat(sans_date(e)) == plat(fait) or (b and len(a & b) / float(len(a | b)) >= 0.8):
+            return True
+    return False
+
+
+def ajouter(piece, sujet, fait, aujourdhui=None):
+    """ajoute un fait date a la fiche ; cree la fiche s'il le faut. Rend le chemin, ou None si le fait y est deja."""
+    c = chemin_fiche(piece, sujet)
+    ligne = "- (%s) %s" % ((aujourdhui or datetime.date.today()).strftime("%d/%m/%Y"), fait)
+    if os.path.exists(c):
+        with open(c, encoding="utf-8") as h:
+            t = h.read()
+        if doublon(fait, faits_de(t)):
+            return None
+        if "**Faits :**" in t:
+            debut = t.rindex("**Faits :**")
+            suite = t.find("\n**", debut + 11)   # un autre bloc apres les faits : on ecrit juste avant
+            if suite == -1:
+                t = t.rstrip("\n") + "\n" + ligne + "\n"
+            else:
+                t = t[:suite].rstrip("\n") + "\n" + ligne + t[suite:]
+        else:
+            t = t.rstrip("\n") + "\n\n**Faits :**\n" + ligne + "\n"
+    else:
+        os.makedirs(os.path.dirname(c), exist_ok=True)
+        titre = {"moi": "Moi", "preferences": "Mes préférences"}.get(piece) or str(sujet).strip()[:60]
+        t = "# %s\n\n**Pièce :** %s\n**Faits :**\n%s\n" % (titre, piece, ligne)
+    tmp = c + ".tmp"
+    with open(tmp, "w", encoding="utf-8", newline="\n") as h:
+        h.write(t)
+    os.replace(tmp, c)
+    return c
+
+
+# ---------------------------------------------------------------- les garde-fous d'un fait
+def refus(piece, sujet, fait, message):
+    """pourquoi ce fait n'est pas retenu (None s'il est bon)"""
+    if piece not in PIECES:
+        return "piece inconnue"
+    fait = str(fait or "").strip()
+    if not (8 <= len(fait) <= MAX_FAIT):
+        return "fait trop court ou trop long"
+    if "\n" in fait or "\r" in fait or fait.startswith(("#", "*", "-")):
+        return "forme interdite"
+    tout = plat(fait + " " + str(sujet or ""))
+    if SECRETS.search(tout) or TELEPHONE.search(fait) or ADRESSE.search(plat(fait)):
+        return "donnee sensible"
+    if piece not in FICHE_UNIQUE and not nom_de_fiche(sujet):
+        return "sujet manquant"
+    if message is not None:
+        dits = set(mots(message, 3))
+        # rien d'invente : le fait reprend des mots du message (un prenom court compte), et le sujet y figure
+        communs = [m for m in mots(fait, 3) if m in dits]
+        if len(communs) < 1:
+            return "ne vient pas du message"
+        if piece not in FICHE_UNIQUE and not any(m in plat(message) for m in re.split(r"[^a-z0-9]+", plat(sujet)) if len(m) >= 3):
+            return "sujet absent du message"
+    return None
+
+
+def parle_de_soi(message):
+    """vrai si le message peut contenir un fait sur l'utilisateur : inutile de deranger le modele sinon"""
+    m = plat(message)
+    return len(m) >= 12 and bool(PREMIERE_PERSONNE.search(re.sub(r"['\-]", " ", m)))
+
+
+def propre(message):
+    """le message de l'utilisateur seulement : pas la description d'une photo ni un contenu venu de l'exterieur"""
+    m = str(message or "")
+    for marque in ("\n--- contenu de la photo", "\n(Une piece jointe", "<<<", "[CONTENU EXTERIEUR"):
+        i = m.find(marque)
+        if i != -1:
+            m = m[:i]
+    return m.strip()[:2000]
+
+
+# ---------------------------------------------------------------- le modele local
+def demander_au_modele(message, appel=None):
+    """les faits proposes par le modele local : [{piece, sujet, fait}] (liste vide si rien, ou si le modele ne repond pas)"""
+    prenom = (os.environ.get("ARCHI_UTILISATEUR") or "").strip()
+    consigne = CONSIGNE.format(prenom=(" (prénom : %s)" % prenom) if prenom else "",
+                               appelle=(" ; appelle l'utilisateur %s" % prenom) if prenom else "")
+    corps = {
+        "model": os.environ.get("ARCHI_MODELE") or "openai/gpt-oss-20b",
+        "temperature": 0,
+        "max_tokens": 700,
+        "reasoning_effort": "low",   # un travail de greffier : pas besoin de longue reflexion (ignore par les modeles qui ne l'ont pas)
+        "messages": [{"role": "system", "content": consigne}, {"role": "user", "content": message}],
+    }
+    if appel is None:
+        url = (os.environ.get("ARCHI_LM_URL") or "http://127.0.0.1:1234/v1").rstrip("/") + "/chat/completions"
+
+        def appel(c):
+            req = urllib.request.Request(url, data=json.dumps(c).encode("utf-8"), headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=40) as r:
+                return json.loads(r.read().decode("utf-8"))
+    try:
+        # la forme de la reponse est imposee : sans cela, le modele ecrit parfois « facts » au lieu de « faits »
+        rep = appel(dict(corps, response_format=SCHEMA))
+    except urllib.error.HTTPError as e:
+        if e.code not in (400, 422):
+            raise
+        rep = appel(corps)   # un serveur qui ne connait pas les schemas : on demande sans, et on lit ce qu'on peut
+    contenu = (((rep.get("choices") or [{}])[0].get("message") or {}).get("content")) or ""
+    m = re.search(r"\{.*\}", contenu, re.S)   # le modele entoure parfois son JSON de texte
+    if not m:
+        return []
+    try:
+        objet = json.loads(m.group(0))
+    except Exception:
+        return []
+    faits = objet.get("faits") or objet.get("facts") or objet.get("fait") or []
+    if isinstance(faits, dict):
+        faits = [faits]
+    propres = []
+    for f in faits if isinstance(faits, list) else []:
+        if isinstance(f, dict):
+            propres.append({"piece": f.get("piece") or f.get("pièce") or f.get("type"), "sujet": f.get("sujet") or f.get("subject"),
+                            "fait": f.get("fait") or f.get("fact")})
+    return propres[:8]
+
+
+def act_retenir(d, appel=None):
+    message = propre(d.get("texte"))
+    if not parle_de_soi(message):
+        return repondre(True, "Rien à retenir.", retenu=[], appel_modele=False)
+    try:
+        proposes = demander_au_modele(message, appel)
+    except Exception as e:   # le modele ne repond pas : la conversation continue, sans rien retenir
+        return repondre(True, "Rien retenu (le modèle n'a pas répondu).", retenu=[], appel_modele=True, erreur=str(e)[:150])
+    retenu, ecartes = [], []
+    for f in proposes:
+        piece = plat(f.get("piece")).strip()
+        sujet = str(f.get("sujet") or "").strip()
+        fait = re.sub(r"\s+", " ", str(f.get("fait") or "")).strip()
+        prenom = (os.environ.get("ARCHI_UTILISATEUR") or "").strip()
+        if prenom:   # les fiches parlent de la personne par son prenom, pas de « l'utilisateur »
+            fait = re.sub(r"\b[Ll]['\u2019]utilisat(eur|rice)\b", lambda m: prenom, fait)
+            fait = re.sub(r"\b(de|que) %s\b" % re.escape(prenom), lambda m: m.group(0), fait)
+        pourquoi = refus(piece, sujet, fait, message)
+        if pourquoi == "sujet absent du message":
+            # le fait vient bien du message, mais son sujet est mal nomme : il va dans la fiche de l'utilisateur
+            piece, sujet = "moi", "moi"
+            pourquoi = refus(piece, sujet, fait, message)
+        if pourquoi:
+            ecartes.append({"fait": fait[:80], "pourquoi": pourquoi})
+            continue
+        if len(retenu) >= MAX_FAITS:
+            ecartes.append({"fait": fait[:80], "pourquoi": "au plus %d faits par message" % MAX_FAITS})
+            continue
+        if oui(d.get("a_blanc")):
+            retenu.append({"piece": piece, "sujet": sujet, "fait": fait})
+            continue
+        with Verrou():
+            chemin = ajouter(piece, sujet, fait)
+            if chemin:
+                noter_au_journal([{"piece": piece, "sujet": sujet, "fait": fait}])
+        if chemin:
+            retenu.append({"piece": piece, "sujet": sujet, "fait": fait})
+        else:
+            ecartes.append({"fait": fait[:80], "pourquoi": "deja su"})
+    phrase = ("Retenu : " + " ; ".join(r["fait"] for r in retenu)) if retenu else "Rien de nouveau à retenir."
+    repondre(True, phrase, retenu=retenu, ecartes=ecartes, appel_modele=True)
+
+
+def act_ecrire(d):
+    piece = plat(d.get("piece") or "moi").strip()
+    sujet = str(d.get("sujet") or "").strip()
+    fait = re.sub(r"\s+", " ", str(d.get("fait") or d.get("contenu") or "")).strip()
+    pourquoi = refus(piece, sujet, fait, None)
+    if pourquoi:
+        raise Erreur("Je ne range pas ce fait (%s). Pièces possibles : %s." % (pourquoi, ", ".join(PIECES)))
+    with Verrou():
+        if not ajouter(piece, sujet, fait):
+            return repondre(True, "Je le savais déjà : " + fait, retenu=[])
+        noter_au_journal([{"piece": piece, "sujet": sujet, "fait": fait}])
+    repondre(True, "C'est retenu : " + fait, retenu=[{"piece": piece, "sujet": sujet, "fait": fait}])
+
+
+def act_lister(d):
+    piece = plat(d.get("piece")).strip() or None
+    if piece and piece not in PIECES:
+        raise Erreur("Pièce inconnue. Pièces possibles : " + ", ".join(PIECES) + ".")
+    liste = [{"piece": p, "sujet": n, "faits": len(f)} for p, n, _, f in fiches(piece) if f]
+    if not liste:
+        return repondre(True, "Ma mémoire est encore vide" + (" pour cette pièce." if piece else "."), fiches=[])
+    repondre(True, "Ce que j'ai en mémoire : " + " ; ".join("%s/%s (%d)" % (x["piece"], x["sujet"], x["faits"]) for x in liste), fiches=liste)
+
+
+def act_lire(d):
+    sujet, piece = nom_de_fiche(d.get("sujet")), plat(d.get("piece")).strip() or None
+    trouvees = [(p, n, f) for p, n, _, f in fiches(piece if piece in PIECES else None) if f and (not sujet or sujet in n or n in sujet)]
+    if not trouvees:
+        return repondre(True, "Je n'ai rien en mémoire" + (" sur « %s »." % str(d.get("sujet"))[:40] if sujet else "."), faits=[])
+    lignes = ["%s/%s : %s" % (p, n, " | ".join(sans_date(x) for x in f)) for p, n, f in trouvees]
+    repondre(True, " || ".join(lignes)[:1800], faits=[{"piece": p, "sujet": n, "faits": f} for p, n, f in trouvees])
+
+
+def act_oublier(d):
+    voulus = mots(d.get("texte") or d.get("sujet") or "", 3)   # un prenom court (Rex, Léa) compte aussi
+    if not voulus:
+        raise Erreur("Dis-moi quoi oublier : texte = quelques mots du fait (un prénom, un sujet).")
+    cibles = []
+    for p, n, c, f in fiches():
+        for fait in f:
+            ensemble = set(mots(fait + " " + n, 3))
+            if all(v in ensemble for v in voulus):
+                cibles.append((p, n, c, fait))
+    if not cibles:
+        return repondre(True, "Je n'ai aucun fait qui contient ces mots : rien à oublier.", oublie=[])
+    apercu = " ; ".join(sans_date(x[3]) for x in cibles)[:900]
+    if not oui(d.get("confirmer")):
+        return repondre(True, "ESSAI À BLANC, rien n'est effacé. J'oublierais %d fait(s) : %s. Demande à l'utilisateur de confirmer, "
+                              "puis rappelle l'outil avec confirmer=oui." % (len(cibles), apercu), a_oublier=[x[3] for x in cibles])
+    with Verrou():
+        for c in sorted(set(x[2] for x in cibles)):
+            a_retirer = set(x[3] for x in cibles if x[2] == c)
+            with open(c, encoding="utf-8") as h:
+                lignes = h.read().split("\n")
+            gardees = [l for l in lignes if not (l.strip().startswith("- ") and l.strip()[2:].strip() in a_retirer)]
+            tmp = c + ".tmp"
+            with open(tmp, "w", encoding="utf-8", newline="\n") as h:
+                h.write("\n".join(gardees))
+            os.replace(tmp, c)
+        # un fait oublie ne doit pas rester affiche dans « les derniers faits retenus »
+        try:
+            oublies = set(sans_date(x[3]) for x in cibles)
+            with open(journal(), encoding="utf-8") as h:
+                gardees = [l for l in h.read().splitlines() if l.strip() and json.loads(l).get("fait") not in oublies]
+            with open(journal() + ".tmp", "w", encoding="utf-8", newline="\n") as h:
+                h.write("\n".join(gardees) + ("\n" if gardees else ""))
+            os.replace(journal() + ".tmp", journal())
+        except (OSError, ValueError):
+            pass
+    repondre(True, "C'est oublié (%d fait(s)) : %s" % (len(cibles), apercu), oublie=[x[3] for x in cibles])
+
+
+ACTIONS = {"retenir": act_retenir, "ecrire": act_ecrire, "lister": act_lister, "lire": act_lire, "oublier": act_oublier}
+
+
+def main():
+    pa = argparse.ArgumentParser()
+    pa.add_argument("--fichier", required=True)
+    pa.add_argument("--menage", action="store_true", help="efface le fichier de demande (appel en arriere-plan par le workflow)")
+    a = pa.parse_args()
+    try:
+        with open(a.fichier, encoding="utf-8-sig") as h:
+            d = json.load(h)
+        if a.menage:
+            try:
+                os.remove(a.fichier)
+            except OSError:
+                pass
+        if not isinstance(d, dict):
+            raise Erreur("demande illisible")
+        action = plat(d.get("action") or "lister").strip()
+        action = {"retiens": "retenir", "noter": "ecrire", "note": "ecrire", "liste": "lister", "oublie": "oublier",
+                  "effacer": "oublier", "supprimer": "oublier", "lis": "lire"}.get(action, action)
+        if action not in ACTIONS:
+            raise Erreur("Action inconnue. Actions : " + ", ".join(sorted(ACTIONS)) + ".")
+        ACTIONS[action](d)
+    except Erreur as e:
+        repondre(False, str(e))
+    except Exception as e:
+        repondre(False, "La mémoire a eu un souci : " + str(e)[:150])
+
+
+if __name__ == "__main__":
+    main()

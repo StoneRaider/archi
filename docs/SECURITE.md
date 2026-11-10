@@ -81,11 +81,24 @@ messages. C'est le prix du « sans compte ». Pour un chiffrement de bout en bou
 (`tailscale funnel 5681`) et mets son adresse dans `WEBHOOK_URL` : le tunnel rapide n'est alors plus lancé.
 Sans tunnel (`ARCHI_TUNNEL=non`), Archi marche sur le PC seul.
 
+## La mémoire
+- **Tout est local** : c'est le modèle de LM Studio qui relève les faits, et les fiches sont des fichiers Markdown dans
+  `chateau/memoire`. Rien ne part ailleurs.
+- **Seul ton propre message est lu par le greffier** : ni la description d'une photo, ni une page web, ni un fichier.
+  Un contenu venu de l'extérieur ne peut donc pas écrire dans la mémoire.
+- **Ce qui n'est jamais retenu tout seul** : mot de passe, code, numéro de carte, IBAN, clé, adresse postale, numéro de
+  téléphone. Le filtre est dans le code (`outils/memoire/memoire.py`), après la réponse du modèle.
+- **Rien d'inventé** : un fait n'est rangé que s'il reprend des mots de ton message, et le nom d'une personne ou d'un
+  lieu doit y figurer. Trois faits au plus par message, sans doublon.
+- **Tu gardes la main** : « oublie… » montre d'abord ce qui serait effacé, puis efface après ton accord. Tu peux aussi
+  ouvrir, corriger ou supprimer les fiches à la main. `ARCHI_MEMOIRE=non` dans le `.env` coupe la mémoire automatique.
+
 ## La voix
 - **Tout est local** : ta voix est transcrite sur le PC (whisper.cpp), la réponse est dite par un serveur local
   (Pocket TTS). Aucun son ne part vers un service en ligne.
 - **Le serveur de voix n'écoute que `127.0.0.1`**, et il n'est pas derrière la porte du téléphone : le tunnel ne le voit pas.
-- **Ce qui est gardé** : les fichiers de travail (la question, la réponse) sont effacés aussitôt. En revanche n8n range
+- **Ce qui est gardé** : les fichiers de travail (la question, la réponse) sont effacés aussitôt ; si un traitement est
+  interrompu, ils le sont au message suivant. En revanche n8n range
   l'historique de ses exécutions, sons compris, dans sa base locale (`donnees\n8n`), et l'efface de lui-même au bout de
   quelques jours (14 par défaut). Cette base ne quitte pas le PC.
 - **Aucun clonage** : Archi utilise une voix du catalogue de Pocket TTS, et le modèle qu'il télécharge est la version

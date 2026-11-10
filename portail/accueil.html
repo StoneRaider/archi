@@ -75,6 +75,9 @@
   #tel-suivi { list-style: none; margin: 10px 0 0; padding: 8px 0 0; border-top: 1px solid var(--bord); font-size: 13px; }
   #tel-suivi:empty { display: none; }
   #tel-suivi li { padding: 2px 0; color: var(--texte2); } #tel-suivi li.fait { color: var(--vert); } #tel-suivi li.souci { color: var(--ambre); }
+  #memoire { list-style: none; margin: 0 0 8px; padding: 0; font-size: 13px; }
+  #memoire:empty { display: none; }
+  #memoire li { padding: 5px 0; border-top: 1px solid var(--bord); color: var(--texte); } #memoire li:first-child { border-top: 0; }
   #outils { list-style: none; margin: 0; padding: 0; font-size: 13px; max-height: 260px; overflow-y: auto; }
   #outils li { padding: 6px 0; border-top: 1px solid var(--bord); color: var(--texte2); } #outils li:first-child { border-top: 0; }
   #outils b { color: var(--vert); font-weight: 600; font-family: Consolas, monospace; font-size: 12.5px; }
@@ -120,6 +123,11 @@
       <p id="tel-code"></p>
       <div id="tel-texte"><p class="note">Ouverture de l'adresse HTTPS du PC…</p></div>
       <ul id="tel-suivi" aria-live="polite" aria-label="Où en est le téléphone"></ul>
+    </div>
+    <div class="carte">
+      <h2>Sa mémoire (<span id="nb-faits">0</span>)</h2>
+      <ul id="memoire" aria-live="polite" aria-label="Les derniers faits retenus"></ul>
+      <p class="note" id="memoire-note">Parle-lui de toi : il retient tout seul ce qui compte, en fiches que tu peux lire et corriger.</p>
     </div>
     <div class="carte">
       <h2>Ses outils (<span id="nb-outils">0</span>)</h2>
@@ -181,6 +189,7 @@ async function majEtat() {
   suiviTelephone(e.lien_telephone ? tl : null);
   voyant('v-tg', e.telegram ? 'ok' : '', e.telegram ? 'Telegram branché' : 'Telegram : en option');
   majVoix(e.voix);
+  majMemoire(e.memoire);
   pret = e.n8n;
   $('c-modele').textContent = c.modele; $('c-vision').textContent = c.vision + (c.vision_prete ? '' : ' (chargé à la première photo)');
   $('c-n8n').href = e.n8n_url;
@@ -233,7 +242,7 @@ function suiviTelephone(tl) {
   ligne(tl.page, tl.page ? 'Page ouverte sur le téléphone (' + ilYA(tl.page) + ')' : 'Page pas encore ouverte sur le téléphone');
   ligne(tl.apk, tl.apk ? 'Appli téléchargée (' + ilYA(tl.apk) + ')' : 'Appli pas encore téléchargée');
   ligne(tl.appli, tl.appli ? 'Appli branchée : dernier signe ' + ilYA(tl.appli) : 'Appli pas encore branchée');
-  if (tl.refus && tl.refus > tl.appli) ligne(false, 'Une appli a présenté une mauvaise clé (' + ilYA(tl.refus) + ') : rescanne le QR code.', 'souci');
+  if (tl.refus && tl.refus > tl.appli && tl.maintenant - tl.refus < 10 * 60000) ligne(false, 'Une appli a présenté une mauvaise clé (' + ilYA(tl.refus) + ') : rescanne le QR code.', 'souci');
 }
 
 let minuteurQr = null;
@@ -242,6 +251,27 @@ function montrerQr(oui) {
   $('qr').style.display = oui ? 'block' : 'none';
   $('b-qr').textContent = oui ? 'Cacher le QR code' : 'Afficher le QR code';
   if (oui) minuteurQr = setTimeout(() => montrerQr(false), 120000);   // il se recache tout seul au bout de 2 minutes
+}
+
+// ---- la memoire : Archi retient tout seul, en arriere-plan, ce qu'on lui apprend de durable (fiches du chateau)
+const ouverture = Date.now(), memoireVue = new Set();
+function majMemoire(m) {
+  m = m || { faits: 0, fiches: 0, derniers: [] };
+  $('nb-faits').textContent = m.faits;
+  const derniers = (m.derniers || []).slice(-4).reverse(), liste = $('memoire');
+  const cle = derniers.map(x => x.quand + x.fait).join('|');
+  if (liste.dataset.cle !== cle) {
+    liste.dataset.cle = cle; liste.textContent = '';
+    for (const x of derniers) { const li = document.createElement('li'); li.textContent = x.fait; liste.appendChild(li); }
+  }
+  $('memoire-note').textContent = m.faits
+    ? m.faits + (m.faits > 1 ? ' faits' : ' fait') + ' dans ' + m.fiches + (m.fiches > 1 ? ' fiches' : ' fiche') + ' du château, que tu peux lire et corriger. Dis « oublie… » pour en effacer un.'
+    : 'Parle-lui de toi : il retient tout seul ce qui compte, en fiches que tu peux lire et corriger.';
+  // ce qui vient d'etre retenu pendant que la page est ouverte : une note dans la discussion
+  for (const x of (m.derniers || [])) {
+    const k = x.quand + '|' + x.fait;
+    if (x.quand > ouverture - 5000 && !memoireVue.has(k)) { memoireVue.add(k); bulle('rappel', '📌 Retenu : ' + x.fait); }
+  }
 }
 
 // ---- la voix : le micro et le haut-parleur n'apparaissent que si l'oreille et la parole sont installees sur ce PC
@@ -268,27 +298,38 @@ function parler(base64) {
   $('sphere').classList.add('parle');
   l.play().catch(() => { if (lecteur === l) taire(); });
 }
+let microEnOuverture = false;
 async function micro() {
   if (enregistreur) { enregistreur.stop(); return; }   // second clic : le message part
-  if (occupe) return;
+  // un double-clic, ou un clic pendant la demande d'autorisation du navigateur, n'ouvre pas un second micro
+  if (occupe || microEnOuverture) return;
+  microEnOuverture = true;
   taire();
-  let flux;
-  try { flux = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-  catch (x) { bulle('souci', 'Je n\'ai pas accès au micro : autorise-le pour cette page (icône à gauche de l\'adresse), puis reclique.'); return; }
-  const morceaux = [], e = new MediaRecorder(flux);
-  enregistreur = e;
-  const limite = setTimeout(() => { if (enregistreur === e) e.stop(); }, 60000);   // une minute au plus
-  e.ondataavailable = ev => { if (ev.data && ev.data.size) morceaux.push(ev.data); };
-  e.onstop = () => {
-    clearTimeout(limite); enregistreur = null;
-    flux.getTracks().forEach(t => t.stop());   // le micro est rendu tout de suite
-    $('b-micro').classList.remove('actif'); $('b-micro').title = TITRE_MICRO; $('texte').placeholder = 'Écris à Archi…';
-    const enregistrement = new Blob(morceaux, { type: e.mimeType || 'audio/webm' });
-    if (enregistrement.size > 800) envoyer('', null, enregistrement);
-  };
-  e.start();
-  $('b-micro').classList.add('actif'); $('b-micro').title = 'J\'écoute… reclique pour envoyer';
-  $('texte').placeholder = 'J\'écoute… reclique sur le micro pour envoyer';
+  let flux = null;
+  const rendre = () => { if (flux) flux.getTracks().forEach(t => t.stop()); };   // le micro est rendu, quoi qu'il arrive
+  try {
+    try { flux = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch (x) { bulle('souci', 'Je n\'ai pas accès au micro : autorise-le pour cette page (icône à gauche de l\'adresse), puis reclique.'); return; }
+    const morceaux = [], e = new MediaRecorder(flux);
+    const limite = setTimeout(() => { try { if (e.state !== 'inactive') e.stop(); } catch (x) { rendre(); } }, 60000);   // une minute au plus
+    e.ondataavailable = ev => { if (ev.data && ev.data.size) morceaux.push(ev.data); };
+    e.onstop = () => {
+      clearTimeout(limite);
+      if (enregistreur === e) enregistreur = null;
+      rendre();
+      $('b-micro').classList.remove('actif'); $('b-micro').title = TITRE_MICRO; $('texte').placeholder = 'Écris à Archi…';
+      const enregistrement = new Blob(morceaux, { type: e.mimeType || 'audio/webm' });
+      if (enregistrement.size > 800) envoyer('', null, enregistrement);
+    };
+    e.onerror = () => { clearTimeout(limite); if (enregistreur === e) enregistreur = null; rendre(); $('b-micro').classList.remove('actif'); };
+    e.start();
+    enregistreur = e;
+    $('b-micro').classList.add('actif'); $('b-micro').title = 'J\'écoute… reclique pour envoyer';
+    $('texte').placeholder = 'J\'écoute… reclique sur le micro pour envoyer';
+  } catch (x) {
+    rendre();   // l'enregistreur n'a pas pu demarrer : le micro ne reste pas ouvert
+    bulle('souci', 'Le micro n\'a pas pu démarrer dans ce navigateur. Écris ton message à la place.');
+  } finally { microEnOuverture = false; }
 }
 
 async function envoyer(texte, fichier, vocal) {

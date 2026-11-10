@@ -117,7 +117,7 @@ if (-not $SansQuestion) {
     $texte = ""
     try {
         $r = Invoke-RestMethod -Uri "$portail/api/message" -Method Post -Headers $maison -ContentType "application/json" `
-            -Body ([System.Text.Encoding]::UTF8.GetBytes('{"texte":"Quels outils as-tu ? Cite-en trois, en une phrase."}')) -TimeoutSec 600
+            -Body ([System.Text.Encoding]::UTF8.GetBytes('{"texte":"Quels outils as-tu ? Cite-en trois, en une phrase.","voix":"non"}')) -TimeoutSec 600
         $texte = "$($r.texte)"
     } catch {}
     $duree = [int]((Get-Date) - $debut).TotalSeconds

@@ -32,6 +32,8 @@ jobs:
         run: cd outils/cameras && python test_cameras.py
       - name: Tests de la musique (bibliotheque inventee)
         run: cd outils/musique && python test_musique.py
+      - name: Tests de la memoire (faux chateau, faux modele local)
+        run: cd outils/memoire && python test_memoire.py
       - name: Tests du rangement de mails (boite simulee)
         run: cd outils/ranger_mails && python test_chercher.py
       - name: Protection SSRF de la lecture de pages

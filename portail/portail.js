@@ -120,6 +120,7 @@ function nouveauSuivi() { return { page: 0, apk: 0, appli: 0, refus: 0 }; }
 
 const CHEMINS_CONNUS = ['/telephone', '/Archi.apk', '/webhook/telephone-archi', '/webhook/telephone-boite'];
 const MAX_JOURNAL = 512 * 1024;
+const COMPTE_AUTRES = new WeakMap();   // par suivi : combien de demandes hors liste blanche notees dans la minute
 
 /**
  * Note un passage a la porte : dans le suivi (la page d'accueil montre ou en est le telephone) et dans
@@ -136,7 +137,14 @@ function noterPassage(r, suivi, methode, chemin, route, entetes) {
   if (route.action === 'page') { if (telephone) suivi.page = maintenant; }
   else if (route.action === 'apk') { if (telephone) suivi.apk = maintenant; }
   else if (route.action === 'relayer' || route.action === 'essai') { if (appli) suivi.appli = maintenant; }
-  else if (route.code === 403) suivi.refus = maintenant;
+  else if (route.code === 403) { if (appli) suivi.refus = maintenant; }   // le verificateur ou un curieux ne sont pas « une appli »
+  // les demandes hors liste blanche (robots d'Internet) ne chassent pas l'historique utile : 20 lignes par minute au plus
+  if (route.action === 'refuser' && route.code === 404) {
+    const minute = Math.floor(maintenant / 60000), c = COMPTE_AUTRES.get(suivi) || { minute: 0, n: 0 };
+    if (c.minute !== minute) { c.minute = minute; c.n = 0; }
+    c.n++; COMPTE_AUTRES.set(suivi, c);
+    if (c.n > 20) return;
+  }
   const ligne = [new Date(maintenant).toISOString(), methode === 'GET' || methode === 'POST' ? methode : 'AUTRE',
     CHEMINS_CONNUS.includes(chemin) ? chemin : (route.action === 'relayer' ? '(telegram)' : '(autre)'),
     route.action === 'refuser' ? String(route.code) : route.action, appli ? 'appli' : (telephone ? 'telephone' : '-')].join(' ') + '\n';
@@ -236,6 +244,34 @@ function outils(r) {
   } catch (e) { return []; }
 }
 
+/** Ce qu'Archi a retenu tout seul (outils/memoire) : le nombre de fiches et de faits, et les derniers faits ranges. */
+function memoire(r) {
+  const resume = { fiches: 0, faits: 0, derniers: [] };
+  const racine = path.join(r.base, 'memoire');
+  for (const piece of ['moi', 'personnes', 'projets', 'lieux', 'preferences']) {
+    let fichiers = [];
+    try { fichiers = fs.readdirSync(path.join(racine, piece)).filter(f => f.endsWith('.md')); } catch (e) { continue; }
+    for (const f of fichiers) {
+      let n = 0;
+      try {
+        for (const bloc of fs.readFileSync(path.join(racine, piece, f), 'utf8').split(/\*\*Faits :\*\*/).slice(1)) {
+          n += bloc.split(/\n\*\*/)[0].split(/\r?\n/).filter(l => l.trim().startsWith('- ')).length;
+        }
+      } catch (e) { n = 0; }
+      if (n) { resume.fiches++; resume.faits += n; }
+    }
+  }
+  try {
+    const lignes = fs.readFileSync(path.join(racine, '.retenu.jsonl'), 'utf8').split(/\r?\n/).filter(Boolean).slice(-8);
+    for (const l of lignes) {
+      let x = null;
+      try { x = JSON.parse(l); } catch (e) { continue; }   // une ligne abimee ne cache pas les autres
+      if (x && typeof x.fait === 'string' && typeof x.quand === 'number') resume.derniers.push({ quand: x.quand, fait: x.fait.slice(0, 240) });
+    }
+  } catch (e) { /* pas encore de journal : rien n'a ete retenu */ }
+  return resume;
+}
+
 async function etat(r, suivi) {
   const [n8n, lm, etatVoix] = await Promise.all([
     voir('http://127.0.0.1:' + r.n8nPort + '/healthz', 2500),
@@ -251,6 +287,8 @@ async function etat(r, suivi) {
     n8n: !!(n8n && n8n.code === 200),
     cerveau: { joignable: !!lm, modele: r.modele, pret: modeles.includes(r.modele), vision: r.modeleVision, vision_prete: modeles.includes(r.modeleVision) },
     telegram: r.telegram,
+    // la memoire : ce qu'Archi a retenu tout seul, en fiches dans le chateau
+    memoire: memoire(r),
     // la voix, en local : l'oreille (Whisper installe) et la parole (le serveur Pocket TTS repond)
     voix: { oreille: !!(etatVoix && etatVoix.oreille), parole: !!(etatVoix && etatVoix.parole) },
     cle_ok: r.cle.length >= 16,
@@ -365,4 +403,4 @@ if (require.main === module) {
 }
 
 module.exports = { reglages, estLocal, appelDeLaPage, routePublique, memeCle, telegramAttendu, codeCourt, creerServeurLocal, creerServeurPorte,
-  surveillerLanceur, adressePublique, outils, nouveauSuivi, noterPassage };
+  surveillerLanceur, adressePublique, outils, nouveauSuivi, noterPassage, memoire };

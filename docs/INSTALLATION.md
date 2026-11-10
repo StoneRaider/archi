@@ -20,7 +20,7 @@ l'installateur, à régler un souci, ou à installer Archi à la main (Linux, ma
 | 7. Château | copie `chateau_exemple\` dans `chateau\` (jamais par-dessus un château existant) et les outils | |
 | 8. `.env` | crée le fichier, deux clés aléatoires, les premiers ports libres | tes valeurs déjà remplies sont gardées |
 | 9. Cerveau | LM Studio par `winget` s'il manque, puis `lms get` des deux modèles | pas de `winget` : installe LM Studio depuis lmstudio.ai, ouvre-le une fois, relance |
-| 10. Voix | whisper.cpp et son modèle (l'oreille), Pocket TTS et son modèle (la parole), empreintes vérifiées | sans la voix, Archi marche par écrit ; `-SansVoix` la saute |
+| 10. Voix | whisper.cpp et son modèle (l'oreille, empreintes vérifiées), Pocket TTS (empreinte vérifiée) et le modèle de voix qu'il télécharge lui-même | sans la voix, Archi marche par écrit ; `-SansVoix` la saute |
 | 11. n8n | crée les identifiants, importe les 10 workflows, active le principal | `installation.txt` dit lequel a échoué |
 
 Options utiles (`installation.bat -Option`) : `-Destination <dossier>`, `-Oui` (aucune question),
@@ -58,7 +58,9 @@ Chaque section du `.env` est commentée. Après un changement, relance Archi.
 | La photo reste sans réponse | Le modèle de vision n'est pas téléchargé, ou `ARCHI_MODELE_VISION` ne correspond pas à son nom dans LM Studio. |
 | « Téléphone : pas d'adresse » | Le tunnel n'a pas pu s'ouvrir (pas d'Internet, pare-feu). Le détail est dans `donnees\etat\tunnel.log`. |
 | L'appli affiche « Clé refusée » | Le PC a été réinstallé : rescanne le QR code. |
+| Archi ne retient pas ce que tu lui dis | Le greffier travaille après la réponse : attends quelques secondes, la note « Retenu » apparaît. Vérifie `ARCHI_MEMOIRE` dans le `.env` et rejoue `outils\memoire\banc_memoire.py`. |
 | Archi répond « La voix n'est pas installée » | L'étape 10 a échoué ou a été sautée : relance `installation.bat` (il ne retélécharge que ce qui manque). |
+| Archi répond « La voix est coupée » | `ARCHI_VOIX=non` dans le `.env` (installation avec `-SansVoix`) : mets `oui`, puis relance Archi. |
 | « Réponse écrite seulement (la voix n'a pas marché) » | Le serveur de voix ne répond pas : relance Archi, puis `verifier_archi.bat`. Le détail est dans `donnees\etat\voix.log`. |
 | Le micro de la page d'accueil ne s'ouvre pas | Autorise le micro pour `127.0.0.1` dans ton navigateur (icône à gauche de l'adresse). |
 | L'appli dit qu'elle n'est « pas encore branchée » | Elle a été ouverte avant l'étape 2 : reviens sur la page du téléphone et touche « Brancher l'appli », ou rescanne le QR code. |
@@ -122,6 +124,17 @@ Pour la fabriquer : `cd appli && ./gradlew assembleDebug` (JDK 17 ou 21 et le SD
 Sans QR code, l'appli demande au premier lancement l'adresse `https://<ton-adresse>/webhook/telephone-archi` et la
 clé `ARCHI_CLE_TELEPHONE`. Pour changer de serveur : appui long sur le titre « ARCHI ».
 
+## La mémoire : il retient tout seul
+
+Rien à installer : l'outil `memoire` est posé avec les autres outils maison.
+
+- **Comment ça marche** : après chaque message, le modèle local relève en arrière-plan ce que tu apprends de durable à
+  Archi, et l'outil le range dans `chateau\memoire\<pièce>\<sujet>.md` (pièces : `moi`, `personnes`, `projets`, `lieux`,
+  `preferences`). À chaque message suivant, Archi relit ces fiches.
+- **Le voir** : la carte « Sa mémoire » de la page d'accueil, et une note « Retenu : … » dans la discussion.
+- **Le régler** : `ARCHI_MEMOIRE=non` dans le `.env` coupe la mémoire automatique (l'outil reste utilisable à la demande).
+- **Le mesurer** : `python outils\memoire\banc_memoire.py` rejoue 30 phrases avec ton modèle, sans rien ranger.
+
 ## La voix : il t'écoute et te répond, sans quitter le PC
 
 `installation.bat` pose la voix par défaut (environ 1 Go). Rien ne part vers un service en ligne.
@@ -136,6 +149,7 @@ clé `ARCHI_CLE_TELEPHONE`. Pour changer de serveur : appui long sur le titre «
 - **Sur la page d'accueil du PC** : clique sur le micro, parle, reclique pour envoyer. Le haut-parleur coupe ou remet la voix.
 - **Les réglages** (`.env`, section 9) : `ARCHI_VOIX=non` coupe tout ; `ARCHI_WHISPER_MODELE` accepte un modèle plus gros
   (plus juste, plus lent) ; `ARCHI_VOIX_NOM` choisit une autre voix du catalogue de Pocket TTS ; `ARCHI_LANGUE` change de langue.
+  Une autre voix ou une autre langue est téléchargée par Pocket TTS au lancement suivant (quelques centaines de Mo).
 - **Les deux tournent sur le processeur** : la carte graphique reste au modèle de langage. Sur un processeur récent,
   l'oreille met environ 2 secondes pour une phrase, et la voix parle plus vite que le temps réel.
 - **Contrôle sans micro** : `verifier_archi.bat` fait dire une phrase témoin à la voix, la fait réécouter par l'oreille et

@@ -1,0 +1,5 @@
+{
+ "ok": true,
+ "date": "2026-11-10",
+ "resume": "40/40 tests (test_memoire.py) sur un faux chateau et un faux modele local : fait retenu et range en fiche datee, pas de doublon, second fait dans la meme fiche, aucun appel au modele sans premiere personne, mot de passe / telephone / adresse jamais retenus, nom absent du message refuse, piece inconnue refusee, sujet piege qui ne sort pas du dossier, 3 faits au plus, essai a blanc, modele eteint ou reponse sans JSON sans casser la conversation, photo non lue, ecrire / lister / lire, ajout avant le bloc suivant, oublier (essai a blanc puis confirmer), journal des faits retenus, menage de la demande, verrou. Banc avec le vrai modele (gpt-oss-20b, 10/11/2026) : 30 phrases sur 30."
+}

@@ -93,8 +93,18 @@ public class Porte {
      */
     public Reponse essai() {
         try {
-            if (!url.contains("telephone-archi")) throw new IllegalStateException(PAS_BRANCHEE);
-            HttpURLConnection cx = ouvrir(url.replace("telephone-archi", "telephone-boite"), "application/json; charset=utf-8");
+            // on ne touche qu'au chemin (la derniere occurrence), jamais au nom du serveur
+            int i = url.lastIndexOf("telephone-archi");
+            if (i < 0 || i < url.indexOf('/', 8)) {
+                // une adresse saisie a la main, avec un chemin a elle : rien a essayer, et ce n'est pas une panne
+                Reponse r = new Reponse();
+                r.code = 0;
+                r.raison = "SANS_ESSAI";
+                r.erreur = "adresse sans telephone-archi";
+                return r;
+            }
+            HttpURLConnection cx = ouvrir(url.substring(0, i) + "telephone-boite" + url.substring(i + "telephone-archi".length()),
+                    "application/json; charset=utf-8");
             cx.setReadTimeout(20000);
             cx.setRequestProperty("x-archi-essai", "1");
             try (OutputStream o = cx.getOutputStream()) {
@@ -212,6 +222,14 @@ public class Porte {
         } catch (Exception ignore) {
         }
         String ou = hote == null || hote.isEmpty() ? "" : " (" + hote + ")";
+        if (r.code == 504 || r.code == 524) {
+            // le tunnel a coupe parce que la reponse tardait : le PC est bien la, l'adresse est bonne
+            return "Archi a mis trop de temps à répondre (réponse " + r.code + "). Réessaie, ou regarde la fenêtre « Archi » sur le PC.";
+        }
+        if ("SANS_ESSAI".equals(r.raison)) {
+            return "Adresse enregistrée. Je ne peux pas tester la liaison : elle ne contient pas « telephone-archi ». "
+                    + "Envoie un message pour l'essayer.";
+        }
         if (r.code == 404 || r.code == 502 || r.code == 503 || r.code >= 520) {
             // une reponse, mais pas celle d'Archi : l'adresse du tunnel ne mene plus a ce PC
             return "Le PC n'est plus à cette adresse" + ou + " : réponse " + r.code

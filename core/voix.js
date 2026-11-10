@@ -19,6 +19,9 @@ const http = require('http');
 const os = require('os');
 const path = require('path');
 
+const BOM = new RegExp('^' + String.fromCharCode(0xFEFF));   // la marque d'ordre des octets que PowerShell glisse devant son envoi
+const MAX_SON_S = 120;    // au plus deux minutes de son ecoutees (l'appli et la page s'arretent a une minute)
+const DELAI_VOIX_MS = 45000;   // plafond TOTAL pour fabriquer la voix : au-dela, la reponse part par ecrit seulement
 const MAX_DIT = 1200;   // au-dela, la voix s'arrete a la fin d'une phrase : la suite se lit a l'ecran
 // Whisper « invente » ces phrases quand l'enregistrement est vide ou brouille
 const FANTOMES = ['amara.org', 'sous-titres realises', 'sous-titrage', "merci d'avoir regarde", 'abonnez-vous', 'sous-titres par'];
@@ -65,6 +68,18 @@ function lancer(cmd, args, ms, entree) {
   });
 }
 
+/** Efface les fichiers de travail oublies par un traitement interrompu (n8n coupe un noeud trop long sans menage). */
+function menage() {
+  try {
+    const limite = Date.now() - 30 * 60 * 1000;
+    for (const f of fs.readdirSync(os.tmpdir())) {
+      if (!/^archi_(oreille|voix|boucle|question|memoire)_/.test(f)) continue;
+      const c = path.join(os.tmpdir(), f);
+      try { if (fs.statSync(c).mtimeMs < limite) fs.unlinkSync(c); } catch (e) { /* pris par un autre programme */ }
+    }
+  } catch (e) { /* dossier temporaire illisible : tant pis */ }
+}
+
 // ---------------------------------------------------------------- l'oreille
 /** Le texte rendu par Whisper, nettoye : sans les bruits entre crochets, et vide si c'est une phrase fantome. */
 function entendre(brut) {
@@ -82,10 +97,12 @@ async function transcrire(fichier, r, deps) {
   if (!r.active) return { ok: false, raison: 'voix_desactivee' };
   if (!r.whisper || !r.modele || !fs.existsSync(r.whisper) || !fs.existsSync(r.modele)) return { ok: false, raison: 'oreille_absente' };
   if (!fichier || !fs.existsSync(fichier)) return { ok: false, raison: 'fichier_absent' };
+  menage();
   const wav = path.join(os.tmpdir(), 'archi_oreille_' + crypto.randomBytes(6).toString('hex') + '.wav');
   try {
-    await L(r.ffmpeg, ['-y', '-loglevel', 'error', '-i', fichier, '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', wav], 120000);
-    const brut = await L(r.whisper, ['-m', r.modele, '-l', r.langue, '-f', wav, '-nt', '-np', '-t', String(r.fils)], 300000);
+    // delais internes (60 s + 150 s) plus courts que celui du noeud n8n qui nous attend (240 s)
+    await L(r.ffmpeg, ['-y', '-loglevel', 'error', '-i', fichier, '-t', String(MAX_SON_S), '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', wav], 60000);
+    const brut = await L(r.whisper, ['-m', r.modele, '-l', r.langue, '-f', wav, '-nt', '-np', '-t', String(r.fils)], 150000);
     const texte = entendre(brut);
     return texte ? { ok: true, texte } : { ok: false, raison: 'rien_entendu' };
   } catch (e) {
@@ -144,6 +161,9 @@ function synthese(port, texte, ms) {
       rep.on('end', () => (rep.statusCode === 200 ? ok(Buffer.concat(m)) : non(new Error('la voix a repondu ' + rep.statusCode))));
       rep.on('error', non);
     });
+    // un plafond TOTAL, pas seulement un delai de silence : un serveur qui traine ne retient pas la reponse ecrite
+    const plafond = setTimeout(() => req.destroy(new Error('la voix met trop de temps')), ms);
+    req.on('close', () => clearTimeout(plafond));
     req.on('timeout', () => req.destroy(new Error('la voix met trop de temps')));
     req.on('error', non);
     req.end(corps);
@@ -160,11 +180,11 @@ async function dire(texte, r, deps) {
   const base = path.join(os.tmpdir(), 'archi_voix_' + crypto.randomBytes(6).toString('hex'));
   try {
     let wav;
-    try { wav = await S(r.portVoix, dit, 150000); }
+    try { wav = await S(r.portVoix, dit, DELAI_VOIX_MS); }
     catch (e) { return { ok: false, raison: 'voix_muette', detail: String((e && e.message) || e).slice(0, 200) }; }
     fs.writeFileSync(base + '.wav', wav);
     // Pocket diffuse en continu : l'en-tete de son WAV annonce une taille fictive, ffmpeg lit jusqu'au bout
-    await L(r.ffmpeg, ['-y', '-loglevel', 'error', '-i', base + '.wav', '-c:a', 'libopus', '-b:a', '32k', base + '.ogg'], 120000);
+    await L(r.ffmpeg, ['-y', '-loglevel', 'error', '-i', base + '.wav', '-c:a', 'libopus', '-b:a', '32k', base + '.ogg'], 30000);
     return { ok: true, audio_ogg_base64: fs.readFileSync(base + '.ogg').toString('base64'), texte_dit: dit };
   } catch (e) {
     return { ok: false, raison: 'erreur_voix', detail: String((e && e.message) || e).replace(/\s+/g, ' ').slice(0, 200) };
@@ -213,7 +233,7 @@ if (require.main === module) {
   (async () => {
     let e = {};
     // PowerShell (verifier_archi.bat) glisse parfois une marque d'ordre des octets devant ce qu'il envoie : on l'enleve
-    try { e = JSON.parse(fs.readFileSync(0, 'utf8').replace(/^﻿/, '').trim() || '{}'); } catch (x) { e = {}; }
+    try { e = JSON.parse(fs.readFileSync(0, 'utf8').replace(BOM, '').trim() || '{}'); } catch (x) { e = {}; }
     let s;
     if (e.action === 'transcrire') s = await transcrire(String(e.fichier || ''));
     else if (e.action === 'dire') s = await dire(String(e.texte || ''));
@@ -223,4 +243,4 @@ if (require.main === module) {
   })().catch(x => { process.stdout.write('\n' + JSON.stringify({ ok: false, raison: 'erreur', detail: String((x && x.message) || x).slice(0, 200) }) + '\n'); });
 }
 
-module.exports = { reglages, trouver, entendre, raccourcir, prononcer, nettoyerSimple, corpsMultipart, transcrire, dire, etat, boucle, synthese, paroleVivante, MAX_DIT };
+module.exports = { reglages, trouver, entendre, raccourcir, prononcer, nettoyerSimple, corpsMultipart, menage, transcrire, dire, etat, boucle, synthese, paroleVivante, MAX_DIT };
