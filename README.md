@@ -67,6 +67,13 @@ L'appli affiche l'adresse et un code de 4 caractères avant de se brancher : la 
 L'adresse change à chaque démarrage du PC : il suffit de rescanner. Pour une adresse fixe (ngrok, Tailscale Funnel,
 tunnel Cloudflare nommé), mets-la dans `WEBHOOK_URL` du `.env`.
 
+### La voix : parle-lui, il te répond
+Archi écoute et parle, **sans quitter le PC** : whisper.cpp transcrit ta voix, Pocket TTS lit la réponse.
+- **Sur le téléphone** : touche la sphère et parle.
+- **Sur la page d'accueil du PC** : clique sur le micro, parle, reclique. Le haut-parleur coupe ou remet la voix.
+- Les deux tournent sur le processeur : la carte graphique reste au modèle de langage.
+- `verifier_archi.bat` le contrôle sans micro : la voix dit une phrase, l'oreille la réécoute, et les mots sont comparés.
+
 ### Telegram (en option)
 
 Double-clique sur **`brancher_telegram.bat`** : il te guide pour créer ton bot avec @BotFather, reconnaît ton

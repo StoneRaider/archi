@@ -20,17 +20,18 @@ l'installateur, à régler un souci, ou à installer Archi à la main (Linux, ma
 | 7. Château | copie `chateau_exemple\` dans `chateau\` (jamais par-dessus un château existant) et les outils | |
 | 8. `.env` | crée le fichier, deux clés aléatoires, les premiers ports libres | tes valeurs déjà remplies sont gardées |
 | 9. Cerveau | LM Studio par `winget` s'il manque, puis `lms get` des deux modèles | pas de `winget` : installe LM Studio depuis lmstudio.ai, ouvre-le une fois, relance |
-| 10. n8n | crée les identifiants, importe les 10 workflows, active le principal | `installation.txt` dit lequel a échoué |
+| 10. Voix | whisper.cpp et son modèle (l'oreille), Pocket TTS et son modèle (la parole), empreintes vérifiées | sans la voix, Archi marche par écrit ; `-SansVoix` la saute |
+| 11. n8n | crée les identifiants, importe les 10 workflows, active le principal | `installation.txt` dit lequel a échoué |
 
 Options utiles (`installation.bat -Option`) : `-Destination <dossier>`, `-Oui` (aucune question),
-`-SansCerveau` (ne touche pas à LM Studio), `-SansModeles`, `-SansLancer`.
+`-SansCerveau` (ne touche pas à LM Studio), `-SansModeles`, `-SansVoix`, `-SansLancer`.
 
 ### Les fichiers à connaître, une fois installé
 | Fichier ou dossier | Rôle |
 |---|---|
-| `lancer_archi.bat` (raccourci « Archi » du Bureau) | démarre le cerveau, la page d'accueil, le tunnel et n8n. Fermer sa fenêtre arrête Archi. |
+| `lancer_archi.bat` (raccourci « Archi » du Bureau) | démarre le cerveau, la page d'accueil, le tunnel, la voix et n8n. Fermer sa fenêtre arrête Archi. |
 | `brancher_telegram.bat` | ajoute ton bot Telegram, pas à pas |
-| `verifier_archi.bat` | contrôle tout de bout en bout pendant qu'Archi tourne : programmes, cerveau, liste blanche, vraie question |
+| `verifier_archi.bat` | contrôle tout de bout en bout pendant qu'Archi tourne : programmes, cerveau, voix, liste blanche, vraie question |
 | `.env` | toutes les clés et tous les réglages, commentés. Jamais publié, jamais affiché. |
 | `chateau\memoire\` | la mémoire d'Archi : des fiches Markdown que tu peux lire et corriger |
 | `chateau\outils\` | les outils maison et leur registre |
@@ -57,6 +58,9 @@ Chaque section du `.env` est commentée. Après un changement, relance Archi.
 | La photo reste sans réponse | Le modèle de vision n'est pas téléchargé, ou `ARCHI_MODELE_VISION` ne correspond pas à son nom dans LM Studio. |
 | « Téléphone : pas d'adresse » | Le tunnel n'a pas pu s'ouvrir (pas d'Internet, pare-feu). Le détail est dans `donnees\etat\tunnel.log`. |
 | L'appli affiche « Clé refusée » | Le PC a été réinstallé : rescanne le QR code. |
+| Archi répond « La voix n'est pas installée » | L'étape 10 a échoué ou a été sautée : relance `installation.bat` (il ne retélécharge que ce qui manque). |
+| « Réponse écrite seulement (la voix n'a pas marché) » | Le serveur de voix ne répond pas : relance Archi, puis `verifier_archi.bat`. Le détail est dans `donnees\etat\voix.log`. |
+| Le micro de la page d'accueil ne s'ouvre pas | Autorise le micro pour `127.0.0.1` dans ton navigateur (icône à gauche de l'adresse). |
 | L'appli dit qu'elle n'est « pas encore branchée » | Elle a été ouverte avant l'étape 2 : reviens sur la page du téléphone et touche « Brancher l'appli », ou rescanne le QR code. |
 | L'appli dit que le PC « n'est plus à cette adresse » | Archi a été relancé : l'adresse du tunnel change à chaque lancement. Rescanne le QR code (ou prends une adresse fixe, plus haut). |
 | Savoir où en est le téléphone | La page d'accueil coche en direct : page ouverte, appli téléchargée, appli branchée. Le détail est dans `donnees\etat\porte.log`. |
@@ -118,6 +122,28 @@ Pour la fabriquer : `cd appli && ./gradlew assembleDebug` (JDK 17 ou 21 et le SD
 Sans QR code, l'appli demande au premier lancement l'adresse `https://<ton-adresse>/webhook/telephone-archi` et la
 clé `ARCHI_CLE_TELEPHONE`. Pour changer de serveur : appui long sur le titre « ARCHI ».
 
-## En option : la voix
-Dans cette version, l'appli envoie la voix au PC, qui répond « Whisper non branché ». Dans ma version personnelle,
-whisper.cpp (Vulkan) transcrit la voix et une synthèse locale lit la réponse. Ce sera ajouté ici après le concours.
+## La voix : il t'écoute et te répond, sans quitter le PC
+
+`installation.bat` pose la voix par défaut (environ 1 Go). Rien ne part vers un service en ligne.
+
+| Brique | Rôle | Où |
+|---|---|---|
+| [whisper.cpp](https://github.com/ggml-org/whisper.cpp) et le modèle Whisper « small » | l'oreille : ton message vocal devient du texte | `programmes\whisper\` |
+| [Pocket TTS](https://github.com/kyutai-labs/pocket-tts) (Kyutai) | la parole : la réponse est lue à voix haute | `programmes\voix\` |
+| ffmpeg | convertit le son (WAV 16 kHz pour l'oreille, OGG/Opus pour l'appli et la page) | `programmes\ffmpeg\` |
+
+- **Sur le téléphone** : touche la sphère et parle. La réponse s'affiche et se fait entendre.
+- **Sur la page d'accueil du PC** : clique sur le micro, parle, reclique pour envoyer. Le haut-parleur coupe ou remet la voix.
+- **Les réglages** (`.env`, section 9) : `ARCHI_VOIX=non` coupe tout ; `ARCHI_WHISPER_MODELE` accepte un modèle plus gros
+  (plus juste, plus lent) ; `ARCHI_VOIX_NOM` choisit une autre voix du catalogue de Pocket TTS ; `ARCHI_LANGUE` change de langue.
+- **Les deux tournent sur le processeur** : la carte graphique reste au modèle de langage. Sur un processeur récent,
+  l'oreille met environ 2 secondes pour une phrase, et la voix parle plus vite que le temps réel.
+- **Contrôle sans micro** : `verifier_archi.bat` fait dire une phrase témoin à la voix, la fait réécouter par l'oreille et
+  compare les mots.
+
+Licences : whisper.cpp et le modèle Whisper sont sous licence MIT ; Pocket TTS est publié par Kyutai (sa licence est dans
+son dossier), et la licence de chaque voix de son catalogue est donnée sur la page `kyutai/tts-voices` de Hugging Face.
+Archi n'utilise qu'une voix de ce catalogue : il ne clone aucune voix.
+
+À la main (Linux, macOS) : installe whisper.cpp et Pocket TTS, lance `pocket-tts serve --host 127.0.0.1 --port 5683
+--language french`, puis remplis `ARCHI_WHISPER_EXE`, `ARCHI_WHISPER_MODELE` et `ARCHI_VOIX_PORT` dans le `.env`.
