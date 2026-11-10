@@ -7,6 +7,7 @@
 //       - POST /webhook/telephone-archi et /webhook/telephone-boite, avec la bonne cle (verifiee ICI, avant n8n) ;
 //       - POST du webhook Telegram : le chemin ET le jeton secret propres a cette installation, verifies ICI ;
 //       - GET /telephone (page d'installation, sans aucun secret) et GET /Archi.apk.
+//     Elle note l'heure de chaque passage (jamais la cle ni le contenu) : la page d'accueil montre ou en est le telephone.
 //     Tout le reste repond 404 : l'editeur n8n, son API et la page d'accueil ne sont pas derriere cette porte.
 //
 // Lance par lancer_archi.ps1 (les reglages viennent du .env, deja charges dans l'environnement).
@@ -97,7 +98,10 @@ function routePublique(methode, chemin, entetes, r) {
   if (methode === 'GET' && chemin === '/Archi.apk') return { action: 'apk' };
   if (methode !== 'POST') return refus(404);
   if (chemin === '/webhook/telephone-archi' || chemin === '/webhook/telephone-boite') {
-    return memeCle(entetes['x-archi-cle'], r.cle) ? { action: 'relayer', max: MAX_CORPS } : refus(403);
+    if (!memeCle(entetes['x-archi-cle'], r.cle)) return refus(403);
+    // l'appli vient de se brancher et verifie la liaison : on lui repond ici, sans reveiller l'agent
+    if (entetes['x-archi-essai'] === '1') return { action: 'essai' };
+    return { action: 'relayer', max: MAX_CORPS };
   }
   if (r.telegram) {
     const tg = telegramAttendu(r);
@@ -106,6 +110,39 @@ function routePublique(methode, chemin, entetes, r) {
     }
   }
   return refus(404);
+}
+
+// ---------------------------------------------------------------- le suivi du telephone
+/** Ce que la porte a vu passer : l'heure du dernier passage de chaque etape (0 = jamais). Rien d'autre n'est garde. */
+function nouveauSuivi() { return { page: 0, apk: 0, appli: 0, refus: 0 }; }
+
+const CHEMINS_CONNUS = ['/telephone', '/Archi.apk', '/webhook/telephone-archi', '/webhook/telephone-boite'];
+const MAX_JOURNAL = 512 * 1024;
+
+/**
+ * Note un passage a la porte : dans le suivi (la page d'accueil montre ou en est le telephone) et dans
+ * donnees/etat/porte.log (pour comprendre une panne). On n'ecrit JAMAIS la cle, les en-tetes, le contenu ni
+ * l'adresse de l'appelant : seulement l'heure, la methode, un chemin de la liste blanche et le resultat.
+ */
+function noterPassage(r, suivi, methode, chemin, route, entetes) {
+  // qui passe : l'appli, un navigateur de telephone (Android), ou autre chose (le verificateur du PC, un curieux).
+  // Ce n'est qu'un indice pour l'affichage, jamais une preuve : la securite, c'est la cle.
+  const ua = String((entetes || {})['user-agent'] || '');
+  const appli = /^ArchiTelephone\//.test(ua);
+  const telephone = appli || /Android/i.test(ua);
+  const maintenant = Date.now();
+  if (route.action === 'page') { if (telephone) suivi.page = maintenant; }
+  else if (route.action === 'apk') { if (telephone) suivi.apk = maintenant; }
+  else if (route.action === 'relayer' || route.action === 'essai') { if (appli) suivi.appli = maintenant; }
+  else if (route.code === 403) suivi.refus = maintenant;
+  const ligne = [new Date(maintenant).toISOString(), methode === 'GET' || methode === 'POST' ? methode : 'AUTRE',
+    CHEMINS_CONNUS.includes(chemin) ? chemin : (route.action === 'relayer' ? '(telegram)' : '(autre)'),
+    route.action === 'refuser' ? String(route.code) : route.action, appli ? 'appli' : (telephone ? 'telephone' : '-')].join(' ') + '\n';
+  const f = path.join(r.etat, 'porte.log');
+  fs.stat(f, (e, s) => {
+    const ecrire = () => fs.appendFile(f, ligne, () => { /* pas de dossier : pas de journal, la porte marche quand meme */ });
+    if (!e && s.size > MAX_JOURNAL) fs.rename(f, f + '.1', ecrire); else ecrire();
+  });
 }
 
 // ---------------------------------------------------------------- petits outils
@@ -197,7 +234,7 @@ function outils(r) {
   } catch (e) { return []; }
 }
 
-async function etat(r) {
+async function etat(r, suivi) {
   const [n8n, lm] = await Promise.all([
     voir('http://127.0.0.1:' + r.n8nPort + '/healthz', 2500),
     voir(r.lmUrl + '/models', 2500),
@@ -217,6 +254,8 @@ async function etat(r) {
     lien_telephone: pret ? pub + '/telephone#k=' + encodeURIComponent(r.cle) : '',
     code_telephone: pret ? codeCourt(r.cle) : '',
     apk: fs.existsSync(path.join(r.depot, 'appli', 'Archi.apk')),
+    // heures (ms) du dernier passage de chaque etape a la porte du telephone, 0 = jamais ; « maintenant » = l'heure du PC
+    telephone: Object.assign({ maintenant: Date.now() }, suivi || nouveauSuivi()),
     outils: outils(r),
     n8n_url: 'http://127.0.0.1:' + r.n8nPort,
   };
@@ -240,7 +279,7 @@ function enveloppe(traiter) {
 }
 
 // ---------------------------------------------------------------- 1. la page d'accueil (navigateur du PC)
-function creerServeurLocal(r) {
+function creerServeurLocal(r, suivi) {
   return enveloppe(async (req, res, chemin, methode) => {
     // un relais, un autre nom d'hote (page piegee, DNS rebinding) : cette porte n'existe pas pour eux
     if (!estLocal(req, r.port)) return repondre(res, 404, 'Introuvable.');
@@ -249,7 +288,7 @@ function creerServeurLocal(r) {
     if (methode === 'GET' && chemin === '/telephone') return fichier(res, 'telephone.html', 'text/html; charset=utf-8');
     if (chemin.startsWith('/api/')) {
       if (!appelDeLaPage(req, r.port)) return json(res, 403, { erreur: 'appel refuse' });
-      if (methode === 'GET' && chemin === '/api/etat') return json(res, 200, await etat(r));
+      if (methode === 'GET' && chemin === '/api/etat') return json(res, 200, await etat(r, suivi));
       if (methode === 'POST' && chemin === '/api/message') {
         return relayer(req, res, r, '/webhook/telephone-archi', await lireCorps(req, MAX_CORPS), { 'x-archi-cle': r.cle });
       }
@@ -263,9 +302,16 @@ function creerServeurLocal(r) {
 }
 
 // ---------------------------------------------------------------- 2. la porte du telephone (cible du tunnel)
-function creerServeurPorte(r) {
+function creerServeurPorte(r, suivi) {
+  suivi = suivi || nouveauSuivi();
   return enveloppe(async (req, res, chemin, methode) => {
     const route = routePublique(methode, chemin, req.headers, r);
+    noterPassage(r, suivi, methode, chemin, route, req.headers);
+    if (route.action === 'essai') {
+      await lireCorps(req, 4096);
+      const [n8n, lm] = await Promise.all([voir('http://127.0.0.1:' + r.n8nPort + '/healthz', 2500), voir(r.lmUrl + '/models', 2500)]);
+      return json(res, 200, { ok: true, agent: !!(n8n && n8n.code === 200), cerveau: !!lm });
+    }
     if (route.action === 'page') return fichier(res, 'telephone.html', 'text/html; charset=utf-8');
     if (route.action === 'apk') {
       const apk = path.join(r.depot, 'appli', 'Archi.apk');
@@ -306,11 +352,12 @@ if (require.main === module) {
     // 127.0.0.1 seulement : ni le reseau local ni Internet n'arrivent ici, sauf par le tunnel (porte du telephone)
     serveur.listen(port, '127.0.0.1', () => console.log(nom + ' : 127.0.0.1:' + port));
   };
-  demarrer(creerServeurLocal(r), r.port, "Page d'accueil");
-  demarrer(creerServeurPorte(r), r.portPorte, 'Porte du telephone');
+  const suivi = nouveauSuivi();
+  demarrer(creerServeurLocal(r, suivi), r.port, "Page d'accueil");
+  demarrer(creerServeurPorte(r, suivi), r.portPorte, 'Porte du telephone');
   const lanceur = parseInt(process.env.ARCHI_PID_LANCEUR || '0', 10);
   if (lanceur > 0) surveillerLanceur(lanceur, r, () => process.exit(0));
 }
 
 module.exports = { reglages, estLocal, appelDeLaPage, routePublique, memeCle, telegramAttendu, codeCourt, creerServeurLocal, creerServeurPorte,
-  surveillerLanceur, adressePublique, outils };
+  surveillerLanceur, adressePublique, outils, nouveauSuivi, noterPassage };

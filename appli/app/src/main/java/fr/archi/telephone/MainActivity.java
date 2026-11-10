@@ -119,7 +119,8 @@ public class MainActivity extends Activity implements Conversation.Ecouteur {
                     .show();
             return true;
         });
-        if (!Reglages.pret(this) && !Reglages.estLienBrancher(getIntent())) Reglages.demander(this, null);
+        // premier lancement sans branchement (« Ouvrir » juste apres l'installation) : on dit quoi faire, sans champ a remplir
+        if (!Reglages.pret(this) && !Reglages.estLienBrancher(getIntent())) Reglages.expliquer(this);
         lunettes.setOnLongClickListener(v -> {
             diagnostic = !diagnostic;
             afficherDiagnostic();

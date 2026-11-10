@@ -48,6 +48,12 @@ Tout le reste répond 404 : l'éditeur n8n, son API, ses identifiants et la page
 porte. Elle ne se fie à aucun en-tête pour décider : même un relais mal réglé ne lui fait rien servir de plus.
 `portail/test/portail.test.js` le vérifie de bout en bout, et `verifier_archi.bat` le revérifie sur le PC installé.
 
+**Ce que la porte retient** : l'heure, la méthode, le chemin (seulement s'il est dans la liste blanche) et le résultat
+de chaque passage, dans `donnees/etat/porte.log`. Jamais la clé, les en-têtes, le contenu ni l'adresse de l'appelant.
+La page d'accueil s'en sert pour cocher en direct les étapes du téléphone : page ouverte, appli téléchargée, appli
+branchée. Juste après le branchement, l'appli appelle la porte pour vérifier la liaison : la porte contrôle la clé
+et répond elle-même, sans réveiller l'agent.
+
 **Telegram** : n8n donne à Telegram un jeton secret calculé à partir des identifiants du workflow et du nœud.
 Dans un dépôt public, ces identifiants sont connus de tous. `n8n/importer_workflows.py` tire donc au hasard, à
 l'installation, l'identifiant du nœud et celui du webhook : le chemin et le jeton sont propres à chaque PC.

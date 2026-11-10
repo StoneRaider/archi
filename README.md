@@ -52,6 +52,7 @@ Les fois suivantes, le raccourci **Archi** du Bureau suffit.
 ### Archi sur ton téléphone (Android) : un QR code
 
 1. Sur la page d'accueil du PC, **scanne le QR code** avec l'appareil photo du téléphone.
+   La page du PC coche chaque étape en direct : page ouverte, appli téléchargée, appli branchée.
 2. La page qui s'ouvre propose **l'appli** (1 Mo). Android demande d'autoriser l'installation depuis le
    navigateur : l'appli vient de ton PC, pas du Play Store.
 3. Touche **« Brancher l'appli »**, puis confirme dans l'appli. L'adresse du PC et la clé se règlent toutes seules.

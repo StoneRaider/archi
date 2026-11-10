@@ -62,7 +62,7 @@ public final class Reglages {
         String hote = valide ? Uri.parse(u).getHost() : null;
         if (hote == null || hote.isEmpty()) {
             Toast.makeText(a, "Lien Archi invalide : scanne de nouveau le QR code du PC.", Toast.LENGTH_LONG).show();
-            if (!pret(a)) demander(a, null);
+            if (!pret(a)) expliquer(a);
             return;
         }
         String message = "Adresse : " + hote + "\nCode : " + codeCourt(k)
@@ -76,13 +76,54 @@ public final class Reglages {
                 .setMessage(message)
                 .setCancelable(false)
                 .setNegativeButton("Annuler", (d, x) -> {
-                    if (!pret(a)) demander(a, null);
+                    if (!pret(a)) expliquer(a);
                 })
                 .setPositiveButton("Brancher", (d, x) -> {
                     p(a).edit().putString("url", url).putString("cle", cle).apply();
-                    Toast.makeText(a, "Appli branchée sur ton PC.", Toast.LENGTH_SHORT).show();
+                    essayer(a);
                 })
                 .show();
+    }
+
+    /** Premier lancement, appli pas encore branchee : on dit quoi faire, sans champ a remplir. */
+    public static void expliquer(Activity a) {
+        new AlertDialog.Builder(a)
+                .setTitle("Dernière étape : brancher l'appli")
+                .setMessage("Retourne sur la page d'installation, dans ton navigateur, et touche « Brancher l'appli »."
+                        + "\n\nTu l'as fermée ? Sur ton PC, affiche le QR code de la page d'accueil d'Archi et scanne-le de nouveau.")
+                .setPositiveButton("Compris", null)
+                .setNeutralButton("Saisir à la main", (d, x) -> demander(a, null))
+                .show();
+    }
+
+    /** Juste apres le branchement : on appelle le PC pour de vrai, et on dit ce qu'il a repondu. */
+    static void essayer(Activity a) {
+        Toast.makeText(a, "Branchement enregistré : j'appelle ton PC…", Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            final Porte.Reponse r = new Porte(a).essai();
+            a.runOnUiThread(() -> {
+                if (a.isFinishing() || a.isDestroyed()) return;
+                boolean ok = r.code == 200 && r.json != null;
+                String message;
+                if (ok) {
+                    message = "Ton PC a répondu. Tu peux écrire, parler ou envoyer une photo.";
+                    if (!r.json.optBoolean("cerveau", true)) {
+                        message += "\n\nAttention : sur le PC, LM Studio ne répond pas encore. Regarde la fenêtre « Archi ».";
+                    } else if (!r.json.optBoolean("agent", true)) {
+                        message += "\n\nAttention : sur le PC, l'agent n'a pas fini de démarrer. Attends une minute.";
+                    }
+                } else if (r.code == 401 || r.code == 403) {
+                    message = "Ton PC a refusé la clé. Rescanne le QR code de la page d'accueil d'Archi.";
+                } else {
+                    message = Porte.explication(a, r);
+                }
+                new AlertDialog.Builder(a)
+                        .setTitle(ok ? "Appli branchée ✓" : "Le PC ne répond pas")
+                        .setMessage(message)
+                        .setPositiveButton("OK", null)
+                        .show();
+            });
+        }, "archi-essai").start();
     }
 
     /** 4 caracteres tires de l'empreinte SHA-256 de la cle : la page d'accueil du PC affiche les memes. */
@@ -133,9 +174,9 @@ public final class Reglages {
                     SharedPreferences.Editor e = p(a).edit().putString("url", u);
                     if (!k.isEmpty()) e.putString("cle", k);
                     e.apply();
-                    Toast.makeText(a, "Serveur enregistré.", Toast.LENGTH_SHORT).show();
                     fenetre.dismiss();
                     if (apres != null) apres.run();
+                    essayer(a);
                 }));
         fenetre.show();
     }

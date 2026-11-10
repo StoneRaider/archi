@@ -312,12 +312,13 @@ public class Conversation {
     private void recevoir(Porte.Reponse r, String texteEcrit) {
         if (r.code == 401 || r.code == 403) {
             tenirEveille(false);
-            changer(Etat.REPOS, "Clé refusée : appui long sur ARCHI > Serveur Archi pour la corriger.");
+            changer(Etat.REPOS, "Clé refusée par ton PC : rescanne le QR code de la page d'accueil d'Archi.");
             return;
         }
         if (r.json == null) {
             tenirEveille(false);
-            changer(Etat.REPOS, r.code == 0 ? "Archi est injoignable (PC éteint ou Internet coupé ?)" : "Problème : " + r.erreur);
+            // la vraie raison, et quoi faire : pas branchee, adresse introuvable, PC muet...
+            changer(Etat.REPOS, Porte.explication(ctx, r));
             return;
         }
         if (r.code >= 400) {

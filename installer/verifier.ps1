@@ -57,6 +57,16 @@ if ($etat) {
     Controle "adresse HTTPS du telephone" ([bool]$etat.adresse_publique) $(if ($etat.adresse_publique) { $etat.adresse_publique } else { "pas de tunnel (le PC marche seul)" })
     Controle "appli Android prete a telecharger" ([bool]$etat.apk)
     $rapport.Add("      Telegram : " + $(if ($etat.telegram) { "branche" } else { "pas branche (en option : brancher_telegram.bat)" })) | Out-Null
+    # ou en est le telephone : la porte note l'heure de chaque etape (information, pas un controle)
+    $tl = $etat.telephone
+    if ($tl) {
+        $age = { param($t) "il y a " + [int](($tl.maintenant - $t) / 1000) + " s" }
+        $ou = if ($tl.appli) { "appli branchee, dernier signe " + (& $age $tl.appli) }
+              elseif ($tl.apk) { "appli telechargee " + (& $age $tl.apk) + ", pas encore branchee (touche 'Brancher l'appli' sur la page du telephone)" }
+              elseif ($tl.page) { "page ouverte " + (& $age $tl.page) + ", appli pas encore telechargee" }
+              else { "pas encore vu (scanne le QR code de la page d'accueil)" }
+        $rapport.Add("      Telephone : $ou") | Out-Null
+    }
 }
 
 Titre "3. Ce qui sort du PC (liste blanche du portail)"

@@ -13,11 +13,14 @@
   p.sous { text-align: center; color: #8FA89B; margin: 0 0 22px; font-size: 15px; }
   .etape { background: #13221B; border: 1px solid #22382E; border-radius: 14px; padding: 16px; margin: 0 auto 14px; max-width: 460px; }
   .etape h2 { font-size: 16px; margin: 0 0 6px; } .etape p { margin: 0 0 12px; color: #8FA89B; font-size: 15px; }
+  .etape p b { color: #E6F2EC; font-weight: 600; }
   a.bouton { display: block; text-align: center; background: #3DDC97; color: #062016; font-weight: 700; text-decoration: none;
              padding: 14px; border-radius: 12px; font-size: 17px; }
   a.bouton.second { background: transparent; color: #3DDC97; border: 1px solid #3DDC97; }
   a.petit { display: block; text-align: center; color: #8FA89B; font-size: 14px; margin-top: 10px; }
   #souci { color: #F2B84B; display: none; }
+  #absente { display: none; border-color: #F2B84B; }
+  #absente h2, #absente p { color: #F2B84B; }
 </style>
 </head>
 <body>
@@ -25,15 +28,21 @@
 <h1>ARCHI</h1>
 <p class="sous">Ton assistant local, dans la poche.</p>
 
+<div class="etape" id="absente" role="alert">
+  <h2>L'appli n'est pas encore installée</h2>
+  <p style="margin:0">Ce téléphone n'a pas trouvé l'appli Archi. Fais d'abord l'étape 1 jusqu'au bout, puis touche de nouveau « Brancher l'appli ».</p>
+</div>
+
 <div class="etape">
   <h2>1. Installe l'appli</h2>
   <p>Android te demandera d'autoriser l'installation depuis ton navigateur : c'est normal, l'appli vient de ton PC et pas du Play Store.</p>
+  <p><b>Après l'installation, reviens sur cette page</b> pour l'étape 2.</p>
   <a class="bouton second" href="/Archi.apk">Télécharger l'appli (1 Mo)</a>
 </div>
 
 <div class="etape">
   <h2>2. Branche-la sur ton PC</h2>
-  <p id="explication">Une fois l'appli installée, touche ce bouton : l'adresse de ton PC et la clé se règlent toutes seules. L'appli te demande de confirmer.</p>
+  <p id="explication">Touche ce bouton : l'appli s'ouvre et demande <b>« Brancher Archi sur ce PC ? »</b>, avec un code de 4 caractères. C'est le même que sur la page d'accueil de ton PC : confirme. L'appli appelle alors ton PC et te dit s'il a répondu.</p>
   <p id="souci">Ce lien ne contient pas la clé. Rescanne le QR code affiché sur la page d'accueil d'Archi, sur ton PC.</p>
   <a class="bouton" id="brancher" href="#">Brancher l'appli</a>
   <a class="petit" id="secours" href="#">Rien ne se passe ? Essaie ce lien.</a>
@@ -48,14 +57,20 @@
 'use strict';
 // La cle arrive dans le « # » du lien : le navigateur ne l'envoie jamais sur le reseau, elle ne passe que du QR code a l'appli.
 const cle = new URLSearchParams(location.hash.slice(1)).get('k') || '';
-// ... et on l'efface de la barre d'adresse : elle ne reste pas dans l'historique du telephone
+// « ?absente=1 » : le navigateur revient ici quand le bouton n'a trouve aucune appli a ouvrir (voir plus bas)
+const absente = new URLSearchParams(location.search).get('absente') === '1';
+// ... et on efface tout de la barre d'adresse : la cle ne reste pas dans l'historique du telephone
 try { history.replaceState(null, '', location.pathname); } catch (e) { /* tant pis */ }
 const adresse = location.origin + '/webhook/telephone-archi';
 const brancher = document.getElementById('brancher'), secours = document.getElementById('secours');
 if (cle.length >= 16 && location.protocol === 'https:') {
   const q = 'u=' + encodeURIComponent(adresse) + '&k=' + encodeURIComponent(cle);
-  brancher.href = 'intent://brancher?' + q + '#Intent;scheme=archi;package=fr.archi.local;end';
+  // Si l'appli n'est pas installee, Android ne peut rien ouvrir : le navigateur recharge alors cette page avec un
+  // avertissement clair, au lieu de ne rien faire ou d'ouvrir le Play Store. La cle reste dans le « # ».
+  const retour = location.origin + '/telephone?absente=1#k=' + encodeURIComponent(cle);
+  brancher.href = 'intent://brancher?' + q + '#Intent;scheme=archi;package=fr.archi.local;S.browser_fallback_url=' + encodeURIComponent(retour) + ';end';
   secours.href = 'archi://brancher?' + q;
+  if (absente) document.getElementById('absente').style.display = 'block';
 } else {
   document.getElementById('souci').style.display = 'block';
   document.getElementById('explication').style.display = 'none';
