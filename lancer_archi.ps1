@@ -24,6 +24,17 @@ $pPortail = if ($env:ARCHI_PORTAIL_PORT) { [int]$env:ARCHI_PORTAIL_PORT } else {
 $pServeur = if ($env:ARCHI_SERVEUR_PORT) { [int]$env:ARCHI_SERVEUR_PORT } else { 8765 }
 $pPorte = if ($env:ARCHI_PORTE_PORT) { [int]$env:ARCHI_PORTE_PORT } else { $pPortail + 1 }   # la porte du telephone : la cible du tunnel
 $env:N8N_PORT = "$pN8n"; $env:ARCHI_PORTAIL_PORT = "$pPortail"; $env:ARCHI_PORTE_PORT = "$pPorte"
+# n8n ouvre aussi un port INTERNE, son "task broker" (5679 par defaut). Si un autre n8n tourne deja sur ce PC, ce port
+# est pris et le n8n d'Archi s'arrete au demarrage. On en prend donc un libre a chaque lancement : le premier apres le
+# port de n8n qui ne soit pas a Archi. Rien d'autre que n8n ne s'en sert.
+$pCourtier = if ($env:N8N_RUNNERS_BROKER_PORT -match '^\d+$') { [int]$env:N8N_RUNNERS_BROKER_PORT } else { 0 }
+if ($pCourtier -eq 0 -or -not (PortLibre $pCourtier)) {
+    $aArchi = @($pN8n, $pPortail, $pPorte, $pServeur)
+    if ($env:ARCHI_VOIX_PORT -match '^\d+$') { $aArchi += [int]$env:ARCHI_VOIX_PORT } else { $aArchi += 5683 }
+    $pCourtier = 0
+    for ($p = $pN8n + 1; $p -lt $pN8n + 60; $p++) { if ($aArchi -notcontains $p -and (PortLibre $p)) { $pCourtier = $p; break } }
+    if ($pCourtier -gt 0) { $env:N8N_RUNNERS_BROKER_PORT = "$pCourtier" }
+}
 $etat = Join-Path $racine "donnees\etat"
 New-Item -ItemType Directory -Force $etat | Out-Null
 $env:ARCHI_ETAT = $etat
