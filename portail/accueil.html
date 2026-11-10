@@ -66,6 +66,9 @@
   #tel-code { font-family: Consolas, monospace; font-size: 12.5px; color: var(--texte); margin: 0 0 8px; overflow-wrap: anywhere; }
   ol { margin: 0; padding-left: 20px; color: var(--texte2); font-size: 13.5px; } ol li { margin: 3px 0; } ol b { color: var(--texte); font-weight: 600; }
   .note { color: var(--texte2); font-size: 13px; margin: 0; }
+  #tel-suivi { list-style: none; margin: 10px 0 0; padding: 8px 0 0; border-top: 1px solid var(--bord); font-size: 13px; }
+  #tel-suivi:empty { display: none; }
+  #tel-suivi li { padding: 2px 0; color: var(--texte2); } #tel-suivi li.fait { color: var(--vert); } #tel-suivi li.souci { color: var(--ambre); }
   #outils { list-style: none; margin: 0; padding: 0; font-size: 13px; max-height: 260px; overflow-y: auto; }
   #outils li { padding: 6px 0; border-top: 1px solid var(--bord); color: var(--texte2); } #outils li:first-child { border-top: 0; }
   #outils b { color: var(--vert); font-weight: 600; font-family: Consolas, monospace; font-size: 12.5px; }
@@ -108,6 +111,7 @@
       <div id="qr" role="img" aria-label="QR code à scanner avec le téléphone"></div>
       <p id="tel-code"></p>
       <div id="tel-texte"><p class="note">Ouverture de l'adresse HTTPS du PC…</p></div>
+      <ul id="tel-suivi" aria-live="polite" aria-label="Où en est le téléphone"></ul>
     </div>
     <div class="carte">
       <h2>Ses outils (<span id="nb-outils">0</span>)</h2>
@@ -159,7 +163,11 @@ async function majEtat() {
   voyant('v-cerveau', c.pret ? 'ok' : (c.joignable ? 'attente' : 'non'),
     c.pret ? 'Cerveau prêt' : (c.joignable ? 'Modèle pas encore chargé' : 'LM Studio arrêté'));
   voyant('v-n8n', e.n8n ? 'ok' : 'attente', e.n8n ? 'Agent prêt' : 'Agent en cours de démarrage');
-  voyant('v-tel', e.lien_telephone ? 'ok' : 'attente', e.lien_telephone ? 'Téléphone : prêt à brancher' : 'Téléphone : pas d\'adresse');
+  const tl = e.telephone || {};
+  const branche = !!tl.appli && tl.maintenant - tl.appli < 5 * 60000;   // l'appli donne signe de vie toutes les 90 s
+  voyant('v-tel', e.lien_telephone ? 'ok' : 'attente',
+    !e.lien_telephone ? 'Téléphone : pas d\'adresse' : (branche ? 'Téléphone branché' : 'Téléphone : prêt à brancher'));
+  suiviTelephone(e.lien_telephone ? tl : null);
   voyant('v-tg', e.telegram ? 'ok' : '', e.telegram ? 'Telegram branché' : 'Telegram : en option');
   pret = e.n8n;
   $('c-modele').textContent = c.modele; $('c-vision').textContent = c.vision + (c.vision_prete ? '' : ' (chargé à la première photo)');
@@ -175,7 +183,7 @@ async function majEtat() {
       montrerQr(false); $('b-qr').style.display = 'block';
       $('tel-code').textContent = 'Adresse : ' + e.adresse_publique.replace('https://', '') + '  ·  Code : ' + e.code_telephone;
       t.innerHTML = '<ol><li><b>Scanne ce QR code</b> avec l\'appareil photo du téléphone (Android).</li>' +
-        (e.apk ? '<li><b>Installe l\'appli</b> depuis la page qui s\'ouvre.</li>' : '<li>L\'appli (APK) n\'est pas sur ce PC : prends-la dans la page « Releases » du dépôt.</li>') +
+        (e.apk ? '<li><b>Installe l\'appli</b> depuis la page qui s\'ouvre, puis reviens sur cette page du téléphone.</li>' : '<li>L\'appli (APK) n\'est pas sur ce PC : prends-la dans la page « Releases » du dépôt.</li>') +
         '<li>Touche <b>« Brancher l\'appli »</b> : elle affiche l\'adresse et le code ci-dessus. S\'ils sont identiques, confirme.</li></ol>' +
         '<p class="note" style="margin-top:8px">L\'adresse change à chaque démarrage du PC : il suffit de rescanner.</p>';
     } else {
@@ -196,6 +204,24 @@ async function majEtat() {
     }
     $('nb-outils').textContent = e.outils.length;
   }
+}
+
+/** Où en est le téléphone : la porte du PC note l'heure de chaque étape (jamais la clé ni le contenu des messages). */
+function suiviTelephone(tl) {
+  const s = $('tel-suivi');
+  s.textContent = '';
+  if (!tl) return;
+  const ilYA = t => { const d = Math.max(0, Math.round((tl.maintenant - t) / 1000)); return d < 90 ? 'il y a ' + d + ' s' : 'il y a ' + Math.round(d / 60) + ' min'; };
+  const ligne = (fait, texte, classe) => {
+    const li = document.createElement('li');
+    li.className = classe || (fait ? 'fait' : '');
+    li.textContent = (classe === 'souci' ? '! ' : (fait ? '✓ ' : '○ ')) + texte;
+    s.appendChild(li);
+  };
+  ligne(tl.page, tl.page ? 'Page ouverte sur le téléphone (' + ilYA(tl.page) + ')' : 'Page pas encore ouverte sur le téléphone');
+  ligne(tl.apk, tl.apk ? 'Appli téléchargée (' + ilYA(tl.apk) + ')' : 'Appli pas encore téléchargée');
+  ligne(tl.appli, tl.appli ? 'Appli branchée : dernier signe ' + ilYA(tl.appli) : 'Appli pas encore branchée');
+  if (tl.refus && tl.refus > tl.appli) ligne(false, 'Une appli a présenté une mauvaise clé (' + ilYA(tl.refus) + ') : rescanne le QR code.', 'souci');
 }
 
 let minuteurQr = null;

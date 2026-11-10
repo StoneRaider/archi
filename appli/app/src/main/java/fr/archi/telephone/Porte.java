@@ -33,7 +33,11 @@ public class Porte {
         public int code;
         public JSONObject json;
         public String erreur;
+        /** Quand code == 0 : pourquoi l'appel n'a pas eu lieu (PAS_BRANCHEE, ADRESSE_INTROUVABLE, PAS_DE_REPONSE, SECURITE, AUTRE). */
+        public String raison;
     }
+
+    private static final String PAS_BRANCHEE = "PAS_BRANCHEE";
 
     private final String url;
     private final String cle;
@@ -44,7 +48,13 @@ public class Porte {
     }
 
     private HttpURLConnection ouvrir(String typeContenu) throws Exception {
-        HttpURLConnection cx = (HttpURLConnection) new URL(url).openConnection();
+        return ouvrir(url, typeContenu);
+    }
+
+    private HttpURLConnection ouvrir(String adresse, String typeContenu) throws Exception {
+        // sans adresse https ni cle, il n'y a nulle part ou envoyer : on le dit tel quel, pas « injoignable »
+        if (!adresse.startsWith("https://") || cle.length() < 16) throw new IllegalStateException(PAS_BRANCHEE);
+        HttpURLConnection cx = (HttpURLConnection) new URL(adresse).openConnection();
         cx.setRequestMethod("POST");
         cx.setDoOutput(true);
         cx.setConnectTimeout(15000);
@@ -70,6 +80,25 @@ public class Porte {
             HttpURLConnection cx = ouvrir("application/json; charset=utf-8");
             try (OutputStream o = cx.getOutputStream()) {
                 o.write(corps.toString().getBytes(StandardCharsets.UTF_8));
+            }
+            return lire(cx);
+        } catch (Exception e) {
+            return erreur(e);
+        }
+    }
+
+    /**
+     * Essai de liaison, juste apres le branchement : la porte du PC repond-elle avec cette cle ?
+     * L'en-tete « x-archi-essai » demande a la porte de repondre elle-meme : l'agent n'est pas reveille.
+     */
+    public Reponse essai() {
+        try {
+            if (!url.contains("telephone-archi")) throw new IllegalStateException(PAS_BRANCHEE);
+            HttpURLConnection cx = ouvrir(url.replace("telephone-archi", "telephone-boite"), "application/json; charset=utf-8");
+            cx.setReadTimeout(20000);
+            cx.setRequestProperty("x-archi-essai", "1");
+            try (OutputStream o = cx.getOutputStream()) {
+                o.write("{}".getBytes(StandardCharsets.UTF_8));
             }
             return lire(cx);
         } catch (Exception e) {
@@ -157,6 +186,53 @@ public class Porte {
         Reponse r = new Reponse();
         r.code = 0;
         r.erreur = e.getClass().getSimpleName() + (e.getMessage() != null ? " : " + e.getMessage() : "");
+        if (e instanceof java.net.MalformedURLException || (e instanceof IllegalStateException && PAS_BRANCHEE.equals(e.getMessage()))) {
+            r.raison = PAS_BRANCHEE;
+        } else if (e instanceof java.net.UnknownHostException) {
+            r.raison = "ADRESSE_INTROUVABLE";
+        } else if (e instanceof java.net.SocketTimeoutException || e instanceof java.net.ConnectException
+                || e instanceof java.net.NoRouteToHostException) {
+            r.raison = "PAS_DE_REPONSE";
+        } else if (e instanceof javax.net.ssl.SSLException) {
+            r.raison = "SECURITE";
+        } else {
+            r.raison = "AUTRE";
+        }
         return r;
+    }
+
+    /**
+     * La vraie raison d'un echec, en mots simples : l'appli ne dit jamais « injoignable » sans dire pourquoi ni quoi faire.
+     * A appeler quand la reponse n'est pas lisible (r.json == null).
+     */
+    public static String explication(Context c, Reponse r) {
+        String hote = null;
+        try {
+            hote = android.net.Uri.parse(Reglages.url(c)).getHost();
+        } catch (Exception ignore) {
+        }
+        String ou = hote == null || hote.isEmpty() ? "" : " (" + hote + ")";
+        if (r.code == 404 || r.code == 502 || r.code == 503 || r.code >= 520) {
+            // une reponse, mais pas celle d'Archi : l'adresse du tunnel ne mene plus a ce PC
+            return "Le PC n'est plus à cette adresse" + ou + " : réponse " + r.code
+                    + ". L'adresse change à chaque lancement d'Archi : rescanne le QR code du PC.";
+        }
+        if (r.code != 0) return "Problème : " + (r.erreur == null ? "réponse " + r.code : r.erreur) + ".";
+        String raison = r.raison == null ? "" : r.raison;
+        if (PAS_BRANCHEE.equals(raison)) {
+            return "L'appli n'est pas encore branchée sur ton PC. Sur le PC, affiche le QR code de la page d'accueil d'Archi, "
+                    + "scanne-le avec l'appareil photo, puis touche « Brancher l'appli ».";
+        }
+        if ("ADRESSE_INTROUVABLE".equals(raison)) {
+            return "Adresse du PC introuvable" + ou + ". Elle change à chaque lancement d'Archi : rescanne le QR code du PC. "
+                    + "Sinon, vérifie l'Internet du téléphone.";
+        }
+        if ("PAS_DE_REPONSE".equals(raison)) {
+            return "Le PC ne répond pas" + ou + ". Archi est-il lancé sur le PC ? Si oui, rescanne le QR code.";
+        }
+        if ("SECURITE".equals(raison)) {
+            return "La connexion sécurisée a échoué" + ou + ". Vérifie la date et l'heure du téléphone, puis rescanne le QR code.";
+        }
+        return "Archi est injoignable" + ou + " : " + (r.erreur == null ? "raison inconnue" : r.erreur) + ".";
     }
 }

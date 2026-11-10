@@ -35,7 +35,7 @@ Options utiles (`installation.bat -Option`) : `-Destination <dossier>`, `-Oui` (
 | `chateau\memoire\` | la mémoire d'Archi : des fiches Markdown que tu peux lire et corriger |
 | `chateau\outils\` | les outils maison et leur registre |
 | `donnees\n8n\` | la base de n8n (workflows, identifiants chiffrés) |
-| `donnees\etat\` | journaux du portail et du tunnel |
+| `donnees\etat\` | journaux du portail, du tunnel et de la porte du téléphone (`porte.log` : heures et chemins, jamais la clé ni le contenu) |
 | `installation.txt` | le bilan de l'installation |
 
 ### Brancher le reste (facultatif)
@@ -57,6 +57,9 @@ Chaque section du `.env` est commentée. Après un changement, relance Archi.
 | La photo reste sans réponse | Le modèle de vision n'est pas téléchargé, ou `ARCHI_MODELE_VISION` ne correspond pas à son nom dans LM Studio. |
 | « Téléphone : pas d'adresse » | Le tunnel n'a pas pu s'ouvrir (pas d'Internet, pare-feu). Le détail est dans `donnees\etat\tunnel.log`. |
 | L'appli affiche « Clé refusée » | Le PC a été réinstallé : rescanne le QR code. |
+| L'appli dit qu'elle n'est « pas encore branchée » | Elle a été ouverte avant l'étape 2 : reviens sur la page du téléphone et touche « Brancher l'appli », ou rescanne le QR code. |
+| L'appli dit que le PC « n'est plus à cette adresse » | Archi a été relancé : l'adresse du tunnel change à chaque lancement. Rescanne le QR code (ou prends une adresse fixe, plus haut). |
+| Savoir où en est le téléphone | La page d'accueil coche en direct : page ouverte, appli téléchargée, appli branchée. Le détail est dans `donnees\etat\porte.log`. |
 | « Le port … est déjà pris » | Un autre programme l'utilise : change `N8N_PORT`, `ARCHI_PORTAIL_PORT` ou `ARCHI_PORTE_PORT` dans le `.env`. |
 | Un nœud Code affiche « Cannot find module child_process » | n8n n'a pas été lancé par `lancer_archi.bat` (qui charge `NODE_FUNCTION_ALLOW_BUILTIN`). |
 

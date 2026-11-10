@@ -284,3 +284,61 @@ test('appli : un seul nom interne, le meme dans Gradle, le manifeste, le passe-p
   const paquets = lire('portail/telephone.html').match(/package=[a-z0-9.]+;/g) || [];
   assert.deepEqual(paquets, ['package=' + nom + ';']);
 });
+
+test('porte : le suivi note chaque etape du telephone, le journal ne garde rien de sensible', async () => {
+  const d = chateau(false);
+  const r = { port: 0, portPorte: 0, n8nPort: 1, depot: d, base: d, etat: d, cle: CLE, lmUrl: 'http://127.0.0.1:1', modele: 'm', modeleVision: 'v', utilisateur: '', telegram: false };
+  const suivi = P.nouveauSuivi();
+  const porte = P.creerServeurPorte(r, suivi);
+  await new Promise(x => porte.listen(0, '127.0.0.1', x));
+  const appel = (methode, chemin, entetes, corps) => new Promise((ok, non) => {
+    const q = http.request({ host: '127.0.0.1', port: porte.address().port, method: methode, path: chemin, headers: entetes || {} }, rep => {
+      const m = []; rep.on('data', x => m.push(x)); rep.on('end', () => ok({ code: rep.statusCode, corps: Buffer.concat(m).toString('utf8') }));
+    });
+    q.on('error', non); q.end(corps || '');
+  });
+  const appli = { 'user-agent': 'ArchiTelephone/1.0', 'x-archi-essai': '1', 'content-type': 'application/json' };
+  try {
+    assert.deepEqual(suivi, { page: 0, apk: 0, appli: 0, refus: 0 });
+    // 1. la page s'ouvre sur le telephone (y compris au retour « appli absente »). Le verificateur du PC, lui, ne coche rien.
+    assert.equal((await appel('GET', '/telephone', { 'user-agent': 'Mozilla/5.0 (Windows NT) WindowsPowerShell/5.1' })).code, 200);
+    assert.equal(suivi.page, 0);
+    assert.equal((await appel('GET', '/telephone?absente=1', { 'user-agent': 'Mozilla/5.0 (Linux; Android 14) Chrome/130 Mobile Safari/537' })).code, 200);
+    assert.ok(suivi.page > 0 && suivi.appli === 0);
+    // 2. mauvaise cle : notee comme un refus, jamais comme une appli branchee
+    assert.equal((await appel('POST', '/webhook/telephone-boite', Object.assign({ 'x-archi-cle': 'mauvaise-cle-abcdefghij' }, appli), '{}')).code, 403);
+    assert.ok(suivi.refus > 0 && suivi.appli === 0);
+    // 3. l'essai de liaison de l'appli : la porte repond elle-meme (n8n et LM Studio sont eteints ici), l'appli est « branchee »
+    const e = await appel('POST', '/webhook/telephone-boite', Object.assign({ 'x-archi-cle': CLE }, appli), '{}');
+    assert.equal(e.code, 200);
+    assert.deepEqual(JSON.parse(e.corps), { ok: true, agent: false, cerveau: false });
+    assert.ok(suivi.appli > 0);
+    // un autre programme qui a la bonne cle (le verificateur) ne fait pas croire a un telephone branche
+    const autre = P.nouveauSuivi();
+    P.noterPassage(r, autre, 'POST', '/webhook/telephone-boite', { action: 'relayer' }, { 'user-agent': 'PowerShell' });
+    P.noterPassage(r, autre, 'GET', '/Archi.apk', { action: 'apk' }, { 'user-agent': 'curl/8' });
+    assert.deepEqual(autre, { page: 0, apk: 0, appli: 0, refus: 0 });
+    P.noterPassage(r, autre, 'GET', '/Archi.apk', { action: 'apk' }, { 'user-agent': 'AndroidDownloadManager/14 (Linux; U; Android 14)' });
+    assert.ok(autre.apk > 0);
+    // le journal : l'heure, la methode, un chemin connu, le resultat. Ni cle, ni parametres, ni chemin inconnu.
+    await appel('GET', '/fouille-' + CLE);
+    await new Promise(x => setTimeout(x, 400));
+    const journal = fs.readFileSync(path.join(d, 'porte.log'), 'utf8');
+    assert.ok(journal.includes('GET /telephone page'), journal);
+    assert.ok(journal.includes('POST /webhook/telephone-boite 403'), journal);
+    assert.ok(journal.includes('POST /webhook/telephone-boite essai appli'), journal);
+    assert.ok(journal.includes('GET (autre) 404'), journal);
+    assert.ok(!journal.includes(CLE) && !journal.includes('absente') && !journal.includes('mauvaise') && !journal.includes('fouille'));
+  } finally {
+    porte.close();
+    await new Promise(x => setTimeout(x, 100));
+    fs.rmSync(d, { recursive: true, force: true });
+  }
+});
+
+test('page du telephone : si l appli est absente, le bouton ramene a la page avec un avertissement', () => {
+  const page = fs.readFileSync(path.join(__dirname, '..', 'telephone.html'), 'utf8');
+  assert.ok(page.includes('S.browser_fallback_url='));
+  assert.ok(page.includes("/telephone?absente=1#k="), 'la cle reste dans le # du lien de retour');
+  assert.ok(page.includes('id="absente"'));
+});
