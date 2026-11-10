@@ -116,7 +116,7 @@ class Verrou:
                 return self
             except OSError:
                 try:
-                    if time.time() - os.path.getmtime(self.d) > 60:
+                    if abs(time.time() - os.path.getmtime(self.d)) > 60:      # abs : horloge revenue en arriere
                         os.rmdir(self.d)
                         continue
                 except OSError:
@@ -344,7 +344,8 @@ def fabriquer(numero):
         etat = lire_etat()
         i = trouver(etat, n)
         if problemes or not r:
-            i.update(etat="rate", message=court("Pas réussi : " + " ; ".join(problemes[:3]), 300), maj=maintenant().isoformat(timespec="seconds"))
+            i.update(etat="rate", message=court("Pas réussi : " + " ; ".join(sans_lu(p) for p in problemes[:3]), 300),
+                     maj=maintenant().isoformat(timespec="seconds"))
         else:
             r["nom"] = nom_libre(r["nom"], etat)
             dossier = "%d_%s" % (n, r["nom"])
@@ -356,10 +357,15 @@ def fabriquer(numero):
                      message="", maj=maintenant().isoformat(timespec="seconds"))
         ecrire_json(atelier("atelier.json"), etat)
     if problemes or not r:
-        annoncer("%sle mécanicien n'a pas réussi l'outil « %s » : %s" % (prenom(), titre, court(problemes[0], 160)))
+        annoncer("%sle mécanicien n'a pas réussi l'outil « %s » : %s" % (prenom(), titre, court(sans_lu(problemes[0]), 160)))
     else:
         annoncer("%sl'outil « %s » est prêt et testé (%d essai(s) réussi(s)). Dis « mécanicien, valide la %d » pour que je l'installe, "
                  "ou regarde-le d'abord sur la page du PC (menu, L'atelier)." % (prenom(), court(r["titre"], 60), len(essais), n))
+
+
+def sans_lu(probleme):
+    """un probleme sans ce que l'outil a lu sur un site (le modele le recoit pour corriger, l'utilisateur non)"""
+    return re.sub(r"l'outil a répondu : .*", "l'essai n'a pas abouti", str(probleme))
 
 
 def lancer_fabrication(n):
@@ -436,9 +442,19 @@ def act_voir(d):
         sites = ", ".join(i.get("hotes") or []) or "aucun (un calcul)"
         essais = " ; ".join("%s -> %s" % (", ".join("%s=%s" % kv for kv in e["parametres"].items()) or "sans paramètre", e["phrase"])
                             for e in i.get("essais") or [])
-        phrase += " Paramètres : %s. Sites lus : %s. Essais : %s." % (params, sites, court(essais, 500))
-    elif i.get("message"):
-        phrase += " " + i["message"]
+        liste = i.get("essais") or []
+        reussis = sum(1 for e in liste if e.get("reussi"))
+        # la phrase est dite telle quelle : elle ne contient que nos mots. Ce que l'outil a lu (les essais) est a part,
+        # dans « extrait » (balise par le lanceur) et sur la page du PC
+        phrase += (" Paramètres : %s. Sites lus : %s. Essais : %d réussi(s) sur %d, leur résultat est sur la page du PC "
+                   "(menu, L'atelier)." % (params, sites, reussis, len(liste)))
+        extrait = "Essais : %s." % court(essais, 500) if essais else ""
+    else:
+        extrait = ""
+        if i.get("message"):
+            phrase += " " + sans_lu(i["message"])
+    if extrait:
+        return repondre(True, phrase, extrait=extrait)
     return repondre(True, phrase)
 
 
@@ -458,15 +474,15 @@ def act_valider(d):
             raise Erreur("Le registre des outils est illisible : je n'y touche pas.")
         nom = r["nom"]
         dest = os.path.join(base(), "outils", nom)
-        if nom in reg or nom in RESERVES or os.path.exists(dest):
+        if nom in reg or nom in RESERVES:
+            raise Erreur("Un outil s'appelle déjà « %s » : je ne l'écrase pas." % nom)
+        # une installation coupee en plein milieu (dossier pose, registre pas encore ecrit) : on la termine
+        reprise = (os.path.isdir(dest) and lire_json(os.path.join(dest, "recette.json"), None) == r
+                   and os.path.isfile(os.path.join(dest, "outil_recette.py")))
+        if os.path.exists(dest) and not reprise:
             raise Erreur("Un outil s'appelle déjà « %s » : je ne l'écrase pas." % nom)
         # prepare a cote, puis un seul renommage : une panne ne laisse jamais un dossier a moitie, ni un nom bloque
         prep = os.path.join(base(), "outils", ".%s_prep" % nom)
-        shutil.rmtree(prep, ignore_errors=True)
-        os.makedirs(prep)
-        # pas de copie du moteur : le lanceur de l'outil utilise celui du mecanicien (une correction vaut pour tous)
-        shutil.copy(os.path.join(ICI, "outil_recette.py"), os.path.join(prep, "outil_recette.py"))
-        ecrire_json(os.path.join(prep, "recette.json"), r)
         ecrire_json(atelier("registre_avant_%s.json" % maintenant().strftime("%Y%m%d_%H%M%S")), reg)
         reg[nom] = {
             "nom": nom, "titre": r["titre"],
@@ -478,10 +494,17 @@ def act_valider(d):
             "mecanicien": {"idee": i["n"], "installe_le": maintenant().isoformat(timespec="seconds"), "hotes": r["hotes"]},
         }
         try:
-            os.rename(prep, dest)
+            if not reprise:
+                shutil.rmtree(prep, ignore_errors=True)
+                os.makedirs(prep)
+                # pas de copie du moteur : le lanceur de l'outil utilise celui du mecanicien (une correction vaut pour tous)
+                shutil.copy(os.path.join(ICI, "outil_recette.py"), os.path.join(prep, "outil_recette.py"))
+                ecrire_json(os.path.join(prep, "recette.json"), r)
+                os.rename(prep, dest)
             ecrire_json(reg_f, reg)
         except OSError:
-            shutil.rmtree(dest if os.path.isdir(dest) else prep, ignore_errors=True)
+            if not reprise:
+                shutil.rmtree(dest if os.path.isdir(dest) else prep, ignore_errors=True)
             shutil.rmtree(prep, ignore_errors=True)
             raise Erreur("Je n'ai pas pu installer l'outil (fichier occupé ?) : rien n'a changé, redis « valide » dans un moment.")
         i.update(etat="installe", installe_le=maintenant().isoformat(timespec="seconds"), maj=maintenant().isoformat(timespec="seconds"))

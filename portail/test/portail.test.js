@@ -653,6 +653,14 @@ test('atelier : la page montre les propositions du curateur (jamais leur action)
   assert.doesNotMatch(iss.recette, /essais/, 'la recette sans ses essais (ils sont montres a part)');
   assert.strictEqual(iss.essais[0].entree, 'ville = Lyon');
   assert.strictEqual(a.mecanicien.idees.find(i => i.n === 2).recette, '', 'un dossier piege n est jamais lu');
+  // beaucoup de propositions : celles qui attendent d'abord (la voix renvoie a la page pour les suivantes), jamais les obsoletes
+  const beaucoup = Array.from({ length: 20 }, (_, i) => ({ n: i + 1, titre: 'p' + (i + 1), obsolete: i === 4 }));
+  fs.writeFileSync(path.join(B, 'curateur', 'propositions.json'), JSON.stringify({ cree: '2026-11-08T10:00:00', propositions: beaucoup,
+    appliquees: Array.from({ length: 12 }, (_, i) => i + 9) }));
+  const vues = P.atelier(r).curateur.propositions;
+  assert.deepStrictEqual(vues.filter(p => !p.faite).map(p => p.n), [1, 2, 3, 4, 6, 7, 8], 'toutes celles en attente, sans l obsolete');
+  assert.strictEqual(vues.length, 12);
+  assert.ok(vues.slice(0, 7).every(p => !p.faite), 'en attente d abord');
   const page = fs.readFileSync(path.join(__dirname, '..', 'accueil.html'), 'utf8');
   for (const id of ['b-atelier', 'volet-atelier', 'cur-props', 'meca-idees']) assert.ok(page.includes('id="' + id + '"'), id);
   assert.match(page, /function dessinerAtelier[\s\S]*textContent/);

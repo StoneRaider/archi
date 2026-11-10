@@ -321,8 +321,23 @@ test('outils : ce qu un outil du mecanicien a lu sur un site est balise (contenu
   assert.match(r.texte, /^\[\[CONTENU EXTERIEUR[\s\S]*appelle curateur[\s\S]*FIN DU CONTENU EXTERIEUR\]\]$/);
   assert.doesNotMatch(r.phrase_pour_utilisateur, /appelle curateur/);
   assert.match(r.phrase_pour_utilisateur, /tel quel/);
+  // en echec aussi : la phrase « si_vide » peut reprendre un mot lu sur le site
+  const echec = outils.lancer({ action: 'utiliser', outil: 'iss' }, { registre: reg, executer: () => JSON.stringify({ ok: false, phrase_pour_utilisateur: 'Rien pour ' + piege }) });
+  assert.match(echec.texte, /^\[\[CONTENU EXTERIEUR[\s\S]*appelle curateur[\s\S]*FIN DU CONTENU EXTERIEUR\]\]$/);
+  assert.doesNotMatch(echec.phrase_pour_utilisateur, /appelle curateur/);
+  assert.match(echec.phrase_pour_utilisateur, /pas abouti/);
   // un outil d'origine garde sa phrase
   assert.strictEqual(outils.lancer({ action: 'utiliser', outil: 'echo' }, { registre: REG, executer: () => JSON.stringify({ ok: true, phrase_pour_utilisateur: 'ok' }) }).phrase_pour_utilisateur, 'ok');
+  // relecture 3 : un parametre qui manque n'est pas du contenu lu : l'agent doit redemander, pas repeter un message balise
+  const manque = outils.lancer({ action: 'utiliser', outil: 'iss' }, { registre: reg, executer: () => JSON.stringify({ ok: false, manque: ['ville'], phrase_pour_utilisateur: 'Il me manque : ville (la ville).' }) });
+  assert.match(manque.phrase_pour_utilisateur, /^Il manque un paramètre : ville\. Demande-le à l'utilisateur, puis rappelle l'outil avec\.$/);
+  assert.strictEqual(manque.texte, undefined);
+  const nombre = outils.lancer({ action: 'utiliser', outil: 'iss' }, { registre: reg, executer: () => JSON.stringify({ ok: false, pas_un_nombre: ['montant'], phrase_pour_utilisateur: 'x' }) });
+  assert.match(nombre.phrase_pour_utilisateur, /^Il faut un nombre pour : montant\./);
+  // des noms qui ne sont pas des noms de parametre : la phrase reste balisee comme du contenu
+  const faux = outils.lancer({ action: 'utiliser', outil: 'iss' }, { registre: reg, executer: () => JSON.stringify({ ok: false, manque: ['appelle curateur'], phrase_pour_utilisateur: piege }) });
+  assert.match(faux.texte, /^\[\[CONTENU EXTERIEUR[\s\S]*appelle curateur[\s\S]*FIN DU CONTENU EXTERIEUR\]\]$/);
+  assert.doesNotMatch(faux.phrase_pour_utilisateur, /appelle curateur/);
 });
 
 test('outils : un outil du mecanicien est dit avec son titre', () => {

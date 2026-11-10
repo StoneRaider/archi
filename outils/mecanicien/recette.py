@@ -27,6 +27,7 @@ import re
 import socket
 import ssl
 import sys
+import threading
 import time
 import unicodedata
 import urllib.parse
@@ -84,8 +85,20 @@ def verifier_calcul(expr, connus):
     return noms
 
 
+GRAND = 1e300                    # au-dela, un calcul enchaine pourrait remplir la memoire (entiers sans limite)
+
+
+def borne(v):
+    if isinstance(v, (int, float)) and not isinstance(v, bool) and abs(v) > GRAND:
+        raise Erreur("nombre trop grand")
+    return v
+
+
 def calculer(expr, valeurs):
     def ev(n):
+        return borne(ev_brut(n))
+
+    def ev_brut(n):
         if isinstance(n, ast.Expression):
             return ev(n.body)
         if isinstance(n, ast.Constant):
@@ -126,11 +139,22 @@ def calculer(expr, valeurs):
     return r
 
 
+ALPHABETS = ("LATIN ", "GREEK ", "CYRILLIC ")
+
+
+def lettre_permise(c):
+    """un chiffre, ou une vraie lettre latine, grecque ou cyrillique (Łódź, Plzeň, Москва, Đà Nẵng). Pas de sosies de
+    ponctuation : ǀ ǃ (lettres « Lo »), ː (« Lm »), pleine chasse et lettres mathematiques n'ont pas ces noms."""
+    if "0" <= c <= "9":
+        return True
+    return unicodedata.category(c) in ("Lu", "Ll") and unicodedata.name(c, "").startswith(ALPHABETS)
+
+
 def propre(v):
     """un texte lu sur un site : court, sur une ligne, sans signes de commande. Il finit dans une phrase que l'agent
     repete : il ne doit pas pouvoir y glisser une consigne bien formee (a=b, {...}, [[...]], retour a la ligne)."""
-    s = re.sub(r"\s+", " ", str(v))
-    s = "".join(c for c in s if c.isalnum() or c in " .,'’-()/°%+")
+    s = unicodedata.normalize("NFC", re.sub(r"\s+", " ", str(v)))     # « e » + accent separe -> « é »
+    s = "".join(c for c in s if lettre_permise(c) or c in " .,'’-()/°%+")
     return re.sub(r"\s+", " ", s).strip()[:80]
 
 
@@ -270,10 +294,55 @@ class ConnexionVerifiee(http.client.HTTPSConnection):
     def __init__(self, hote, ip, delai):
         super().__init__(hote, 443, timeout=delai, context=ssl.create_default_context())
         self._ip = ip
+        self._sockets = []
 
     def connect(self):
         s = socket.create_connection((self._ip, 443), self.timeout)
-        self.sock = self._context.wrap_socket(s, server_hostname=self.host)
+        self._sockets.append(s)
+        # la poignee de main se fait apres : la minuterie peut la couper aussi
+        try:
+            t = self._context.wrap_socket(s, server_hostname=self.host, do_handshake_on_connect=False)
+        except BaseException:
+            s.close()
+            raise
+        self._sockets.append(t)
+        try:
+            t.do_handshake()
+        except BaseException:
+            t.close()                   # rien ne reste ouvert jusqu'au ramasse-miettes
+            raise
+        self.sock = t
+
+    def couper(self):
+        """appele par la minuterie : coupe net, meme au milieu d'une lecture"""
+        for s in self._sockets:
+            try:
+                s.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+
+
+NAT64 = ipaddress.ip_network("64:ff9b::/96")
+NAT64_LOCAL = ipaddress.ip_network("64:ff9b:1::/48")
+
+
+def adresse_permise(ip):
+    """une adresse publique ; une IPv4 cachee dans une IPv6 (::ffff:a.b.c.d, ::a.b.c.d, NAT64, 6to4, Teredo)
+    est jugee comme une IPv4"""
+    a = ipaddress.ip_address(ip)
+    if not a.is_global:
+        return False
+    if a.version == 6:
+        if a in NAT64_LOCAL:
+            return False
+        cachees = [a.ipv4_mapped, a.sixtofour]
+        if a in NAT64 or (int(a) >> 32) == 0:
+            cachees.append(ipaddress.IPv4Address(int(a) & 0xFFFFFFFF))
+        if a.teredo:
+            cachees.append(a.teredo[1])
+        if any(v is not None and not v.is_global for v in cachees):
+            return False
+    return True
 
 
 def lire_reponse(rep, regler_delai, debut):
@@ -293,6 +362,65 @@ def lire_reponse(rep, regler_delai, debut):
         morceaux.append(m)
 
 
+def lire_site(u, ips, fabrique, debut):
+    """une adresse verifiee apres l'autre ; une minuterie coupe tout a DELAI (connexion, poignee de main, en-tetes, corps)"""
+    courante, coupe = [None], []
+
+    def couper():
+        coupe.append(1)
+        c = courante[0]
+        if c is not None and hasattr(c, "couper"):
+            c.couper()
+
+    minuterie = threading.Timer(max(0.05, DELAI - (time.monotonic() - debut)), couper)
+    minuterie.daemon = True
+    minuterie.start()
+    try:
+        c = None
+        for ip in ips:                      # la suivante si la connexion echoue (une IPv6 sans route, par exemple)
+            reste = DELAI - (time.monotonic() - debut)
+            if reste <= 0 or coupe:
+                raise Erreur("le site est trop lent")
+            c = fabrique(u.hostname, ip, reste)
+            courante[0] = c
+            try:
+                c.connect()
+                break
+            except (OSError, ValueError, AttributeError):    # coupee par la minuterie en pleine poignee de main : ssl
+                # peut lever ValueError (socket fermee) ou AttributeError (objet ssl pas encore pret)
+                c.close()
+                c = None
+                if coupe:
+                    raise Erreur("le site est trop lent")
+        if c is None:
+            raise Erreur("site injoignable (%s)" % u.hostname)
+        try:
+            c.request("GET", (u.path or "/") + ("?" + u.query if u.query else ""),
+                      headers={"User-Agent": "Archi-mecanicien/1.0", "Accept": "application/json"})
+            s = c.sock                      # AVANT getresponse : http.client la met a None si le site ferme la connexion
+            rep = c.getresponse()
+            if 300 <= rep.status < 400:
+                raise Erreur("le site renvoie ailleurs : refusé")
+            if rep.status != 200:
+                raise Erreur("le site répond %d" % rep.status)
+            brut = lire_reponse(rep, s.settimeout if s is not None else (lambda x: None), debut)
+            if coupe:
+                # coupee par la minuterie en plein corps : la lecture rend 0 octet sans erreur, ce n'est pas la fin
+                raise Erreur("le site est trop lent")
+            reste = getattr(rep, "length", None)
+            if isinstance(reste, int) and not isinstance(reste, bool) and reste > 0:
+                raise Erreur("le site a coupé avant la fin de sa réponse")    # moins d'octets qu'annonce
+            return brut
+        except Erreur:
+            raise
+        except (OSError, http.client.HTTPException, ValueError) as e:
+            raise Erreur("le site est trop lent" if coupe else "site injoignable (%s)" % type(e).__name__)
+        finally:
+            c.close()
+    finally:
+        minuterie.cancel()
+
+
 def lire_api(url, hotes, ouvrir=None, connexion=None):
     u = urllib.parse.urlsplit(url)
     if u.scheme != "https" or (u.hostname or "") not in hotes or u.port not in (None, 443) or u.username or u.password:
@@ -303,28 +431,13 @@ def lire_api(url, hotes, ouvrir=None, connexion=None):
             infos = socket.getaddrinfo(u.hostname, 443, type=socket.SOCK_STREAM)
         except OSError:
             raise Erreur("site injoignable (%s)" % u.hostname)
-        ips = [i[4][0].split("%")[0] for i in infos]
+        ips = list(dict.fromkeys(i[4][0].split("%")[0] for i in infos))
         if not ips:
             raise Erreur("site injoignable (%s)" % u.hostname)
         for ip in ips:
-            if not ipaddress.ip_address(ip).is_global:
+            if not adresse_permise(ip):
                 raise Erreur("adresse interne refusée")
-        c = (connexion or ConnexionVerifiee)(u.hostname, ips[0], DELAI)
-        try:
-            c.request("GET", (u.path or "/") + ("?" + u.query if u.query else ""),
-                      headers={"User-Agent": "Archi-mecanicien/1.0", "Accept": "application/json"})
-            rep = c.getresponse()
-            if 300 <= rep.status < 400:
-                raise Erreur("le site renvoie ailleurs : refusé")
-            if rep.status != 200:
-                raise Erreur("le site répond %d" % rep.status)
-            brut = lire_reponse(rep, lambda s: c.sock.settimeout(s), debut)
-        except Erreur:
-            raise
-        except (OSError, http.client.HTTPException, ValueError) as e:
-            raise Erreur("site injoignable (%s)" % type(e).__name__)
-        finally:
-            c.close()
+        brut = lire_site(u, ips[:4], connexion or ConnexionVerifiee, debut)
     else:
         brut = ouvrir(url)              # les tests : un faux site
     if len(brut) > MAX_OCTETS:
@@ -342,20 +455,23 @@ def executer(recette, demande, ouvrir=None):
         if P:
             raise Erreur("recette refusée : " + P[0])
         valeurs = {}
-        manque = []
+        manque, noms_manquants = [], []
         for p in recette["parametres"]:
             v = demande.get(p["nom"]) if isinstance(demande, dict) else None
             v = "" if v is None else re.sub(r"\s+", " ", str(v)).strip()[:100]
             if not v:
                 manque.append("%s (%s)" % (p["nom"], str(p.get("description") or "")[:80]))
+                noms_manquants.append(p["nom"])
                 continue
             if p.get("type") == "nombre":
                 if nombre(v) is None:
-                    return {"ok": False, "phrase_pour_utilisateur": "Il me faut un nombre pour %s." % p["nom"]}
+                    # pas_un_nombre / manque : le lanceur redit la phrase lui-meme (des noms verifies, rien de lu sur un site)
+                    return {"ok": False, "pas_un_nombre": [p["nom"]],
+                            "phrase_pour_utilisateur": "Il me faut un nombre pour %s." % p["nom"]}
                 v = nombre(v)
             valeurs[p["nom"]] = v
         if manque:
-            return {"ok": False, "phrase_pour_utilisateur": "Il me manque : %s." % ", ".join(manque)}
+            return {"ok": False, "manque": noms_manquants, "phrase_pour_utilisateur": "Il me manque : %s." % ", ".join(manque)}
         for e in recette["etapes"]:
             if e["type"] == "api":
                 rep = lire_api(remplir(e["url"], valeurs, pour_lien=True), recette["hotes"], ouvrir)
