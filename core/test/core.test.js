@@ -167,3 +167,32 @@ test('outils : accord strict (« oui » seul) et faux marqueur accentue neutrali
   assert.equal((b.texte.match(/FIN DU CONTENU EXT/gi) || []).length, 1);
   assert.doesNotMatch(b.phrase_pour_utilisateur, /\[\[/);
 });
+
+test('contexte : la memoire vive (ce qu Archi a retenu) est donnee au modele, avec la regle qui va avec', () => {
+  const M = path.join(BASE, 'memoire');
+  fs.mkdirSync(path.join(M, 'personnes'), { recursive: true });
+  fs.mkdirSync(path.join(M, 'moi'), { recursive: true });
+  fs.writeFileSync(path.join(M, 'personnes', 'medor.md'), '# Médor\n\n**Pièce :** personnes\n**Faits :**\n- (10/11/2026) Médor est le chien de Camille.\n- (10/11/2026) Médor a huit ans.\n');
+  fs.writeFileSync(path.join(M, 'moi', 'moi.md'), '# Moi\n\n**Pièce :** moi\n**Faits :**\n- (10/11/2026) Camille est née à Dijon.\n**Hypothèses :**\n- pas un fait\n');
+  const r = contexte.construire({ texte: 'Comment s appelle mon chien ?' });
+  assert.match(r.profil, /RÈGLE MÉMOIRE/);
+  assert.match(r.profil, /MÉMOIRE \(ce que tu sais déjà de Camille/);
+  assert.match(r.profil, /\[personnes\/medor\] Médor est le chien de Camille\. ; Médor a huit ans\./);
+  assert.match(r.profil, /\[moi\/moi\] Camille est née à Dijon\./);
+  assert.doesNotMatch(r.profil, /pas un fait/);
+  assert.doesNotMatch(r.profil, /\(10\/11\/2026\)/, 'les dates des fiches ne chargent pas le contexte');
+  // une fiche ecrite a la main, sans bloc de faits (le projet d'exemple) : son debut est donne quand meme
+  assert.match(r.profil, /\[projets\/drone\] .*quadricoptère/);
+});
+
+test('contexte : une grosse memoire ne noie pas le modele (la fiche de l utilisateur, puis celles qui parlent du message)', () => {
+  const M = path.join(BASE, 'memoire', 'personnes');
+  for (let i = 0; i < 60; i++) fs.writeFileSync(path.join(M, 'ami' + i + '.md'), '# Ami' + i + '\n**Faits :**\n- Ami' + i + ' collectionne les timbres rares du Japon depuis vingt ans.\n');
+  fs.writeFileSync(path.join(M, 'tom.md'), '# Tom\n**Faits :**\n- Tom est le fils de Camille et adore les dinosaures.\n');
+  const lignes = contexte.memoireVive('Qu est-ce qui ferait plaisir à Tom pour son anniversaire ?');
+  assert.ok(lignes.join('\n').length <= 2400, 'taille : ' + lignes.join('\n').length);
+  assert.ok(lignes[0].startsWith('[moi/moi]'), lignes[0]);
+  assert.ok(lignes.some(l => l.startsWith('[personnes/tom]')), 'la fiche dont on parle est gardee (prenom court)');
+  assert.ok(lignes.length < 30, 'les 60 fiches ne passent pas toutes');
+  for (let i = 0; i < 60; i++) fs.unlinkSync(path.join(M, 'ami' + i + '.md'));
+});

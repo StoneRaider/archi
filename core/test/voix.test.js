@@ -101,13 +101,14 @@ test('transcrire : ffmpeg puis whisper, avec les bons arguments', async () => {
 
 test('dire : texte nettoye -> serveur de voix -> OGG en base64', async () => {
   const d = installe();
-  const demandes = [];
+  const demandes = [], travail = [];
   const synthese = async (port, texte) => { demandes.push([port, texte]); return Buffer.from('RIFFfauxwav'); };
   const lancer = async (cmd, args) => {
     assert.equal(path.basename(cmd), 'ffmpeg');
     assert.ok(args.join(' ').includes('-c:a libopus'), args.join(' '));
     assert.equal(fs.readFileSync(args[args.indexOf('-i') + 1], 'utf8'), 'RIFFfauxwav');
     fs.writeFileSync(args[args.length - 1], 'OggSfaux');
+    travail.push(args[args.indexOf('-i') + 1], args[args.length - 1]);   // les deux fichiers de travail de CET appel
     return '';
   };
   try {
@@ -115,7 +116,8 @@ test('dire : texte nettoye -> serveur de voix -> OGG en base64', async () => {
     const s = await V.dire('**Bonjour** \u{1F600} tout va bien.', r, { lancer, synthese });
     assert.deepEqual(s, { ok: true, audio_ogg_base64: Buffer.from('OggSfaux').toString('base64'), texte_dit: 'Bonjour tout va bien.' });
     assert.deepEqual(demandes, [[6002, 'Bonjour tout va bien.']]);
-    assert.equal(fs.readdirSync(os.tmpdir()).filter(f => f.startsWith('archi_voix_') && /\.(wav|ogg)$/.test(f)).length, 0, 'aucun son ne traine');
+    assert.equal(travail.length, 2);
+    assert.ok(travail.every(f => path.dirname(f) === os.tmpdir() && !fs.existsSync(f)), 'les fichiers de travail de cet appel sont effaces');
     // le serveur de voix ne repond pas : reponse ecrite seulement, avec la raison
     const muet = await V.dire('Bonjour.', r, { lancer, synthese: async () => { throw new Error('ECONNREFUSED'); } });
     assert.equal(muet.ok, false); assert.equal(muet.raison, 'voix_muette');
@@ -178,8 +180,31 @@ test('boucle : la voix dit la phrase temoin, l oreille la reecoute, et on compar
     assert.deepEqual([sourd.ok, sourd.etape, sourd.raison], [false, 'oreille', 'rien_entendu']);
     const muet = await V.boucle(r, { lancer: async () => '', synthese: async () => { throw new Error('port ferme'); } });
     assert.deepEqual([muet.ok, muet.etape, muet.raison], [false, 'parole', 'voix_muette']);
-    assert.equal(fs.readdirSync(os.tmpdir()).filter(f => f.startsWith('archi_boucle_')).length, 0);
   } finally { fs.rmSync(d, { recursive: true, force: true }); }
+});
+
+test('menage : un fichier de travail oublie par un traitement interrompu finit par etre efface', () => {
+  const vieux = path.join(os.tmpdir(), 'archi_question_test_vieux.m4a'), recent = path.join(os.tmpdir(), 'archi_voix_test_recent.wav');
+  const autre = path.join(os.tmpdir(), 'pas_archi_test_vieux.wav');
+  for (const f of [vieux, recent, autre]) fs.writeFileSync(f, 'x');
+  const hier = new Date(Date.now() - 2 * 3600 * 1000);
+  fs.utimesSync(vieux, hier, hier); fs.utimesSync(autre, hier, hier);
+  try {
+    V.menage();
+    assert.equal(fs.existsSync(vieux), false, 'vieux fichier d Archi efface');
+    assert.equal(fs.existsSync(recent), true, 'un fichier en cours d usage n est pas touche');
+    assert.equal(fs.existsSync(autre), true, 'les fichiers des autres programmes ne sont jamais touches');
+  } finally { for (const f of [vieux, recent, autre]) { try { fs.unlinkSync(f); } catch (e) { /* deja efface */ } } }
+});
+
+test('synthese : un serveur de voix qui traine est abandonne au bout du plafond (la reponse ecrite ne l attend pas)', async () => {
+  const serveur = http.createServer((req, res) => { req.resume(); res.writeHead(200); res.write('RIFF'); /* ... et plus rien */ });
+  await new Promise(x => serveur.listen(0, '127.0.0.1', x));
+  const debut = Date.now();
+  try {
+    await assert.rejects(V.synthese(serveur.address().port, 'Bonjour.', 400), /trop de temps/);
+    assert.ok(Date.now() - debut < 3000, 'abandonne vite : ' + (Date.now() - debut) + ' ms');
+  } finally { serveur.closeAllConnections(); serveur.close(); }
 });
 
 test('en ligne de commande : une ligne JSON, meme quand la voix est coupee', () => {

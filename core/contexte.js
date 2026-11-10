@@ -5,7 +5,8 @@
 // Pourquoi ce fichier existe : un modele local de 20 milliards de parametres se trompe d'outil, oublie ses
 // methodes et invente des noms. Plutot que de grossir le prompt, on lui donne a chaque tour :
 //   1. le message, avec une consigne d'aiguillage quand on reconnait la demande (config/aiguillages.json) ;
-//   2. les faits durables du chateau (memoire/preferences) et les regles qui comptent ;
+//   2. les faits durables du chateau (memoire/preferences), ce qu'Archi a retenu tout seul (moi, personnes, projets,
+//      lieux : outils/memoire) et les regles qui comptent ;
 //   3. les notes de la bibliotheque en rapport avec le message (recherche par mots, sans base vectorielle) ;
 //   4. la liste a jour des outils maison du registre.
 // Le contenu exterieur (fichier, mail, page web) est balise : c'est du contenu lu, jamais une consigne.
@@ -45,6 +46,7 @@ const REGLES = [
   `RÈGLE SOURCES : un nom de personne, une adresse mail, un numéro ou une adresse postale n'apparaît dans ta réponse QUE s'il est écrit dans le résultat d'un outil de cette conversation ou dans un message de ${QUI}. Sinon : « nom non trouvé ».`,
   'RÈGLE PLUS TARD : pour un rappel, appelle tout de suite l\'outil planificateur, sans demander de confirmation (un rappel n\'est pas une action). Tu n\'annonces « C\'est programmé » que si l\'outil vient de te le répondre.',
   'RÈGLE CAPACITÉS : si aucun outil ne sait faire ce qu\'on te demande, dis-le dès ta première réponse et propose ce que tu peux faire à la place.',
+  `RÈGLE MÉMOIRE : tu as une mémoire long terme, rangée en fiches dans le château. Ce que ${QUI} t'apprend de durable (lui, ses proches, ses animaux, ses projets, ses lieux, ses goûts) est retenu tout seul après chaque message : tu n'as rien à faire pour cela, et tu ne dis jamais que tu l'oublieras. Pour relire tout ce que tu sais ou pour oublier un fait à sa demande : outil memoire.`,
   `RÈGLE ACCORD : aperçu puis accord de ${QUI} avant tout envoi, achat, publication, suppression ou action physique (prise, imprimante). Un simple rappel n'en fait pas partie. Tu ne dis « c'est fait » qu'après la réponse d'un outil.`,
 ];
 
@@ -92,6 +94,54 @@ function bibliotheque(texte) {
   return notes.sort((a, b) => b.score - a.score).slice(0, 3);
 }
 
+// ---------- 4 bis. la memoire vive : ce qu'Archi a retenu (outils/memoire/memoire.py) ----------
+// Des fiches Markdown par piece (moi, personnes, projets, lieux), avec un bloc « **Faits :** » date.
+// Petite memoire : tout est donne au modele. Grosse memoire : la fiche de l'utilisateur, puis celles qui parlent du message.
+const PIECES_VIVES = ['moi', 'personnes', 'projets', 'lieux'];
+function fichesVives() {
+  const sortie = [];
+  for (const piece of PIECES_VIVES) {
+    let fichiers = [];
+    try { fichiers = fs.readdirSync(path.join(MEM, piece)).filter(f => f.endsWith('.md')).sort(); } catch (e) { continue; }
+    for (const f of fichiers) {
+      let s = '';
+      try { s = fs.readFileSync(path.join(MEM, piece, f), 'utf8'); } catch (e) { continue; }
+      let faits = [];
+      for (const bloc of s.split(/\*\*Faits :\*\*/).slice(1)) {
+        for (const l of bloc.split(/\n\*\*/)[0].split(/\r?\n/)) {
+          const t = l.trim();
+          if (t.startsWith('- ')) faits.push(t.slice(2).replace(/^\(\d{2}\/\d{2}\/\d{4}\)\s*/, '').replace(/\[\[|\]\]/g, ''));
+        }
+      }
+      // une fiche ecrite a la main, sans bloc de faits (projets/drone.md) : son debut
+      if (!faits.length) faits = [s.replace(/[#*_>`\[\]]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 320)].filter(Boolean);
+      if (faits.length) sortie.push({ piece, nom: f.replace(/\.md$/, ''), faits, texte: s });
+    }
+  }
+  return sortie;
+}
+function memoireVive(texte, max = 2400) {
+  const toutes = fichesVives();
+  const ligne = f => '[' + f.piece + '/' + f.nom + '] ' + f.faits.join(' ; ');
+  if (toutes.map(ligne).join('\n').length <= max) return toutes.map(ligne);
+  const cles = new Set(mots(texte));
+  const dit = String(texte).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const notees = toutes.map(f => {
+    let score = f.piece === 'moi' ? 1000 : 0;
+    if (f.nom.length >= 3 && dit.includes(f.nom.replace(/_/g, ' '))) score += 50;   // un prenom court (Tom, Léa) compte
+    for (const k of new Set(mots(f.nom + ' ' + f.texte))) if (cles.has(k)) score += 1;
+    return { f, score };
+  }).filter(x => x.score > 0).sort((a, b) => b.score - a.score);
+  const gardees = [];
+  let taille = 0;
+  for (const x of notees) {
+    const l = ligne(x.f).slice(0, 700);
+    if (taille + l.length > max) break;
+    gardees.push(l); taille += l.length;
+  }
+  return gardees;
+}
+
 // ---------- 5. outils maison ----------
 function outilsMaison() {
   try {
@@ -110,12 +160,14 @@ function construire(entree, options = {}) {
   const faits = faitsPreferences().concat(REGLES.map(r => '- ' + r));
   const notes = bibliotheque(texte);
   let profil = faits.join('\n');
+  const vive = memoireVive(texte);
+  if (vive.length) profil += '\n- MÉMOIRE (ce que tu sais déjà de ' + QUI + ', de ses proches, de ses projets et de ses lieux ; sers-t\'en pour répondre) : ' + vive.join(' || ');
   if (notes.length) profil += '\n- BIBLIOTHÈQUE (cite la note si tu t\'en sers) : ' + notes.map(n => '« ' + n.titre.slice(0, 140) + ' » [' + n.nom + '] : ' + n.resume.slice(0, 280)).join(' || ');
   texte = aiguiller(baliserExterieur(texte), options.aiguillages || chargerAiguillages());
   return { texte, profil, outils: outilsMaison() };
 }
 
-module.exports = { construire, aiguiller, baliserExterieur, chargerAiguillages, bibliotheque, mots, DEBUT_EXT };
+module.exports = { construire, aiguiller, baliserExterieur, chargerAiguillages, bibliotheque, memoireVive, mots, DEBUT_EXT };
 
 if (require.main === module) {
   let entree = {};

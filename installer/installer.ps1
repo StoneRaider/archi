@@ -320,6 +320,10 @@ try {
     if ($LASTEXITCODE -ge 8) { throw "copie des outils (robocopy $LASTEXITCODE)" }
     if (-not (Test-Path (Join-Path $BASE "outils\registre.json"))) {
         Copy-Item (Join-Path $Destination "chateau_exemple\outils\registre.json") (Join-Path $BASE "outils\registre.json") -Force
+    } elseif (Test-Path $PY) {
+        # reinstallation : les outils nouveaux de cette version s'ajoutent ; un outil deja inscrit n'est jamais modifie
+        $r = Lancer $PY @("-I", (Join-Path $Destination "installer\completer_registre.py"), (Join-Path $Destination "chateau_exemple\outils\registre.json"), (Join-Path $BASE "outils\registre.json")) 60
+        if ($r.code -eq 0 -and "$($r.sortie)".Trim()) { Noter "Nouveaux outils ajoutes au registre : $("$($r.sortie)".Trim())" }
     }
     & robocopy (Join-Path $Destination "pc") (Join-Path $BASE "pc") /E /XD "__pycache__" /XF "*.pyc" /NFL /NDL /NJH /NJS /NP /R:1 /W:1 | Out-Null
     New-Item -ItemType Directory -Force (Join-Path $BASE "impression3d") | Out-Null
@@ -363,6 +367,8 @@ ReglerEnv "N8N_PERSONALIZATION_ENABLED" "false"
 ReglerEnv "N8N_HIRING_BANNER_ENABLED" "false"
 # le tunnel du telephone : rapide = Cloudflare sans compte ; non = aucun ; ou remplis WEBHOOK_URL avec ton propre tunnel
 ReglerEnv "ARCHI_TUNNEL" "rapide"
+# la memoire : Archi retient tout seul ce que tu lui apprends de durable (oui ou non)
+ReglerEnv "ARCHI_MEMOIRE" "oui"
 Noter "Fichier .env pret (deux cles aleatoires, creees a la premiere installation ; aucune valeur n'est affichee). Ports : n8n $pN8n, page d'accueil $pPortail, porte du telephone $pPorte, serveur $pServeur."
 
 # ---------------------------------------------------------------- 9. le cerveau : LM Studio et les modeles
@@ -433,6 +439,12 @@ if ($SansVoix) {
             $wh = Trouver (Join-Path $PROG "whisper\programme") "whisper-cli.exe"
         }
         if (-not $wh) { throw "whisper-cli.exe introuvable dans le ZIP" }
+        # on le LANCE pour de bon : un fichier present ne prouve pas qu'il marche (extraction coupee, composant manquant)
+        $r = Lancer $wh @("-h") 60
+        if ($r.code -ne 0) {
+            Remove-Item (Join-Path $PROG "whisper\programme") -Recurse -Force -ErrorAction SilentlyContinue
+            throw "whisper-cli.exe ne se lance pas sur ce PC (code $($r.code)) ; relance installation.bat"
+        }
         $modeles = Join-Path $PROG "whisper\modeles"
         $mo = Join-Path $modeles "ggml-small.bin"
         if (-not ((Test-Path $mo) -and (EmpreinteBonne $mo "ggml-small.bin"))) {
@@ -454,15 +466,21 @@ if ($SansVoix) {
             $pk = Trouver (Join-Path $PROG "voix\programme") "pocket-tts.exe"
         }
         if (-not $pk) { throw "pocket-tts.exe introuvable dans le ZIP" }
+        $r = Lancer $pk @("--version") 60
+        if ($r.code -ne 0) {
+            Remove-Item (Join-Path $PROG "voix\programme") -Recurse -Force -ErrorAction SilentlyContinue
+            throw "pocket-tts.exe ne se lance pas sur ce PC (code $($r.code)) ; relance installation.bat"
+        }
         # une premiere phrase : Pocket telecharge son modele (Hugging Face) et le range dans le dossier d'Archi
         $cacheVoix = Join-Path $PROG "voix\cache"
         New-Item -ItemType Directory -Force $cacheVoix, $TELE | Out-Null
         $essai = Join-Path $TELE "essai_voix.wav"
         Remove-Item $essai -Force -ErrorAction SilentlyContinue
+        if ($SansReseau -and -not (Test-Path (Join-Path $cacheVoix "hub"))) { throw "pas de reseau (mode essai) pour le modele de la voix" }
         $hfAvant = $env:HF_HOME
         $env:HF_HOME = $cacheVoix
         try {
-            if (-not $SansReseau) { Dire "  modele de la voix (environ 430 Mo, une seule fois)..." }
+            if (-not (Test-Path (Join-Path $cacheVoix "hub"))) { Dire "  modele de la voix (environ 430 Mo, une seule fois)..." }
             $r = Lancer $pk @("generate", "--language", "french", "--voice", "charles", "--quiet", "--text", "Bonjour, je suis Archi.", "--output-path", $essai) 1800 -Points
         } finally { $env:HF_HOME = $hfAvant }
         if ($r.code -ne 0 -or -not (Test-Path $essai) -or (Get-Item $essai).Length -lt 10000) { throw "la premiere phrase n'a pas pu etre dite (code $($r.code))" }
@@ -470,7 +488,10 @@ if ($SansVoix) {
         Noter "Parole prete : Pocket TTS (Archi lit ses reponses a voix haute, sur le telephone et sur la page d'accueil)."
     } catch { Souci "Parole (Pocket TTS) : $($_.Exception.Message) (Archi repondra par ecrit)" }
 }
+# le port de la voix ne doit etre celui d'aucune autre brique d'Archi
+while (@($pN8n, $pPortail, $pPorte, $pServeur) -contains $pVoix) { $pVoix++ }
 ReglerEnv "ARCHI_VOIX" $(if ($SansVoix) { "non" } else { "oui" }) -Forcer:$SansVoix
+if (-not $SansVoix -and (ValeurEnv "ARCHI_VOIX") -eq "non") { Noter "La voix est installee mais COUPEE : ARCHI_VOIX=non dans le fichier .env (mets oui pour entendre Archi)." }
 ReglerEnv "ARCHI_VOIX_PORT" "$pVoix" -Forcer
 ReglerEnv "ARCHI_VOIX_NOM" "charles"
 ReglerEnv "ARCHI_LANGUE" "fr"

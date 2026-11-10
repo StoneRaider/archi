@@ -342,3 +342,44 @@ test('page du telephone : si l appli est absente, le bouton ramene a la page ave
   assert.ok(page.includes("/telephone?absente=1#k="), 'la cle reste dans le # du lien de retour');
   assert.ok(page.includes('id="absente"'));
 });
+
+test('etat : la memoire compte les fiches et montre les derniers faits retenus', () => {
+  const d = chateau(false);
+  try {
+    assert.deepEqual(P.memoire({ base: d }), { fiches: 0, faits: 0, derniers: [] });
+    fs.mkdirSync(path.join(d, 'memoire', 'personnes'), { recursive: true });
+    fs.mkdirSync(path.join(d, 'memoire', 'preferences'), { recursive: true });
+    fs.writeFileSync(path.join(d, 'memoire', 'personnes', 'medor.md'), '# Médor\n\n**Pièce :** personnes\n**Faits :**\n- (10/11/2026) Médor est le chien de Camille.\n- (10/11/2026) Médor a huit ans.\n');
+    fs.writeFileSync(path.join(d, 'memoire', 'preferences', 'archi_et_moi.md'), '## x\n**Faits :**\n- Camille aime le court.\n**Hypothèses :**\n- pas un fait\n');
+    fs.writeFileSync(path.join(d, 'memoire', 'personnes', 'vide.md'), '# sans fait\n');
+    fs.writeFileSync(path.join(d, 'memoire', '.retenu.jsonl'), 'ligne abimee\n' + JSON.stringify({ quand: 1700000000000, piece: 'personnes', sujet: 'Médor', fait: 'Médor a huit ans.' }) + '\n');
+    assert.deepEqual(P.memoire({ base: d }), { fiches: 2, faits: 3, derniers: [{ quand: 1700000000000, fait: 'Médor a huit ans.' }] });
+  } finally { fs.rmSync(d, { recursive: true, force: true }); }
+});
+
+test('porte : seule l appli declenche l alerte « mauvaise cle », et les robots ne remplissent pas le journal', async () => {
+  const d = chateau(false);
+  const r = { etat: d };
+  const suivi = P.nouveauSuivi();
+  try {
+    // le verificateur du PC (ou un curieux) recoit 403 sans faire croire a une appli mal branchee
+    P.noterPassage(r, suivi, 'POST', '/webhook/telephone-archi', { action: 'refuser', code: 403 }, { 'user-agent': 'Mozilla/5.0 WindowsPowerShell/5.1' });
+    assert.equal(suivi.refus, 0);
+    P.noterPassage(r, suivi, 'POST', '/webhook/telephone-archi', { action: 'refuser', code: 403 }, { 'user-agent': 'ArchiTelephone/1.0' });
+    assert.ok(suivi.refus > 0);
+    for (let i = 0; i < 80; i++) P.noterPassage(r, suivi, 'GET', '/robot' + i, { action: 'refuser', code: 404 }, {});
+    await new Promise(x => setTimeout(x, 600));
+    const lignes = fs.readFileSync(path.join(d, 'porte.log'), 'utf8').split('\n').filter(l => l.includes('(autre) 404'));
+    assert.ok(lignes.length >= 1 && lignes.length <= 40, lignes.length + ' lignes pour 80 demandes');   // 20 par minute
+    assert.deepEqual(Object.keys(suivi).sort(), ['apk', 'appli', 'page', 'refus'], 'le compteur ne fuit pas dans /api/etat');
+  } finally { fs.rmSync(d, { recursive: true, force: true }); }
+});
+
+test('page d accueil : le micro ne peut pas s ouvrir deux fois, et il est toujours rendu', () => {
+  const page = fs.readFileSync(path.join(__dirname, '..', 'accueil.html'), 'utf8');
+  const micro = page.slice(page.indexOf('async function micro()'), page.indexOf('async function envoyer('));
+  assert.ok(micro.includes('if (occupe || microEnOuverture) return;'), 'drapeau pose avant la demande d autorisation');
+  assert.ok(micro.indexOf('microEnOuverture = true') < micro.indexOf('getUserMedia'));
+  assert.ok(micro.includes('finally { microEnOuverture = false; }'));
+  assert.ok((micro.match(/rendre\(\)/g) || []).length >= 4, 'le micro est rendu a l arret, a l erreur, au delai et si le demarrage echoue');
+});

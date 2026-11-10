@@ -4,6 +4,7 @@ La mémoire longue d'Archi : des fiches Markdown lisibles par un humain, rangée
 Ce château d'exemple est INVENTÉ pour la démo. Le vrai château de l'auteur ne sort jamais de son PC.
 
 - [[preferences]] : faits durables sur l'utilisateur (lus à chaque message)
+- [[moi]], [[personnes]], [[lieux]] : ce qu'Archi retient tout seul quand on lui parle (outil memoire), un fait daté par ligne
 - [[bibliotheque]] : notes de vidéos et d'articles (retrouvées par mots-clés)
 - [[projets]] : un fichier par projet, avec une ligne datée à chaque avancée
 - [[methodes]] : comment Archi doit faire certaines tâches (mail, rappel...)

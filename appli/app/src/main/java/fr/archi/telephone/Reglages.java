@@ -53,6 +53,7 @@ public final class Reglages {
      * Le meme code est affiche sur la page d'accueil du PC : s'il differe, ce lien ne vient pas de ton PC.
      */
     public static void proposer(Activity a, String u, String k) {
+        fermerExplication();   // le lien arrive : la fenetre « Derniere etape » n'a plus lieu d'etre
         u = u == null ? "" : u.trim();
         k = k == null ? "" : k.trim();
         // adresse : https, un nom d'hote en lettres simples (pas de sosie en Unicode), un chemin simple ;
@@ -85,14 +86,27 @@ public final class Reglages {
                 .show();
     }
 
+    /** La fenetre « Derniere etape », si elle est ouverte : le lien du QR code la referme en arrivant. */
+    private static AlertDialog explication;
+
+    private static void fermerExplication() {
+        try {
+            if (explication != null && explication.isShowing()) explication.dismiss();
+        } catch (Exception ignore) {
+        }
+        explication = null;
+    }
+
     /** Premier lancement, appli pas encore branchee : on dit quoi faire, sans champ a remplir. */
     public static void expliquer(Activity a) {
-        new AlertDialog.Builder(a)
+        fermerExplication();
+        explication = new AlertDialog.Builder(a)
                 .setTitle("Dernière étape : brancher l'appli")
                 .setMessage("Retourne sur la page d'installation, dans ton navigateur, et touche « Brancher l'appli »."
                         + "\n\nTu l'as fermée ? Sur ton PC, affiche le QR code de la page d'accueil d'Archi et scanne-le de nouveau.")
                 .setPositiveButton("Compris", null)
                 .setNeutralButton("Saisir à la main", (d, x) -> demander(a, null))
+                .setOnDismissListener(d -> explication = null)
                 .show();
     }
 
@@ -117,8 +131,13 @@ public final class Reglages {
                 } else {
                     message = Porte.explication(a, r);
                 }
+                String titre = ok ? "Appli branchée ✓"
+                        : (r.code == 401 || r.code == 403) ? "Clé refusée"
+                        : "SANS_ESSAI".equals(r.raison) ? "Adresse enregistrée"
+                        : (r.code == 504 || r.code == 524) ? "Le PC est lent à répondre"
+                        : "Le PC ne répond pas";
                 new AlertDialog.Builder(a)
-                        .setTitle(ok ? "Appli branchée ✓" : "Le PC ne répond pas")
+                        .setTitle(titre)
                         .setMessage(message)
                         .setPositiveButton("OK", null)
                         .show();

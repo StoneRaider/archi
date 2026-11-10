@@ -23,6 +23,21 @@ function appelNode(script, entree) {
 CONTEXTE = APPEL_NODE + r"""
 const e = $input.first().json;
 const c = appelNode('contexte.js', { texte: e.texte || '', source: e.source || 'telegram', lat: e.lat, lon: e.lon });
+// La memoire : un greffier (le modele local) releve ce que l'utilisateur vient d'apprendre de durable a Archi et le range
+// en fiche (outils/memoire/memoire.py, action retenir). Il travaille EN ARRIERE-PLAN : la reponse ne l'attend pas.
+try {
+  const dit = String(e.entendu || e.texte || '');
+  if (dit && String($env.ARCHI_MEMOIRE || 'oui').toLowerCase() !== 'non') {
+    const fs = require('fs'), os = require('os');
+    const BASE = $env.ARCHI_BASE || path.join(os.homedir(), '.n8n-files');
+    const script = path.join(BASE, 'outils', 'memoire', 'memoire.py');
+    if (fs.existsSync(script)) {
+      const f = path.join(os.tmpdir(), 'archi_memoire_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '.json');
+      fs.writeFileSync(f, JSON.stringify({ action: 'retenir', texte: dit }));
+      cp.spawn($env.ARCHI_PY || 'python', [script, '--fichier', f, '--menage'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    }
+  }
+} catch (x) { /* la memoire ne doit jamais empecher Archi de repondre */ }
 return [{ json: Object.assign({}, e, c) }];
 """
 
@@ -96,11 +111,12 @@ if (cleAudio && !texte) {
   let t = { ok: false, raison: 'erreur_oreille' };
   try {
     fs.writeFileSync(f, await this.helpers.getBinaryDataBuffer(0, cleAudio));
-    t = await appelVoix({ action: 'transcrire', fichier: f }, 320000);
+    t = await appelVoix({ action: 'transcrire', fichier: f }, 240000);   // moins que le delai d'une tache n8n (300 s)
   } catch (e) { /* t garde « erreur_oreille » */ } finally { try { fs.unlinkSync(f); } catch (e) {} }
   if (!t.ok) {
     const quoi = t.raison === 'rien_entendu' ? "Je n'ai rien entendu. Tu peux répéter ?"
-      : (t.raison === 'oreille_absente' || t.raison === 'voix_desactivee')
+      : t.raison === 'voix_desactivee' ? "La voix est coupée sur ce PC (ARCHI_VOIX=non dans le fichier .env). Écris-moi ton message."
+      : t.raison === 'oreille_absente'
         ? "La voix n'est pas installée sur ce PC : relance installation.bat. En attendant, écris-moi ton message."
         : "Je n'ai pas réussi à écouter ton message. Écris-le-moi, et lance verifier_archi.bat sur le PC pour voir ce qui manque.";
     return [{ json: { direct: true, texte: quoi, sans_voix } }];
@@ -132,7 +148,8 @@ const p = $('Porte').first().json;
 const reponse = { texte: String(e.texte || '') };
 if (p.entendu) reponse.entendu = p.entendu;
 if (!p.sans_voix && reponse.texte) {
-  const v = await appelVoix({ action: 'dire', texte: reponse.texte }, 200000);
+  // la voix a un plafond court (45 s dans core/voix.js) : si elle traine, la reponse ecrite part quand meme
+  const v = await appelVoix({ action: 'dire', texte: reponse.texte }, 90000);
   if (v.ok) { reponse.audio_ogg_base64 = v.audio_ogg_base64; reponse.texte_dit = v.texte_dit; }
   else reponse.erreur_voix = v.raison || 'erreur';
 }

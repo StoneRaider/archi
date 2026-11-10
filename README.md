@@ -67,6 +67,18 @@ L'appli affiche l'adresse et un code de 4 caractères avant de se brancher : la 
 L'adresse change à chaque démarrage du PC : il suffit de rescanner. Pour une adresse fixe (ngrok, Tailscale Funnel,
 tunnel Cloudflare nommé), mets-la dans `WEBHOOK_URL` du `.env`.
 
+### La mémoire : il retient ce que tu lui apprends
+Dis-lui « mon chien s'appelle Médor » : Archi le range tout seul dans une fiche, et s'en souvient le lendemain.
+- Après chaque message, un « greffier » (le même modèle local) relève ce que tu lui apprends de durable sur toi, tes
+  proches, tes projets, tes lieux et tes goûts. Il travaille en arrière-plan : la réponse ne l'attend pas.
+- Les fiches sont des fichiers Markdown dans `chateau\memoire` : tu peux les lire, les corriger, les supprimer.
+  La page d'accueil montre ce qui vient d'être retenu.
+- « Que sais-tu sur moi ? » relit tout. « Oublie… » efface, après un essai à blanc et ton accord.
+- Les garde-fous sont dans le code, pas seulement dans la consigne : jamais de mot de passe, de code, de numéro de
+  carte, d'adresse postale ni de téléphone ; un fait doit reprendre des mots de ton message ; trois faits au plus par message.
+- Mesuré le 10/11/2026 avec gpt-oss-20b : 30 phrases sur 30 bien classées (15 à retenir, 15 à laisser). Le banc se
+  rejoue avec `python outils/memoire/banc_memoire.py`.
+
 ### La voix : parle-lui, il te répond
 Archi écoute et parle, **sans quitter le PC** : whisper.cpp transcrit ta voix, Pocket TTS lit la réponse.
 - **Sur le téléphone** : touche la sphère et parle.
@@ -151,6 +163,7 @@ Le détail se trouve dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 ```bash
 node --test core/test portail/test                      # cœur (contexte, lanceur, vérificateur) et portail (liste blanche)
 cd outils/planificateur && python test_planificateur.py # 90 tests, dans un faux dossier personnel
+cd outils/memoire && python test_memoire.py             # 40 tests, avec un faux modèle local
 python outils_depot/verifier_depot.py .                 # aucun secret ni donnée perso dans le dépôt
 ```
 
