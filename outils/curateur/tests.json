@@ -1,5 +1,5 @@
 {
  "ok": true,
  "date": "2026-11-10",
- "resume": "54/54 tests (test_curateur.py) sur un faux chateau et un faux modele local : lien casse repare ou mis en texte, fait en double, contradiction trouvee par le modele et verifiee par le code (meme fiche, mot commun, pas un simple doublon), fiche vide archivee, projet endormi mis en pause, ligne qui ressemble a un secret (jamais repetee), 12 propositions au plus, copie avant d'appliquer, annuler, proposition trop vieille ou fiche changee refusee, chemin piege, verrou, tournee annoncee."
+ "resume": "86/86 tests (test_curateur.py) sur un faux chateau et un faux modele local : lien casse repare ou mis en texte, fait en double, contradiction trouvee par le modele et verifiee par le code (meme fiche, mot commun, pas un simple doublon), fiche vide archivee, projet endormi mis en pause, ligne qui ressemble a un secret (jamais repetee), 12 propositions au plus, copie avant d'appliquer, annuler, proposition trop vieille ou fiche changee refusee, chemin piege, verrou, tournee annoncee ; relecture : action deguisee et accord manquant refuses, phrase avec exception refusee, numeros stables d'une tournee a l'autre, annuler defait deux applications et une panne au milieu, lien d'une ligne secrete jamais recopie."
 }

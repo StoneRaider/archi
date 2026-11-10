@@ -96,18 +96,30 @@ Sans tunnel (`ARCHI_TUNNEL=non`), Archi marche sur le PC seul.
 ## Le curateur et le mécanicien
 - **Rien sans accord** : « appliquer », « annuler », « construire », « valider » et « retirer » sont des actions
   sensibles (`accord=oui`). Les mots qui ressemblent (« range », « vérifie », « état ») ne font que regarder.
-- **Le curateur** garde une copie de la mémoire avant de modifier, ne sort pas du dossier `memoire`, ne touche pas
-  une fiche modifiée depuis sa tournée, et ne répète jamais une ligne qui ressemble à un secret.
+- **L'accord ne se contourne pas.** Le lanceur compare la forme « nue » de l'action (ses seules lettres :
+  « appliquer. » = « appliquer ») et refuse une action qui n'est pas un simple mot. L'outil revérifie de son côté :
+  il ne connaît que le nom exact, et il exige l'accord que le lanceur lui transmet (`_accord`) ; un `_accord` glissé
+  par le modèle dans les paramètres est retiré.
+- **Le curateur** garde une copie de chaque fiche avant de l'écrire, ne sort pas du dossier `memoire`, ne touche pas
+  une fiche modifiée depuis sa tournée, et ne répète jamais une ligne qui ressemble à un secret (ni un lien posé sur
+  cette ligne). « Annuler » défait toutes les applications, même une interrompue au milieu. Les numéros annoncés ne
+  changent pas de sens d'une tournée à l'autre, et une phrase avec une exception (« tout sauf la 2 ») est refusée.
 - **Le mécanicien n'exécute aucun code écrit par le modèle.** Le modèle écrit une recette (des données), suivie par
   un moteur fixe, relu et testé. Le moteur :
   - ne lit que des pages `https` en JSON, sur le port 443, des sites que la recette annonce (3 au plus) ;
   - refuse une adresse IP, un nom local (`.local`, `.lan`, `.internal`…), et tout nom qui pointe vers le réseau
     local ou le PC lui-même, vérifié à la résolution ;
-  - ne suit pas les redirections, ignore le proxy du système, coupe à 10 s et à 1 Mo ;
-  - calcule avec son propre évaluateur (une liste fermée d'opérations et de fonctions), jamais `eval`.
+  - se connecte à l'adresse déjà vérifiée (pas de seconde résolution du nom), le certificat restant vérifié ;
+  - ne suit pas les redirections, ignore le proxy du système, coupe à 10 s au total (même goutte à goutte) et à 1 Mo ;
+  - calcule avec son propre évaluateur (une liste fermée d'opérations et de fonctions), jamais `eval` ;
+  - nettoie chaque texte lu sur un site (une ligne, 80 caractères, sans `{}`, `=`, `[[`) : l'agent le reçoit balisé
+    comme du contenu, jamais comme une consigne.
 - **Il n'installe aucun module** et n'envoie aucune clé : une recette ne lit que des sites publics sans compte.
 - **Un outil fabriqué entre au registre seulement après « valide »**, et peut en être retiré. La copie du registre
-  est gardée dans `atelier/`.
+  est gardée dans `atelier/`. Il ne contient que sa recette et un petit lanceur : le moteur reste au mécanicien, en
+  un seul exemplaire. Une installation ou un retrait en panne ne laisse rien à moitié.
+- **Une fabrication s'arrête au bout de 15 minutes** (un site ou un modèle bloqué) et l'idée passe « ratée ».
+  Le journal des ratés ne garde que des codes fixes, jamais un bout de ce qu'un outil a sorti.
 
 ## La voix
 - **Tout est local** : ta voix est transcrite sur le PC (whisper.cpp), la réponse est dite par un serveur local

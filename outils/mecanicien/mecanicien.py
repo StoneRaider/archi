@@ -23,6 +23,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import unicodedata
 import urllib.error
@@ -251,10 +252,10 @@ Une recette, c'est :
 - des étapes (au plus 4), dans l'ordre :
   * api : url https vers un site déclaré ; {nom} y met un paramètre ou une valeur déjà gardée. garder : des paires nom -> chemin dans la réponse JSON, avec des points (ex. current.temperature_2m, results.0.name). si_vide : la phrase si la réponse ne contient pas ces valeurs (ex. Je ne trouve pas {ville}.).
   * calcul : url vide ; garder : des paires nom -> calcul avec + - * / // % **, des parenthèses, round, abs, min, max, sqrt, floor, ceil, et les noms déjà connus. si_vide vide.
-- une phrase en français, en tutoyant, avec des {nom} ; {nom:1} écrit un nombre avec 1 chiffre après la virgule ;
+- une phrase en français, en tutoyant, avec des {nom} ; {nom:1} écrit un nombre avec 1 chiffre après la virgule ; chaque nombre est NOMMÉ et a son unité (latitude, longitude, °C, km/h…), pour qu'on ne puisse pas le confondre ;
 - 1 à 3 essais : des paramètres, et un bout de texte que la phrase DOIT contenir (vide si la réponse change tout le temps, comme une température).
 Si l'idée a besoin d'un compte, d'une clé, de fichiers du PC, d'envoyer quelque chose ou d'agir sur un appareil : faisable=false et pourquoi_pas en une phrase simple.
-Exemple de recette (position de la station spatiale) : parametres vide ; hotes ["api.wheretheiss.at"] ; etapes [{type api, url https://api.wheretheiss.at/v1/satellites/25544, garder [{nom lat, valeur latitude}, {nom lon, valeur longitude}, {nom vitesse, valeur velocity}], si_vide "Je n'ai pas la position."}] ; phrase "La station spatiale est au-dessus de {lat:1}, {lon:1}, à {vitesse:0} km/h." ; essais [{parametres vide, doit_contenir "station spatiale"}].
+Exemple de recette (position de la station spatiale) : parametres vide ; hotes ["api.wheretheiss.at"] ; etapes [{type api, url https://api.wheretheiss.at/v1/satellites/25544, garder [{nom lat, valeur latitude}, {nom lon, valeur longitude}, {nom vitesse, valeur velocity}], si_vide "Je n'ai pas la position."}] ; phrase "La station spatiale est au-dessus de la latitude {lat:1}, longitude {lon:1}, à {vitesse:0} km/h." ; essais [{parametres vide, doit_contenir "station spatiale"}].
 Le nom de l'outil : minuscules et tirets bas, 3 à 30 caractères (ex. position_iss)."""
 
 
@@ -459,20 +460,30 @@ def act_valider(d):
         dest = os.path.join(base(), "outils", nom)
         if nom in reg or nom in RESERVES or os.path.exists(dest):
             raise Erreur("Un outil s'appelle déjà « %s » : je ne l'écrase pas." % nom)
-        os.makedirs(dest)
-        shutil.copy(os.path.join(ICI, "recette.py"), os.path.join(dest, "recette.py"))
-        ecrire_json(os.path.join(dest, "recette.json"), r)
+        # prepare a cote, puis un seul renommage : une panne ne laisse jamais un dossier a moitie, ni un nom bloque
+        prep = os.path.join(base(), "outils", ".%s_prep" % nom)
+        shutil.rmtree(prep, ignore_errors=True)
+        os.makedirs(prep)
+        # pas de copie du moteur : le lanceur de l'outil utilise celui du mecanicien (une correction vaut pour tous)
+        shutil.copy(os.path.join(ICI, "outil_recette.py"), os.path.join(prep, "outil_recette.py"))
+        ecrire_json(os.path.join(prep, "recette.json"), r)
         ecrire_json(atelier("registre_avant_%s.json" % maintenant().strftime("%Y%m%d_%H%M%S")), reg)
         reg[nom] = {
             "nom": nom, "titre": r["titre"],
-            "description": "MODE D EMPLOI : %s %s" % (r["quoi"].rstrip(".") + ".", r["mode_d_emploi"]),
-            "script": "recette.py",
+            "description": "MODE D EMPLOI : %s %s Dis à l'utilisateur ce que l'outil a lu, tel quel, sans changer les nombres." % (r["quoi"].rstrip(".") + ".", r["mode_d_emploi"].strip()),
+            "script": "outil_recette.py",
             "parametres": [{"nom": p["nom"], "description": p.get("description") or p["nom"]} for p in r["parametres"]],
             "timeout_s": 60,
             "touche": ["fabriqué par le mécanicien"] + (["lit : " + ", ".join(r["hotes"])] if r["hotes"] else []),
             "mecanicien": {"idee": i["n"], "installe_le": maintenant().isoformat(timespec="seconds"), "hotes": r["hotes"]},
         }
-        ecrire_json(reg_f, reg)
+        try:
+            os.rename(prep, dest)
+            ecrire_json(reg_f, reg)
+        except OSError:
+            shutil.rmtree(dest if os.path.isdir(dest) else prep, ignore_errors=True)
+            shutil.rmtree(prep, ignore_errors=True)
+            raise Erreur("Je n'ai pas pu installer l'outil (fichier occupé ?) : rien n'a changé, redis « valide » dans un moment.")
         i.update(etat="installe", installe_le=maintenant().isoformat(timespec="seconds"), maj=maintenant().isoformat(timespec="seconds"))
         ecrire_json(atelier("atelier.json"), etat)
     ex = next((e for e in i.get("essais") or [] if e.get("reussi")), None)
@@ -506,11 +517,19 @@ def act_retirer(d):
             raise Erreur("« %s » n'a pas été fabriqué par le mécanicien : je n'y touche pas." % cle)
         ecrire_json(atelier("registre_avant_%s.json" % maintenant().strftime("%Y%m%d_%H%M%S")), reg)
         del reg[cle]
-        ecrire_json(reg_f, reg)
         src = os.path.join(base(), "outils", cle)
-        if os.path.isdir(src):                 # rien n'est efface : le dossier part dans atelier\_retires
-            os.makedirs(atelier("_retires"), exist_ok=True)
-            shutil.move(src, atelier("_retires", "%s_%s" % (cle, maintenant().strftime("%Y%m%d_%H%M%S"))))
+        vers = atelier("_retires", "%s_%s" % (cle, maintenant().strftime("%Y%m%d_%H%M%S")))
+        bouge = False
+        try:
+            if os.path.isdir(src):             # rien n'est efface : le dossier part dans atelier\_retires
+                os.makedirs(atelier("_retires"), exist_ok=True)
+                shutil.move(src, vers)
+                bouge = True
+            ecrire_json(reg_f, reg)
+        except OSError:
+            if bouge and not os.path.exists(src):
+                shutil.move(vers, src)
+            raise Erreur("Je n'ai pas pu retirer « %s » (fichier occupé ?) : rien n'a changé." % cle)
         for x in etat["idees"]:
             if x.get("nom") == cle and x.get("etat") == "installe":
                 x.update(etat="retire", maj=maintenant().isoformat(timespec="seconds"))
@@ -585,19 +604,54 @@ SYNONYMES = {"liste": "etat", "lister": "etat", "atelier": "etat", "ou_en_es": "
              "noter": "idee", "note": "idee", "proposer": "idee", "abandonne": "abandonner", "laisse_tomber": "abandonner"}
 
 
+MODIFIENT = ("construire", "valider", "retirer")     # les memes que sensible_si dans outil.json
+
+
+def action_de(d, defaut):
+    """le nom de l'action, tel quel (accents et majuscules mis a part) : on ne retire AUCUN caractere, sinon « valider. »
+    passerait le controle d'accord du lanceur sous un autre nom, puis serait lu « valider » ici"""
+    brut = d.get("action")
+    if brut is None or (isinstance(brut, str) and not brut.strip()):
+        return defaut
+    if not isinstance(brut, str):
+        raise Erreur("L'action doit être un mot, par exemple « etat ».")
+    a = re.sub(r"[\s'-]+", "_", plat(brut).strip())
+    if not re.fullmatch(r"[a-z_]{1,30}", a):
+        raise Erreur("Action inconnue. Actions : etat, idee, construire, voir, valider, abandonner, retirer.")
+    return a
+
+
 def traiter(d):
     """une demande de l'agent -> la reponse (dict) ; ne leve jamais d'exception"""
     try:
         d = d if isinstance(d, dict) else {}
-        act = re.sub(r"[^a-z_]", "", plat(d.get("action") or "etat").replace(" ", "_").replace("-", "_"))
+        act = action_de(d, "etat")
         act = SYNONYMES.get(act, act)
         if act not in ACTIONS:
             raise Erreur("Action inconnue « %s ». Actions : etat, idee, construire, voir, valider, abandonner, retirer." % act[:30])
+        if act in MODIFIENT and str(d.get("_accord") or "").strip().lower() != "oui":
+            raise Erreur("« %s » change tes outils : il me faut ton accord (outils_maison avec accord=oui)." % act)
         return ACTIONS[act](d)
     except Erreur as e:
         return repondre(False, str(e))
     except Exception as e:
         return repondre(False, "Le mécanicien a eu un pépin : %s." % type(e).__name__, erreur=str(e)[:200])
+
+
+FABRICATION_MAX = 15 * 60
+
+
+def abandon_fabrication(numero):
+    """le chien de garde : une fabrication trop longue (un site trop lent, un modele bloque) est arretee et marquee ratee"""
+    try:
+        with Verrou():
+            etat = lire_etat()
+            for i in etat["idees"]:
+                if str(i.get("n")) == str(numero) and i.get("etat") == "construction":
+                    i.update(etat="rate", message="Fabrication arrêtée : elle durait plus de %d minutes." % (FABRICATION_MAX // 60))
+            ecrire_json(atelier("atelier.json"), etat)
+    finally:
+        os._exit(3)
 
 
 def main():
@@ -608,6 +662,9 @@ def main():
     a = pa.parse_args()
     try:
         if a.construire:
+            chien = threading.Timer(FABRICATION_MAX, abandon_fabrication, args=(a.construire,))
+            chien.daemon = True
+            chien.start()
             try:
                 fabriquer(a.construire)
             except Exception as x:          # en arriere-plan : l'idee passe « ratee », jamais « en construction » pour toujours

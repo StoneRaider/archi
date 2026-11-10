@@ -6,7 +6,10 @@
 #     propositions      : relit les propositions en attente (celles de la derniere tournee)
 #     appliquer         : numeros = "1 et 3" | "1,3" | "tout". Exige accord=oui (outils_maison) : c'est le oui de l'utilisateur.
 #                         Copie de toute la memoire avant (curateur\copies), puis SEULEMENT les numeros choisis.
-#     annuler           : remet les fiches comme avant la derniere application, si personne n'y a touche depuis.
+#     annuler           : remet les fiches comme avant les applications (toutes, depuis la tournee), si personne n'y a
+#                         touche depuis.
+# Les numeros ne changent pas de sens tant que la liste est en cours : une nouvelle tournee garde les numeros deja
+# annonces et donne les suivants aux nouvelles propositions (« curateur, 1 » vise toujours ce qu'on a entendu).
 #   python curateur.py --tournee    (le passage du dimanche, lance par core/tournees.js) : examine, puis previent
 #                                   l'utilisateur par une annonce du planificateur (Telegram, appli, page du PC).
 # Ce qu'il cherche, dans le code : un lien [[...]] qui ne mene a aucune fiche, un fait en double, une ligne qui ressemble
@@ -53,6 +56,9 @@ TELEPHONE = re.compile(r"(\+\d[\d .-]{7,})|(\b0\d([ .-]?\d\d){4}\b)")
 LIEN = re.compile(r"\[\[([^\[\]|#\n]{1,80})(?:[|#][^\[\]\n]{0,80})?\]\]")
 DATE = re.compile(r"\b(\d{2})/(\d{2})/(\d{4})\b")
 STATUT = re.compile(r"^\s*\*\*Statut\s*:\*\*\s*en\s+cours\b", re.I)
+REMPLISSAGE = set("curateur applique appliquer appliques appliquez la le les l et n numero numeros no proposition propositions "
+                  "oui juste seulement stp svp ok d de des du vas y va s il te plait".split())
+NEGATIONS = re.compile(r"\b(sauf|pas|mais|sans|excepte|exceptee|exceptees|hormis|moins|non|ni)\b")
 NOMBRES = {"un": 1, "une": 1, "deux": 2, "trois": 3, "quatre": 4, "cinq": 5, "six": 6, "sept": 7, "huit": 8, "neuf": 9,
            "dix": 10, "onze": 11, "douze": 12, "premiere": 1, "premier": 1}
 
@@ -233,6 +239,28 @@ def proposition(type_, f, titre, action):
     return {"type": type_, "fiche": f["rel"], "titre": titre, "action": action, "empreinte": empreinte(f["texte"])}
 
 
+def retirer(ligne):
+    """une ligne a retirer est gardee par son EMPREINTE : un secret ne reste pas en clair dans propositions.json"""
+    return {"type": "retirer_ligne", "empreinte_ligne": empreinte(ligne.rstrip("\r"))}
+
+
+def trouver_ligne(lignes, a):
+    if a.get("empreinte_ligne"):
+        return next((k for k, l in enumerate(lignes) if empreinte(l.rstrip("\r")) == a["empreinte_ligne"]), None)
+    cible = str(a.get("ligne") or "").rstrip("\r")      # l'ancien format
+    return next((k for k, l in enumerate(lignes) if cible and l.rstrip("\r") == cible), None)
+
+
+def s_applique(p, texte):
+    """la proposition vise-t-elle encore quelque chose dans ce texte ?"""
+    a = p.get("action") or {}
+    if a.get("type") == "remplacer":
+        return bool(a.get("ancien")) and a["ancien"] in texte
+    if a.get("type") == "retirer_ligne":
+        return trouver_ligne(texte.split("\n"), a) is not None
+    return True
+
+
 # ---------------------------------------------------------------- ce qu'il cherche
 def chercher_secrets(fiches):
     P = []
@@ -243,7 +271,7 @@ def chercher_secrets(fiches):
             if l.strip() and secret(l):
                 P.append(proposition("secret", f, "Dans « %s », la ligne %d ressemble à un mot de passe, un code ou un numéro de "
                                      "téléphone : je propose de la retirer de la mémoire (je ne la recopie pas ici)." % (f["nom"], i + 1),
-                                     {"type": "retirer_ligne", "ligne": l}))
+                                     retirer(l)))
     return P
 
 
@@ -257,7 +285,7 @@ def chercher_liens(fiches):
     P = []
     for f in fiches:
         vus = set()
-        for m in LIEN.finditer(f["texte"]):
+        for m in (m for l in f["texte"].split("\n") if not secret(l) for m in LIEN.finditer(l)):
             brut, cible = m.group(0), m.group(1).strip()
             k = cle(cible)
             if not k or k in connus or brut in vus:
@@ -296,7 +324,7 @@ def chercher_doublons(fiches):
             if avant:
                 ou = "plus haut" if avant[1] == f["nom"] else "dans « %s »" % avant[1]
                 P.append(proposition("fait_double", f, "Fait en double dans « %s » : « %s » est déjà écrit %s. Je propose de retirer la copie."
-                                     % (f["nom"], court(sans_date(fait), 90), ou), {"type": "retirer_ligne", "ligne": ligne}))
+                                     % (f["nom"], court(sans_date(fait), 90), ou), retirer(ligne)))
             else:
                 vus.append((fait, f["nom"]))
         if f["piece"] in deja:
@@ -432,7 +460,7 @@ def chercher_contradictions(fiches, appel=None):
         P.append(proposition("contradiction", fa, "Deux faits se contredisent dans « %s » : « %s » et « %s ». Je propose de garder le plus "
                              "récent, « %s », et de retirer l'autre." % (fa["nom"], court(sans_date(ancien[1]), 80),
                                                                          court(sans_date(recent[1]), 80), court(sans_date(recent[1]), 80)),
-                             {"type": "retirer_ligne", "ligne": ancien[0]}))
+                             retirer(ancien[0])))
     return P
 
 
@@ -455,17 +483,82 @@ def examiner(par="demande", avec_modele=True, appel=None):
         if k not in vues:
             vues.add(k)
             gardees.append(p)
-    gardees = gardees[:MAX_PROPOSITIONS]
-    for i, p in enumerate(gardees):
-        p["n"] = i + 1
+    ancien = lire_json(chemin("propositions.json"), {})
+    if en_cours(ancien):
+        liste, appliquees = fusionner(ancien, gardees)
+    else:
+        liste, appliquees = gardees[:MAX_PROPOSITIONS], []
+        for i, p in enumerate(liste):
+            p["n"] = i + 1
     etat = {"cree": maintenant().isoformat(timespec="seconds"), "par": par, "fiches": len(fiches), "modele": modele,
-            "propositions": gardees, "appliquees": []}
+            "propositions": liste, "appliquees": appliquees}
     ecrire_json(chemin("propositions.json"), etat)
     return etat
 
 
-def liste_dite(etat, deja=()):
-    P = [p for p in etat.get("propositions") or [] if p.get("n") not in set(deja)]
+def en_attente(etat):
+    deja = set(etat.get("appliquees") or [])
+    return [p for p in etat.get("propositions") or [] if isinstance(p, dict) and p.get("n") not in deja and not p.get("obsolete")]
+
+
+def en_cours(etat):
+    """une liste encore en cours : recente, avec des propositions annoncees et pas encore appliquees"""
+    try:
+        cree = datetime.datetime.fromisoformat(etat.get("cree"))
+    except (TypeError, ValueError):
+        return False
+    return maintenant() - cree <= VALIDITE and any(p.get("type") != "info" for p in en_attente(etat))
+
+
+def cle_prop(p):
+    return (p.get("fiche"), json.dumps(p.get("action"), sort_keys=True))
+
+
+def fusionner(ancien, trouvees):
+    """les numeros deja annonces gardent leur sens : une proposition retrouvee garde son numero, une disparue devient
+    « plus d'actualite » (son numero n'est jamais redonne), une nouvelle prend le numero suivant"""
+    deja = set(ancien.get("appliquees") or [])
+    par_cle = {cle_prop(p): p for p in trouvees}
+    liste, vues = [], set()
+    for p in ancien.get("propositions") or []:
+        if not isinstance(p, dict) or not isinstance(p.get("n"), int):
+            continue
+        k = cle_prop(p)
+        vues.add(k)
+        if p["n"] in deja:
+            liste.append(p)
+        elif k in par_cle:          # retrouvee (meme une « plus d'actualite » qui revient) : meme numero, meme sens
+            q = dict(par_cle[k], n=p["n"])
+            q.pop("obsolete", None)
+            liste.append(q)
+        else:
+            liste.append(dict(p, obsolete=True))
+    suivant = max([p["n"] for p in liste] + [0]) + 1
+    attente = len(en_attente({"propositions": liste, "appliquees": list(deja)}))
+    for p in trouvees:
+        if cle_prop(p) in vues or attente >= MAX_PROPOSITIONS:
+            continue
+        liste.append(dict(p, n=suivant))
+        suivant += 1
+        attente += 1
+    return liste, sorted(deja)
+
+
+def rafraichir(etat, rel, texte):
+    """apres NOTRE ecriture d'une fiche, ses autres propositions en attente restent applicables si elles visent encore
+    quelque chose (sinon « la fiche a change » les bloquerait a tort)"""
+    for p in en_attente(etat):
+        if p.get("fiche") == rel and s_applique(p, texte):
+            p["empreinte"] = empreinte(texte)
+
+
+def exemple(P):
+    ns = [p["n"] for p in P if p.get("type") != "info"][:2]
+    return "« curateur, %s »" % " et ".join(str(n) for n in ns) if ns else "« curateur, tout »"
+
+
+def liste_dite(etat):
+    P = en_attente(etat)
     dites = " ".join("%d) %s" % (p["n"], p["titre"]) for p in P[:MAX_DITES])
     if len(P) > MAX_DITES:
         dites += " Et %d autre(s) sur la page du PC (menu, L'atelier)." % (len(P) - MAX_DITES)
@@ -477,24 +570,24 @@ def phrase_examen(etat):
     n = etat.get("fiches", 0)
     if not P:
         return "J'ai relu la mémoire (%d fiches) : tout est en ordre, je n'ai rien à proposer." % n
-    return ("J'ai relu la mémoire (%d fiches) : %d proposition(s). %s Rien n'est changé : dis « curateur, 1 et 3 » pour en "
-            "appliquer, ou « curateur, tout »." % (n, len(P), dites))
+    return ("J'ai relu la mémoire (%d fiches) : %d proposition(s). %s Rien n'est changé : dis %s pour en "
+            "appliquer, ou « curateur, tout »." % (n, len(P), dites, exemple(P)))
 
 
 def act_examiner(d, appel=None):
     etat = examiner("demande", not oui(d.get("sans_modele")), appel)
-    return repondre(True, phrase_examen(etat), propositions=[{"n": p["n"], "titre": p["titre"]} for p in etat["propositions"]])
+    return repondre(True, phrase_examen(etat), propositions=[{"n": p["n"], "titre": p["titre"]} for p in en_attente(etat)])
 
 
 def act_propositions(_d):
     etat = lire_json(chemin("propositions.json"), {})
     if not etat.get("propositions"):
         return repondre(True, "Je n'ai aucune proposition en attente. Dis « curateur, fais ta tournée » pour que je relise la mémoire.")
-    P, dites = liste_dite(etat, etat.get("appliquees") or [])
+    P, dites = liste_dite(etat)
     quand = datetime.datetime.fromisoformat(etat["cree"]).strftime("%d/%m à %Hh%M")
     if not P:
         return repondre(True, "Tout ce que j'avais proposé le %s est appliqué." % quand)
-    return repondre(True, "Mes propositions du %s : %s Dis « curateur, 1 et 3 », ou « curateur, tout »." % (quand, dites),
+    return repondre(True, "Mes propositions du %s : %s Dis %s, ou « curateur, tout »." % (quand, dites, exemple(P)),
                     propositions=[{"n": p["n"], "titre": p["titre"]} for p in P])
 
 
@@ -503,14 +596,25 @@ def oui(v):
     return v is True or plat(v).strip() in {"oui", "true", "1", "yes"}
 
 
-def numeros_de(s, n):
+def numeros_de(s, attente):
+    """les numeros choisis. « tout » seulement s'il est dit seul (= toutes les propositions en attente). Une phrase avec
+    une exception (« tout sauf la 3 », « pas la 2 ») est refusee : mieux vaut redemander qu'appliquer ce qui n'etait pas
+    voulu. Des chiffres : seuls les chiffres comptent (« une seule : la 4 » -> 4)."""
     s = plat(s)
-    if re.search(r"\b(tout|toutes|tous)\b", s):
-        return list(range(1, n + 1))
+    if NEGATIONS.search(s):
+        raise Erreur("Dis-moi seulement les numéros à appliquer, sans exception : par exemple « curateur, 1 et 3 ».")
+    chiffres = [int(x) for x in re.findall(r"\d+", s)]
+    reste = [m for m in re.findall(r"[a-z]+", s) if m not in REMPLISSAGE]
+    tout = [m for m in reste if m in ("tout", "toutes", "tous")]
+    if tout and (chiffres or len(tout) != len(reste)):
+        raise Erreur("Je n'ai pas compris : dis « curateur, tout », ou seulement des numéros, par exemple « curateur, 1 et 3 ».")
+    if tout:
+        return sorted(attente)
+    if not chiffres:
+        chiffres = [NOMBRES[m] for m in reste if m in NOMBRES]
     vus = []
-    for m in re.finditer(r"\d+|[a-z]+", s):
-        x = int(m.group(0)) if m.group(0).isdigit() else NOMBRES.get(m.group(0))
-        if x and 1 <= x <= n and x not in vus:
+    for x in chiffres:
+        if x not in vus:
             vus.append(x)
     return vus
 
@@ -575,19 +679,26 @@ def act_appliquer(d):
         cree = datetime.datetime(2000, 1, 1)
     if maintenant() - cree > VALIDITE:
         raise Erreur("Mes propositions ont plus d'une semaine : je refais une tournée d'abord (« curateur, fais ta tournée »).")
-    choix = numeros_de(d.get("numeros") or d.get("texte") or "", len(L))
+    attente = [p["n"] for p in en_attente(etat)]
+    choix = numeros_de(d.get("numeros") or d.get("texte") or "", attente)
     if not choix:
         raise Erreur("Dis-moi quels numéros appliquer, par exemple « curateur, 1 et 3 », ou « curateur, tout ».")
     deja = set(etat.get("appliquees") or [])
-    voulues = [p for p in L if p.get("n") in choix and p.get("n") not in deja]
+    par_n = {p.get("n"): p for p in L if isinstance(p, dict)}
+    voulues = [par_n[n] for n in choix if n in attente]
+    sautees = [(n, "déjà appliquée" if n in deja else "plus d'actualité" if par_n.get(n, {}).get("obsolete")
+                else "pas dans la liste") for n in choix if n not in attente]
     if not voulues:
-        return repondre(True, "C'est déjà appliqué.")
-    faites, sautees, annulation, retires = [], [], [], []
+        if all(n in deja for n in choix):
+            return repondre(True, "C'est déjà appliqué.")
+        raise Erreur("Rien à appliquer : " + " ; ".join("%d (%s)" % s for s in sautees) + ". Dis « curateur, tes propositions » pour la liste.")
+    faites, plan, secrets = [], [], False
     with Verrou():
         copie = copier_memoire()
         par_fiche = {}
         for p in voulues:
             par_fiche.setdefault(p["fiche"], []).append(p)
+        # 1. tout preparer, sans rien ecrire
         for rel, items in par_fiche.items():
             c = fiche_de(rel)
             try:
@@ -596,47 +707,68 @@ def act_appliquer(d):
             except OSError:
                 sautees += [(p["n"], "la fiche n'existe plus") for p in items]
                 continue
-            if empreinte(texte) != items[0].get("empreinte"):
-                sautees += [(p["n"], "la fiche a changé depuis la tournée") for p in items]
-                continue
-            nouveau, archiver = texte, False
+            nouveau, archiver, nums, retires = texte, False, [], []
             for p in items:
+                if empreinte(texte) != p.get("empreinte"):
+                    sautees.append((p["n"], "la fiche a changé depuis la tournée"))
+                    continue
                 a = p.get("action") or {}
                 t = a.get("type")
                 if t == "remplacer" and a.get("ancien") and a["ancien"] in nouveau:
                     nouveau = nouveau.replace(a["ancien"], str(a.get("nouveau") or ""), 1)
                 elif t == "retirer_ligne":
                     lignes = nouveau.split("\n")
-                    cible = str(a.get("ligne") or "").rstrip("\r")
-                    i = next((k for k, l in enumerate(lignes) if l.rstrip("\r") == cible), None)
+                    i = trouver_ligne(lignes, a)
                     if i is None:
                         sautees.append((p["n"], "la ligne n'y est plus"))
                         continue
                     retires.append(lignes.pop(i).strip()[2:])
                     nouveau = "\n".join(lignes)
+                    secrets = secrets or p.get("type") == "secret"
                 elif t == "archiver":
                     archiver = True
                 elif t != "info":
                     sautees.append((p["n"], "je ne sais pas faire ça"))
                     continue
-                faites.append(p["n"])
+                nums.append(p["n"])
+            if not nums:
+                continue
             if archiver:
                 dossier, nom = os.path.split(rel)
                 vers = "/".join(x for x in ("_archives", dossier, "%s_%s.md" % (nom[:-3], maintenant().strftime("%Y%m%d_%H%M%S"))) if x)
-                cv = fiche_de(vers)
-                if nouveau != texte:
-                    ecrire_texte(c, nouveau)
-                os.makedirs(os.path.dirname(cv), exist_ok=True)
-                os.replace(c, cv)
-                annulation.append({"type": "archive", "fiche": rel, "vers": vers, "avant": texte})
+                plan.append({"type": "archive", "fiche": rel, "vers": vers, "avant": texte, "numeros": nums, "_nouveau": nouveau, "_retires": retires})
             elif nouveau != texte:
-                ecrire_texte(c, nouveau)
-                annulation.append({"type": "modif", "fiche": rel, "avant": texte, "apres": empreinte(nouveau)})
-        oublier_du_journal(retires)
-        if annulation:
-            ecrire_json(chemin("annulation.json"), {"quand": maintenant().isoformat(timespec="seconds"), "copie": copie, "fiches": annulation})
-        etat["appliquees"] = sorted(deja | set(faites))
-        ecrire_json(chemin("propositions.json"), etat)
+                plan.append({"type": "modif", "fiche": rel, "avant": texte, "apres": empreinte(nouveau), "numeros": nums,
+                             "_nouveau": nouveau, "_retires": retires})
+            else:
+                faites += nums          # rien a ecrire (une info) : c'est vu
+        # 2. l'annulation est ecrite AVANT la premiere fiche : une panne au milieu reste annulable
+        if plan:
+            pile = lire_annulation()
+            pile["etapes"].append({"quand": maintenant().isoformat(timespec="seconds"), "copie": copie,
+                                   "fiches": [{k: v for k, v in e.items() if not k.startswith("_")} for e in plan]})
+            ecrire_json(chemin("annulation.json"), pile)
+        # 3. les fiches ; quoi qu'il arrive, l'etat dit ce qui a vraiment ete ecrit
+        try:
+            for e in plan:
+                c = fiche_de(e["fiche"])
+                if e["type"] == "archive":
+                    cv = fiche_de(e["vers"])
+                    if e["_nouveau"] != e["avant"]:
+                        ecrire_texte(c, e["_nouveau"])
+                    os.makedirs(os.path.dirname(cv), exist_ok=True)
+                    os.replace(c, cv)
+                else:
+                    ecrire_texte(c, e["_nouveau"])
+                    rafraichir(etat, e["fiche"], e["_nouveau"])
+                faites += e["numeros"]
+                oublier_du_journal(e["_retires"])
+        finally:
+            etat["appliquees"] = sorted(deja | set(faites))
+            for e in plan:              # les autres propositions de ces fiches suivent le nouveau texte
+                if e["type"] == "modif" and set(e["numeros"]) <= set(faites):
+                    rafraichir(etat, e["fiche"], e["_nouveau"])
+            ecrire_json(chemin("propositions.json"), etat)
     try:
         with open(chemin("journal.jsonl"), "a", encoding="utf-8") as h:
             h.write(json.dumps({"quand": maintenant().isoformat(timespec="seconds"), "faites": faites,
@@ -647,45 +779,71 @@ def act_appliquer(d):
               % (" et ".join(str(n) for n in faites), copie) if faites else "Je n'ai rien appliqué.")
     if sautees:
         phrase += " Pas fait : " + " ; ".join("%d (%s)" % s for s in sautees) + "."
+    if secrets and faites:
+        phrase += (" La ligne retirée reste dans les copies de sécurité (dossier curateur, copies) : efface-les si tu veux "
+                   "qu'elle disparaisse tout à fait.")
     return repondre(bool(faites), phrase, faites=faites, sautees=[n for n, _ in sautees], copie=copie)
 
 
-def act_annuler(_d):
+def lire_annulation():
+    """la pile des applications depuis la tournee : « annuler » les defait toutes, de la plus recente a la plus ancienne"""
     a = lire_json(chemin("annulation.json"), {})
-    if not a.get("fiches"):
+    etapes = a.get("etapes") if isinstance(a, dict) else None
+    if not isinstance(etapes, list):            # l'ancien format : une seule application
+        etapes = [{"quand": a.get("quand"), "copie": a.get("copie"), "fiches": a["fiches"]}] if isinstance(a, dict) and a.get("fiches") else []
+    return {"etapes": [e for e in etapes if isinstance(e, dict) and e.get("fiches")]}
+
+
+def act_annuler(_d):
+    pile = lire_annulation()
+    if not pile["etapes"]:
         raise Erreur("Il n'y a rien à annuler.")
-    remises, laissees = [], []
+    remises, laissees, rendus, textes = [], [], set(), {}
     with Verrou():
-        for e in a["fiches"]:
-            c = fiche_de(e["fiche"])
-            if e.get("type") == "archive":
-                cv = fiche_de(e["vers"])
-                if not os.path.exists(c) and os.path.exists(cv):
-                    os.replace(cv, c)
+        for etape in reversed(pile["etapes"]):
+            for e in reversed(etape["fiches"]):
+                c = fiche_de(e["fiche"])
+                nums = set(x for x in e.get("numeros") or [] if isinstance(x, int))
+                if e.get("type") == "archive":
+                    cv = fiche_de(e["vers"])
+                    if not os.path.exists(c) and os.path.exists(cv):
+                        os.replace(cv, c)
+                        ecrire_texte(c, e["avant"])
+                        remises.append(e["fiche"])
+                        rendus |= nums
+                        textes[e["fiche"]] = e["avant"]
+                    elif os.path.exists(c) and not os.path.exists(cv):
+                        rendus |= nums      # jamais archivee (panne au milieu) : rien a defaire
+                    else:
+                        laissees.append(e["fiche"])
+                    continue
+                try:
+                    with open(c, encoding="utf-8", newline="") as h:
+                        actuel = h.read()
+                except OSError:
+                    actuel = None
+                if actuel is not None and empreinte(actuel) == e.get("apres"):
                     ecrire_texte(c, e["avant"])
                     remises.append(e["fiche"])
+                    rendus |= nums
+                    textes[e["fiche"]] = e["avant"]
+                elif actuel is not None and actuel == e.get("avant"):
+                    rendus |= nums          # jamais ecrite (panne au milieu) : deja comme avant
                 else:
                     laissees.append(e["fiche"])
-                continue
-            try:
-                with open(c, encoding="utf-8", newline="") as h:
-                    actuel = h.read()
-            except OSError:
-                actuel = None
-            if actuel is not None and empreinte(actuel) == e.get("apres"):
-                ecrire_texte(c, e["avant"])
-                remises.append(e["fiche"])
-            else:
-                laissees.append(e["fiche"])
-        ecrire_json(chemin("annulation.json"), {"quand": a.get("quand"), "annulee": maintenant().isoformat(timespec="seconds"), "fiches": []})
+        ecrire_json(chemin("annulation.json"), {"etapes": [], "annulee": maintenant().isoformat(timespec="seconds")})
         etat = lire_json(chemin("propositions.json"), {})
         if etat.get("propositions"):
-            etat["appliquees"] = []
+            etat["appliquees"] = sorted(set(etat.get("appliquees") or []) - rendus)   # seulement ce qui a vraiment ete remis
+            for rel, texte in textes.items():
+                rafraichir(etat, rel, texte)
             ecrire_json(chemin("propositions.json"), etat)
+    remises = list(dict.fromkeys(remises))
     phrase = "C'est annulé : %d fiche(s) remise(s) comme avant." % len(remises)
     if laissees:
-        phrase += " Je n'ai pas touché à %s : elle(s) a(ont) changé depuis (la copie %s reste là)." % (", ".join(laissees), a.get("copie", ""))
-    return repondre(bool(remises), phrase, remises=remises, laissees=laissees)
+        phrase += (" Je n'ai pas touché à %s : elle(s) a(ont) changé depuis (la copie %s reste là)."
+                   % (", ".join(dict.fromkeys(laissees)), pile["etapes"][-1].get("copie") or ""))
+    return repondre(bool(remises or rendus), phrase, remises=remises, laissees=laissees)
 
 
 # ---------------------------------------------------------------- la tournee du dimanche
@@ -711,7 +869,7 @@ def annoncer(texte):
 
 def tournee(appel=None):
     etat = examiner("tournee", True, appel)
-    n = len(etat["propositions"])
+    n = len(en_attente(etat))
     annonce = False
     if n:
         prenom = (os.environ.get("ARCHI_UTILISATEUR") or "").strip()[:30]
@@ -725,6 +883,23 @@ ACTIONS = {"examiner": act_examiner, "propositions": act_propositions, "applique
 SYNONYMES = {"tournee": "examiner", "relire": "examiner", "relis": "examiner", "ranger": "examiner", "range": "examiner",
              "verifier": "examiner", "examine": "examiner", "menage": "examiner", "etat": "propositions", "liste": "propositions",
              "lister": "propositions", "voir": "propositions"}
+
+
+MODIFIENT = ("appliquer", "annuler")      # les memes que sensible_si dans outil.json
+
+
+def action_de(d, defaut):
+    """le nom de l'action, tel quel (accents et majuscules mis a part) : on ne retire AUCUN caractere, sinon « appliquer. »
+    passerait le controle d'accord du lanceur sous un autre nom, puis serait lu « appliquer » ici"""
+    brut = d.get("action")
+    if brut is None or (isinstance(brut, str) and not brut.strip()):
+        return defaut
+    if not isinstance(brut, str):
+        raise Erreur("L'action doit être un mot, par exemple « examiner ».")
+    a = re.sub(r"[\s'-]+", "_", plat(brut).strip())
+    if not re.fullmatch(r"[a-z_]{1,30}", a):
+        raise Erreur("Action inconnue. Actions : examiner, propositions, appliquer (numeros), annuler.")
+    return a
 
 
 def main():
@@ -742,10 +917,12 @@ def main():
                 d = json.load(h)
         if not isinstance(d, dict):
             d = {}
-        act = re.sub(r"[^a-z_]", "", plat(d.get("action") or "examiner"))
+        act = action_de(d, "examiner")
         act = SYNONYMES.get(act, act)
         if act not in ACTIONS:
             raise Erreur("Action inconnue « %s ». Actions : examiner, propositions, appliquer (numeros), annuler." % act[:30])
+        if act in MODIFIENT and str(d.get("_accord") or "").strip().lower() != "oui":
+            raise Erreur("« %s » change la mémoire : il me faut ton accord (outils_maison avec accord=oui)." % act)
         ACTIONS[act](d)
     except Erreur as e:
         repondre(False, str(e))

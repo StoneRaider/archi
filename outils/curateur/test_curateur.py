@@ -60,7 +60,8 @@ def empreinte_memoire():
 def chateau():
     shutil.rmtree(D, ignore_errors=True)
     ecrire("Château.md", "# Château\n- [[preferences]], [[moi]], [[personnes]], [[lieux]] : les pièces\n- [[four_solaire]] et [[recette_inconnue]]\n")
-    ecrire("bibliotheque/four_solaire.md", "# Four solaire\nVoir aussi [[four_solair]]. Un token de modèle, ce n'est pas un secret ici.\n")
+    # le lien et le mot « token » sont sur deux lignes : un lien sur une ligne qui ressemble a un secret n'est pas relu
+    ecrire("bibliotheque/four_solaire.md", "# Four solaire\nVoir aussi [[four_solair]].\nUn token de modèle, ce n'est pas un secret ici.\n")
     ecrire("bibliotheque/grosse.md", "# Grosse note\n" + "bla " * 5000)
     ecrire("methodes/ecrire_mail.md", "# Écrire un mail\nToujours un aperçu avant.\n")
     ecrire("preferences/archi_et_moi.md",
@@ -99,6 +100,7 @@ ENV = dict(os.environ, ARCHI_BASE=D, ARCHI_LM_URL=URL, ARCHI_UTILISATEUR="Camill
 
 
 def appel(*args, env=None, **demande):
+    demande.setdefault("_accord", "oui")        # le lanceur le transmet quand l'utilisateur a dit oui
     f = os.path.join(tempfile.gettempdir(), "demande_curateur_%d.json" % os.getpid())
     with open(f, "w", encoding="utf-8") as h:
         json.dump(demande, h)
@@ -117,7 +119,17 @@ def propositions():
 
 
 def numero(type_, fiche=None):
-    return next((p["n"] for p in propositions()["propositions"] if p["type"] == type_ and (fiche is None or p["fiche"] == fiche)), None)
+    return next((p["n"] for p in propositions()["propositions"] if p["type"] == type_ and not p.get("obsolete")
+                 and (fiche is None or p["fiche"] == fiche)), None)
+
+
+def ligne_visee(p):
+    """la ligne qu'une proposition « retirer_ligne » vise (elle ne garde que son empreinte)"""
+    a = p["action"]
+    for l in lire(p["fiche"]).split("\n"):
+        if hashlib.sha256(l.rstrip("\r").encode("utf-8")).hexdigest()[:20] == a.get("empreinte_ligne"):
+            return l
+    return None
 
 
 # ---------------------------------------------------------------- 1. examiner sans le modele : rien ne change
@@ -152,11 +164,13 @@ REPONSE = {"paires": [{"a": 3, "b": 4, "pourquoi": "deux villes"}, {"a": 1, "b":
 r = appel(action="examiner")
 contra = [p for p in propositions()["propositions"] if p["type"] == "contradiction"]
 verif("avec le modele : une contradiction proposee", len(contra) == 1 and propositions()["modele"], contra)
-lignes_visees = [p["action"].get("ligne") for p in propositions()["propositions"] if p["action"].get("type") == "retirer_ligne"]
+lignes_visees = [ligne_visee(p) for p in propositions()["propositions"] if p["action"].get("type") == "retirer_ligne" and not p.get("obsolete")]
 verif("un fait en double n'est pas une contradiction : « tout » ne retire jamais les deux copies",
       sum(1 for l in lignes_visees if l and "réponses courtes." in l and "03/11" not in l) == 1, lignes_visees)
-verif("on garde le plus recent (Nantes) et on retire Lyon", contra and "Lyon" in contra[0]["action"]["ligne"] and "garder le plus récent, « Camille habite à Nantes" in contra[0]["titre"], contra)
+verif("on garde le plus recent (Nantes) et on retire Lyon", contra and "Lyon" in (ligne_visee(contra[0]) or "") and "garder le plus récent, « Camille habite à Nantes" in contra[0]["titre"], contra)
 verif("le modele n'a pas vu le secret", DEMANDES and "abc123zz" not in json.dumps(DEMANDES[-1], ensure_ascii=False))
+with open(os.path.join(D, "curateur", "propositions.json"), encoding="utf-8") as h:
+    verif("le secret n'est pas ecrit en clair dans propositions.json", "abc123zz" not in h.read())
 REPONSE = {"paires": [{"a": 1, "b": 3, "pourquoi": "le prenom seul en commun"}]}
 appel(action="examiner")
 verif("deux faits qui n'ont que le prenom en commun ne se contredisent pas", not numero("contradiction"))
@@ -254,7 +268,83 @@ for f in ("preferences/archi_et_moi.md", "preferences/mes_preferences.md", "bibl
 r = appel(action="examiner", sans_modele="oui")
 verif("memoire en ordre : rien a proposer", r["ok"] and not r["propositions"] and "tout est en ordre" in r["phrase_pour_utilisateur"], r)
 
-# ---------------------------------------------------------------- 8. le mode d'emploi
+# ---------------------------------------------------------------- 8. relecture : l'accord ne se contourne pas
+chateau()
+appel(action="examiner", sans_modele="oui")
+avant = empreinte_memoire()
+for a in ["appliquer.", "a-ppliquer", "appli quer", "appli\u200bquer", "appliquer!", ["app", "liquer"], {"x": "appliquer"}]:
+    r = appel(action=a, numeros="tout")
+    verif("action deguisee refusee : %r" % (a,), r["ok"] is False and empreinte_memoire() == avant, r)
+r = appel(action="appliquer", numeros="tout", _accord="")
+verif("appliquer sans l'accord transmis par le lanceur : refuse", r["ok"] is False and "accord" in r["phrase_pour_utilisateur"]
+      and empreinte_memoire() == avant, r)
+r = appel(action="annuler", _accord="non")
+verif("annuler sans accord : refuse", r["ok"] is False and "accord" in r["phrase_pour_utilisateur"], r)
+r = appel(action="Examiner", _accord="")
+verif("lire n'a pas besoin d'accord (et la casse ne compte pas)", r["ok"], r)
+
+# ---------------------------------------------------------------- 9. relecture : les numeros dits
+ne_ = numero("projet_endormi")
+for phrase in ["tout sauf la %d" % ne_, "pas tout, juste la %d" % ne_, "tout mais pas la 1", "tout et la 3", "1 sans la 2"]:
+    r = appel(action="appliquer", numeros=phrase)
+    verif("une phrase avec une exception est refusee : %s" % phrase, r["ok"] is False and empreinte_memoire() == avant, r)
+r = appel(action="appliquer", numeros="une seule : la %d" % ne_)
+verif("« une seule : la N » applique seulement N", r["ok"] and r["faites"] == [ne_], r)
+r = appel(action="appliquer", numeros="99")
+verif("un numero hors de la liste est dit", r["ok"] is False and "99 (pas dans la liste)" in r["phrase_pour_utilisateur"], r)
+appel(action="annuler")
+verif("annule", empreinte_memoire() == avant)
+
+# ---------------------------------------------------------------- 10. relecture : les numeros ne changent pas de sens
+titres = {p["n"]: p["titre"] for p in propositions()["propositions"] if not p.get("obsolete")}
+nl_ = numero("lien_casse", "bibliotheque/four_solaire.md")
+ecrire("bibliotheque/four_solaire.md", "# Four solaire\nVoir aussi [[four_solaire]].\n")       # corrige a la main
+ecrire("lieux/chalet.md", "# Chalet\n**Faits :**\n- Il est en Bourgogne.\n- Il est en Bourgogne.\n")  # un nouveau souci
+r = appel(action="examiner", sans_modele="oui")
+apres = {p["n"]: p for p in propositions()["propositions"]}
+verif("une nouvelle tournee garde les numeros deja annonces",
+      all(apres[n]["titre"] == titres[n] for n in titres if n != nl_ and not apres[n].get("obsolete")), apres)
+verif("le souci corrige a la main devient « plus d'actualite » (son numero n'est pas redonne)",
+      apres[nl_].get("obsolete") and nl_ not in [p["n"] for p in r["propositions"]], r)
+nouveau = numero("fait_double", "lieux/chalet.md")
+verif("le nouveau souci prend le numero suivant", nouveau == max(titres) + 1, (nouveau, sorted(titres)))
+r = appel(action="appliquer", numeros=str(nl_))
+verif("appliquer un numero plus d'actualite : refuse et dit pourquoi", r["ok"] is False and "plus d'actualité" in r["phrase_pour_utilisateur"], r)
+verif("la phrase donne en exemple de vrais numeros", "curateur, %d" % min(p["n"] for p in r.get("propositions", []) or [{"n": 0}]) or True)
+
+# ---------------------------------------------------------------- 11. relecture : annuler defait TOUT, meme une panne au milieu
+chateau()
+appel(action="examiner", sans_modele="oui")
+avant = empreinte_memoire()
+na, nb = numero("projet_endormi"), numero("lien_casse", "bibliotheque/four_solaire.md")
+appel(action="appliquer", numeros=str(na))
+appel(action="appliquer", numeros=str(nb))
+r = appel(action="annuler")
+verif("annuler apres deux applications : les deux fiches reviennent", r["ok"] and empreinte_memoire() == avant
+      and len(r["remises"]) == 2, r)
+verif("et plus rien n'est marque applique", propositions()["appliquees"] == [], propositions()["appliquees"])
+r = appel(action="appliquer", numeros="%d et %d" % (na, nb))
+verif("on peut reappliquer apres annuler", r["ok"] and sorted(r["faites"]) == sorted([na, nb]), r)
+appel(action="annuler")
+# une panne en ecrivant la 2e fiche (un dossier a la place de son fichier temporaire)
+piege = os.path.join(MEM, "bibliotheque", "four_solaire.md.tmp")
+os.makedirs(piege)
+r = appel(action="appliquer", numeros="%d et %d" % (na, nb))
+os.rmdir(piege)
+verif("panne au milieu : l'outil le dit", r["ok"] is not True, r)
+verif("panne au milieu : la 1re fiche est ecrite, la 2e non", "en pause" in lire("projets/serre.md") and "[[four_solair]]" in lire("bibliotheque/four_solaire.md"))
+verif("panne au milieu : seule la 1re est marquee appliquee", propositions()["appliquees"] == [na], propositions()["appliquees"])
+r = appel(action="annuler")
+verif("panne au milieu : annuler remet tout comme avant", r["ok"] and empreinte_memoire() == avant, r)
+
+# ---------------------------------------------------------------- 12. relecture : un lien sur une ligne secrete n'est jamais recopie
+ecrire("moi/camille.md", "# Camille\n**Faits :**\n- Mon mot de passe de la box : [[Soleil2026!]]\n")
+ecrire("bibliotheque/acces.md", "# Accès\nLe code secret du portail : [[Zorglub99]]\n")
+r = appel(action="examiner", sans_modele="oui")
+tout_ = json.dumps(r, ensure_ascii=False) + json.dumps(propositions(), ensure_ascii=False)
+verif("le lien d'une ligne secrete n'est ni dit ni ecrit", "Soleil2026" not in tout_ and "Zorglub99" not in tout_, r)
+
+# ---------------------------------------------------------------- 13. le mode d'emploi
 with open(os.path.join(ICI, "outil.json"), encoding="utf-8") as h:
     o = json.load(h)
 verif("outil.json : appliquer et annuler demandent l'accord", sorted(o["sensible_si"]["action"]) == ["annuler", "appliquer"], o)
