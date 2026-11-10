@@ -73,8 +73,8 @@ public final class Reglages {
         if (ancien != null && !ancien.equals(hote)) message += "\n\nCela remplace le branchement actuel (" + ancien + ").";
         final String url = u, cle = k;
         new AlertDialog.Builder(a)
-                .setTitle("Brancher Archi sur ce PC ?")
-                .setMessage(message)
+                .setTitle(Logo.poser(a, "Brancher Archi sur ce PC ?"))
+                .setMessage(Logo.poser(a, message))
                 .setCancelable(false)
                 .setNegativeButton("Annuler", (d, x) -> {
                     if (!pret(a)) expliquer(a);
@@ -102,8 +102,8 @@ public final class Reglages {
         fermerExplication();
         explication = new AlertDialog.Builder(a)
                 .setTitle("Dernière étape : brancher l'appli")
-                .setMessage("Retourne sur la page d'installation, dans ton navigateur, et touche « Brancher l'appli »."
-                        + "\n\nTu l'as fermée ? Sur ton PC, affiche le QR code de la page d'accueil d'Archi et scanne-le de nouveau.")
+                .setMessage(Logo.poser(a, "Retourne sur la page d'installation, dans ton navigateur, et touche « Brancher l'appli »."
+                        + "\n\nTu l'as fermée ? Sur ton PC, affiche le QR code de la page d'accueil d'Archi et scanne-le de nouveau."))
                 .setPositiveButton("Compris", null)
                 .setNeutralButton("Saisir à la main", (d, x) -> demander(a, null))
                 .setOnDismissListener(d -> explication = null)
@@ -137,8 +137,8 @@ public final class Reglages {
                         : (r.code == 504 || r.code == 524) ? "Le PC est lent à répondre"
                         : "Le PC ne répond pas";
                 new AlertDialog.Builder(a)
-                        .setTitle(titre)
-                        .setMessage(message)
+                        .setTitle(Logo.poser(a, titre))
+                        .setMessage(Logo.poser(a, message))
                         .setPositiveButton("OK", null)
                         .show();
             });
@@ -171,8 +171,8 @@ public final class Reglages {
         l.addView(url);
         l.addView(cle);
         AlertDialog fenetre = new AlertDialog.Builder(a)
-                .setTitle("Brancher Archi sur ton PC")
-                .setMessage("Le plus simple : scanne le QR code affiché par ton PC (page d'accueil d'Archi). Sinon, saisis l'adresse du webhook « telephone-archi » et la clé ARCHI_CLE_TELEPHONE de ton fichier .env.")
+                .setTitle(Logo.poser(a, "Brancher Archi sur ton PC"))
+                .setMessage(Logo.poser(a, "Le plus simple : scanne le QR code affiché par ton PC (page d'accueil d'Archi). Sinon, saisis l'adresse du webhook « telephone-archi » et la clé ARCHI_CLE_TELEPHONE de ton fichier .env."))
                 .setView(l)
                 .setCancelable(false)
                 .setNegativeButton("Plus tard", null)

@@ -549,7 +549,7 @@ public class MainActivity extends Activity implements Conversation.Ecouteur {
 
     private void info(String m) {
         fil.removeCallbacks(effacerInfo);
-        etatTxt.setText(m == null ? "" : m);
+        etatTxt.setText(Logo.poser(this, m));
         if (m != null && !m.isEmpty()) fil.postDelayed(effacerInfo, 7000);
     }
 
@@ -678,8 +678,8 @@ public class MainActivity extends Activity implements Conversation.Ecouteur {
     public void reponse(String quoi, String texte) {
         diagnostic = false;
         sphere.setDocumentFichier(conv.dernierDocumentFichier);
-        entendu.setText(quoi == null || quoi.isEmpty() ? "" : "Toi : " + quoi);
-        reponse.setText(texte);
+        entendu.setText(Logo.poser(this, quoi == null || quoi.isEmpty() ? "" : "Toi : " + quoi));
+        reponse.setText(Logo.poser(this, texte));
     }
 
     @Override

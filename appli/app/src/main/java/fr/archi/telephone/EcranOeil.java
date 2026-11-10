@@ -237,9 +237,9 @@ public class EcranOeil extends FrameLayout {
     private final Runnable delaiDemande = () -> { if (attendDemande) pret(); };
 
     private void afficherTitres(JSONObject oeil) {
-        titre.setText(oeil.optString("titre", "L'œil"));
+        titre.setText(Logo.poser(getContext(), oeil.optString("titre", "L'œil")));
         String st = oeil.optString("sous_titre", "");
-        sousTitre.setText(st);
+        sousTitre.setText(Logo.poser(getContext(), st));
         sousTitre.setVisibility(st.isEmpty() ? GONE : VISIBLE);
     }
 
@@ -252,7 +252,7 @@ public class EcranOeil extends FrameLayout {
     }
 
     private void erreur(String m) {
-        message.setText(m);
+        message.setText(Logo.poser(getContext(), m));
         message.setVisibility(VISIBLE);
         jauge.setVisibility(GONE);
         globePret = false;
@@ -291,21 +291,21 @@ public class EcranOeil extends FrameLayout {
                 break;
             case ATTENTE:
                 bouton.setMode("reflechit");
-                etatTxt.setText("Archi réfléchit…");
+                etatTxt.setText(Logo.poser(getContext(), "Archi réfléchit…"));
                 break;
             case PARLE:
                 bouton.setMode("parle");
                 etatTxt.setText("");
                 if (texteReponse != null && !texteReponse.isEmpty()) {
                     legende.animate().cancel();
-                    legende.setText(texteReponse);
+                    legende.setText(Logo.poser(getContext(), texteReponse));
                     legende.setAlpha(1f);
                     legende.setVisibility(VISIBLE);
                 }
                 break;
             default:
                 bouton.setMode("repos");
-                etatTxt.setText(msg == null ? "" : msg);
+                etatTxt.setText(Logo.poser(getContext(), msg));
                 if (legende.getVisibility() == VISIBLE)
                     legende.animate().alpha(0f).setStartDelay(2500).setDuration(900).withEndAction(() -> legende.setVisibility(GONE)).start();
         }
