@@ -5,6 +5,11 @@ lancement (`n8n/importer_workflows.py`), avec des ID fixes : les liens entre eux
 sans réglage. Tu peux aussi les importer à la main (Workflows > Import from file), mais il faudra alors re-choisir les
 workflows liés dans les nœuds « Call n8n Workflow Tool ».
 
+**Reliés à l'agent de la démo**, et essayés dans une installation neuve : Hunter (`enquete_osint`), vidéos et pages
+(`lire_page`, `videos_youtube`) et le navigateur (`navigateur`). L'agent a aussi l'outil Wikipédia de n8n, sans clé.
+**Importés mais pas encore reliés** : le monteur (il lui faut d'autres modules Python), les pièces 3D (OpenSCAD et
+Telegram) et la vision par lien. La page d'accueil les annonce « en cours de développement » (`config/vitrine.json`).
+
 | Fichier | Ce qu'il fait |
 |---|---|
 | `hunter_osint.json` | **Hunter**, l'enquêteur OSINT, branché sur l'agent de la démo (`enquete_osint`). Il enquête sur des entreprises, des sites, des domaines, des IP, des arnaques, des photos (indices et métadonnées), des personnalités publiques, ton empreinte numérique ou la veille géopolitique. Avec un particulier, il se limite à vérifier son identité, repérer une arnaque et trouver des profils **publics** : jamais son adresse, son téléphone ni sa vie privée, et jamais de recoupement de lieu ou d'habitudes entre ses comptes (règle dans ses consignes). Il n'a pas d'outil de géolocalisation d'IP, et la position d'une photo n'est donnée qu'à la commune. Il range une fiche sourcée dans le château. |
@@ -30,9 +35,9 @@ Pour imprimer ensuite : découpe le STL avec ton logiciel (OrcaSlicer, PrusaSlic
 2. Copie `audit_stl.py` dans `<ARCHI_BASE>/impression3d/` (par défaut `~/.n8n-files/impression3d/`).
 3. Importe les deux fichiers dans n8n. Les identifiants « Bot Telegram Archi » et « LM Studio (local) » sont déjà
    reliés, et le chat Telegram vient de `ARCHI_TELEGRAM_CHAT_ID`.
-4. Pour qu'Archi s'en serve, ajoute dans le workflow principal un nœud **Call n8n Workflow Tool** par workflow,
-   relié à l'agent. Sa description doit dire quand l'utiliser : « concevoir une pièce 3D », « chercher une pièce 3D
-   existante ».
+4. Pour qu'Archi s'en serve, ajoute-les à la liste `OUTILS_AGENT` de `n8n/fabriquer_workflow.py` (nom, description,
+   ID du workflow, champs), relance ce script, et annonce-les dans `config/vitrine.json`. Donne d'abord un ID fixe aux
+   deux fichiers (`"id": "..."`), comme les autres. Un outil n'est relié qu'après un essai réel.
 
 Les chemins et le modèle viennent du `.env` (`ARCHI_BASE`, `ARCHI_LM_URL`, `ARCHI_OPENSCAD`). Ces workflows n'ont
 encore été essayés que sur le PC de l'auteur, avec sa propre installation.

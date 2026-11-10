@@ -52,7 +52,8 @@ dans des règles écrites dans le programme (liste fermée d'actifs, ni levier n
 actif, coupe-circuit de la semaine). On ne lui dicte pas d'ordre, et il ne donne jamais de conseil.
 
 **La vitrine.** `config/vitrine.json` donne à la page d'accueil le nom lisible de chaque outil, ce qu'il lui faut
-(« à brancher »), les outils branchés directement sur l'agent (les enquêtes de Hunter) et les projets en cours de
+(« à brancher »), les outils branchés directement sur l'agent (les enquêtes de Hunter, la lecture d'une page web, les
+vidéos YouTube, le navigateur, Wikipédia : la liste `OUTILS_AGENT` de `n8n/fabriquer_workflow.py`) et les projets en cours de
 développement. Archi s'en sert aussi pour dire la liste de ses outils.
 Un outil reste « en construction » tant que ses tests ne passent pas. Il n'est inscrit au registre
 qu'après l'accord de l'utilisateur.

@@ -3,7 +3,7 @@
 #   python navigateur.py surveiller_tout          -> verifie les pages surveillees (planifie 2 fois par jour)
 # Actions : ouvrir, chercher, lire, elements, cliquer, remplir, touche, capture, montrer, cacher, connexion,
 #           telecharger, surveiller, retirer, surveillances, fermer
-# Edge tourne en continu (port local 9333) : les connexions faites par l'utilisateur restent ouvertes.
+# Edge tourne en continu (port local 9333, decale si n8n n'est pas sur 5678 ; ARCHI_NAVIGATEUR_PORT pour l'imposer) : les connexions faites par l'utilisateur restent ouvertes.
 # Fenetre cachee hors de l'ecran par defaut ; "montrer" la ramene devant l'utilisateur.
 # Regles dures : jamais de mot de passe / carte / code tape par Archi ; jamais de clic sur un bouton final
 # (valider, envoyer, payer, declarer...) : c'est l'utilisateur qui clique (regle dure du code).
@@ -34,7 +34,22 @@ TELECHARGEMENTS = os.path.join(DOSSIER, "telechargements")
 SURVEILLANCE = os.path.join(DOSSIER, "surveillance.json")
 EDGE = ([os.environ["ARCHI_NAVIGATEUR"]] if os.environ.get("ARCHI_NAVIGATEUR") else []) + [r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
         r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"]
-PORT = 9333
+
+
+def _port():
+    """Le port local d'Edge. Une seconde installation d'Archi sur le meme PC (autre port n8n) prend le sien :
+    sans cela, elle piloterait le navigateur de la premiere, avec ses connexions."""
+    voulu = os.environ.get("ARCHI_NAVIGATEUR_PORT", "")
+    if voulu.isdigit() and 1024 < int(voulu) < 65535:
+        return int(voulu)
+    try:
+        ecart = int(os.environ.get("N8N_PORT") or 5678) - 5678
+    except ValueError:
+        ecart = 0
+    return 9333 + ecart if 0 <= ecart < 1000 else 9333
+
+
+PORT = _port()
 CDP = f"http://127.0.0.1:{PORT}"
 RETOUR = os.environ.get("ARCHI_WEBHOOK_ALERTE", "")   # webhook n8n LOCAL qui previent l'utilisateur (facultatif)
 MAX_TEXTE = 6000
@@ -71,10 +86,20 @@ def demarrer_edge():
     exe = next((e for e in EDGE if os.path.exists(e)), None)
     if not exe:
         raise RuntimeError("Edge introuvable sur le PC")
-    subprocess.Popen([exe, f"--remote-debugging-port={PORT}", f"--user-data-dir={PROFIL}",
-                      "--no-first-run", "--no-default-browser-check", "--disable-features=msEdgeSidebarV2",
-                      "--window-position=-32000,-32000", "--window-size=1366,900", "about:blank"],
-                     creationflags=0x00000008 | 0x00000200, close_fds=True)  # DETACHED_PROCESS | NEW_PROCESS_GROUP
+    p = subprocess.Popen([exe, f"--remote-debugging-port={PORT}", f"--user-data-dir={PROFIL}",
+                          "--no-first-run", "--no-default-browser-check", "--disable-features=msEdgeSidebarV2",
+                          "--window-position=-32000,-32000", "--window-size=1366,900", "about:blank"],
+                         creationflags=0x00000008 | 0x00000200, close_fds=True)  # DETACHED_PROCESS | NEW_PROCESS_GROUP
+    # Quand l'utilisateur ferme Archi, son navigateur se ferme aussi : le lanceur arrete tout ce qui est note dans pids.txt
+    # (sans cela, un Edge cache resterait ouvert en arriere-plan, avec son port local).
+    # (ARCHI_ETAT n'arrive pas jusqu'ici quand n8n nous lance : le dossier d'etat se retrouve par ARCHI_DEPOT, lu dans .env)
+    etat = os.environ.get("ARCHI_ETAT") or (os.path.join(os.environ["ARCHI_DEPOT"], "donnees", "etat") if os.environ.get("ARCHI_DEPOT") else "")
+    if etat and os.path.isdir(etat):
+        try:
+            with open(os.path.join(etat, "pids.txt"), "a", encoding="ascii") as f:
+                f.write("\n%d\n" % p.pid)
+        except OSError:
+            pass
     for _ in range(40):
         time.sleep(0.5)
         if edge_vivant():

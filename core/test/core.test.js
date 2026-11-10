@@ -60,6 +60,15 @@ test('contexte : aiguillages', () => {
     assert.match(contexte.aiguiller(q, ai), /outils_maison avec \{"action":"liste"\}/, q);
   }
   assert.doesNotMatch(contexte.aiguiller('range mes outils de jardin dans un pdf', ai), /action":"liste/);
+  // les outils relies a l'agent : page web, Wikipedia, navigateur, videos
+  const lien = contexte.aiguiller('Lis la page https://fr.wikipedia.org/wiki/Asus et résume-la', ai);
+  assert.match(lien, /outil lire_page/);
+  assert.doesNotMatch(lien, /outil Wikipedia/, 'le mot wikipedia dans une adresse ne demande pas l encyclopedie');
+  assert.match(contexte.aiguiller('Cherche sur Wikipédia qui est Ada Lovelace', ai), /outil Wikipedia/);
+  assert.match(contexte.aiguiller('Ouvre le site example.com dans ton navigateur', ai), /outil navigateur/);
+  assert.match(contexte.aiguiller('Trouve des vidéos YouTube sur la permaculture et résume', ai), /outil videos_youtube/);
+  assert.doesNotMatch(contexte.aiguiller('Lance une vidéo de jazz sur mon téléphone', ai), /action=chercher \(cible/);
+  assert.doesNotMatch(contexte.aiguiller('regarde https://exemple.org', ai), /CONSIGNE/);
   // « demain » dans une phrase ordinaire ne programme rien (essai reel du 10/11 : un rappel « verifier le nom du chien »)
   assert.doesNotMatch(contexte.aiguiller('Demain, si je te reparle de mon chien, tu ne sauras plus comment il s appelle.', ai), /planificateur/);
   assert.doesNotMatch(contexte.aiguiller('Je pars en vacances demain.', ai), /planificateur/);

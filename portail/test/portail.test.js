@@ -584,3 +584,39 @@ test('page d accueil : un menu (visite guidee, ses outils, outils en cours de de
   assert.ok(page.includes('if (window.ArchiLogo) ArchiLogo.installer(document);'));
   assert.ok(page.includes('.mot-archi svg {'));
 });
+
+test('workflow de la demo : les outils de l agent sont relies aux deux agents, vers des workflows optionnels qui existent', () => {
+  const depot = path.join(__dirname, '..', '..');
+  const wf = JSON.parse(fs.readFileSync(path.join(depot, 'n8n', 'archi_demo.json'), 'utf8'));
+  const ids = fs.readdirSync(path.join(depot, 'n8n', 'optionnels')).filter(f => f.endsWith('.json'))
+    .map(f => JSON.parse(fs.readFileSync(path.join(depot, 'n8n', 'optionnels', f), 'utf8'))).reduce((m, w) => { if (w.id) m[w.id] = w; return m; }, {});
+  const v = JSON.parse(fs.readFileSync(path.join(depot, 'config', 'vitrine.json'), 'utf8'));
+  const annonces = v.outils.filter(o => o.agent).map(o => o.nom).sort();
+  assert.deepEqual(annonces, ['Wikipedia', 'enquete_osint', 'lire_page', 'navigateur', 'videos_youtube']);
+  for (const suffixe of ['', ' appli']) {
+    const relies = Object.keys(wf.connections).filter(src => (wf.connections[src].ai_tool || []).some(l => l.some(x => x.node === 'Agent' + suffixe)));
+    // ce que la page annonce = ce qui est vraiment relie a l'agent (plus le lanceur des outils maison)
+    assert.deepEqual(relies.map(n => n.slice(0, n.length - suffixe.length)).sort(), annonces.concat('outils_maison').sort(), 'agent' + suffixe);
+    for (const nom of relies) {
+      const n = wf.nodes.find(x => x.name === nom);
+      if (!n.type.endsWith('toolWorkflow')) continue;
+      const cible = ids[n.parameters.workflowId.value];
+      assert.ok(cible, nom + ' appelle un workflow absent du depot : ' + n.parameters.workflowId.value);
+      // chaque champ envoye est une entree declaree par le workflow appele
+      const entrees = cible.nodes.find(x => x.type.endsWith('executeWorkflowTrigger')).parameters.workflowInputs.values.map(x => x.name);
+      assert.deepEqual(Object.keys(n.parameters.workflowInputs.value).filter(c => !entrees.includes(c)), [], nom);
+      assert.ok(n.parameters.description.length > 60, nom);
+    }
+  }
+  // lire_page ne peut QUE lire une page : l'action est fixee, le modele ne la choisit pas
+  assert.equal(wf.nodes.find(x => x.name === 'lire_page').parameters.workflowInputs.value.action, 'page');
+  // le navigateur : les regles dures sont rappelees au modele, et la capture sans Telegram ne casse pas l'outil
+  assert.match(wf.nodes.find(x => x.name === 'navigateur').parameters.description, /JAMAIS un mot de passe/);
+  const nav = ids.ArchiNavigateur1;
+  assert.ok(nav.nodes.find(x => x.name === 'Navigateur').parameters.jsCode.includes('$env.TELEGRAM_BOT_TOKEN && $env.ARCHI_TELEGRAM_CHAT_ID'));
+  assert.equal(nav.nodes.find(x => x.name === 'Envoyer capture').onError, 'continueRegularOutput');
+  // ce qui n'est pas relie (monteur, pieces 3D, image par lien) est annonce « en cours de developpement », pas dans les outils
+  for (const mot of [/monteur/i, /pi[eè]ce 3D/i, /image/i, /curateur/i, /m[eé]canicien/i]) assert.ok(v.en_developpement.some(c => mot.test(c.titre)), String(mot));
+  assert.ok(!v.outils.some(o => /monteur|impression3d|catalogues|analyse_image/.test(o.nom)));
+});
+

@@ -247,5 +247,5 @@ try {
     }
 } finally {
     foreach ($id in $aides) { Stop-Process -Id $id -Force -ErrorAction SilentlyContinue }
-    Remove-Item $fichierPids -Force -ErrorAction SilentlyContinue
+    ArreterAnciens   # ce qui s'est note en route (le navigateur d'Archi) : seulement ce qui appartient a CE dossier
 }
