@@ -55,6 +55,11 @@ test('contexte : aiguillages', () => {
   assert.doesNotMatch(contexte.aiguiller('bonjour', ai), /CONSIGNE/);
   assert.match(contexte.aiguiller('Archi, où en est le trader ?', ai), /outil trader.*SIMULATION/);
   assert.doesNotMatch(contexte.aiguiller('on va au théâtre ce soir', ai), /trader/);
+  // « Quels outils as-tu ? » (une des phrases proposees par la page) : la liste lisible, pas une liste de noms techniques
+  for (const q of ['Quels outils as-tu ?', 'quels sont tes outils', 'Montre-moi la liste de tes outils', 'Que sais-tu faire ?', 'la liste complète des outils']) {
+    assert.match(contexte.aiguiller(q, ai), /outils_maison avec \{"action":"liste"\}/, q);
+  }
+  assert.doesNotMatch(contexte.aiguiller('range mes outils de jardin dans un pdf', ai), /action":"liste/);
   // « demain » dans une phrase ordinaire ne programme rien (essai reel du 10/11 : un rappel « verifier le nom du chien »)
   assert.doesNotMatch(contexte.aiguiller('Demain, si je te reparle de mon chien, tu ne sauras plus comment il s appelle.', ai), /planificateur/);
   assert.doesNotMatch(contexte.aiguiller('Je pars en vacances demain.', ai), /planificateur/);
