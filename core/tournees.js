@@ -60,7 +60,8 @@ function reveiller(options = {}) {
     fs.mkdirSync(path.dirname(verrou), { recursive: true });
     fs.mkdirSync(verrou);
   } catch (x) {
-    try { if (Date.now() - fs.statSync(verrou).mtimeMs < 60000) return { lancees: [], raison: 'occupe' }; } catch (y) { return { lancees: [], raison: 'occupe' }; }
+    // Math.abs : un verrou date du futur (horloge revenue en arriere) ne reste pas « occupe » pour toujours
+    try { if (Math.abs(Date.now() - fs.statSync(verrou).mtimeMs) < 60000) return { lancees: [], raison: 'occupe' }; } catch (y) { return { lancees: [], raison: 'occupe' }; }
     try { fs.rmdirSync(verrou); fs.mkdirSync(verrou); } catch (y) { return { lancees: [], raison: 'occupe' }; }
   }
   try {

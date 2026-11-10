@@ -290,7 +290,9 @@ function recetteLisible(r, i) {
 function atelier(r) {
   const c = lireObjet(path.join(r.base, 'curateur', 'propositions.json')) || {};
   const faites = Array.isArray(c.appliquees) ? c.appliquees : [];
-  const propositions = (Array.isArray(c.propositions) ? c.propositions : []).filter(p => p && Number.isInteger(p.n) && !p.obsolete).slice(-12)   // pas les « plus d'actualite »
+  const vivantes = (Array.isArray(c.propositions) ? c.propositions : []).filter(p => p && Number.isInteger(p.n) && !p.obsolete);   // pas les « plus d'actualite »
+  // d'abord celles qui attendent (la voix renvoie a la page pour les suivantes), puis les dernieres appliquees
+  const propositions = [...vivantes.filter(p => !faites.includes(p.n)), ...vivantes.filter(p => faites.includes(p.n)).reverse()].slice(0, 12)
     .map(p => ({ n: p.n, titre: court(p.titre, 300), faite: faites.includes(p.n) }));   // jamais l'action : elle peut contenir un secret a retirer
   const a = lireObjet(path.join(r.base, 'atelier', 'atelier.json')) || {};
   const idees = (Array.isArray(a.idees) ? a.idees : []).filter(i => i && Number.isInteger(i.n) && ETATS_ATELIER.includes(i.etat)).slice(-12).reverse()

@@ -38,6 +38,7 @@ PERSO = ("moi", "personnes", "projets", "lieux", "preferences")   # la ou un sec
 MAX_PROPOSITIONS = 12
 MAX_DITES = 5                       # au-dela, la phrase renvoie a la page du PC (la voix ne lit pas 12 propositions)
 VALIDITE = datetime.timedelta(days=8)
+DUREE_LISTE = datetime.timedelta(days=28)   # au-dela, une nouvelle liste (numeros depuis 1, annulations oubliees)
 ENDORMI = datetime.timedelta(days=90)
 GEANTE = 15000
 COPIES_GARDEES = 10
@@ -58,7 +59,13 @@ DATE = re.compile(r"\b(\d{2})/(\d{2})/(\d{4})\b")
 STATUT = re.compile(r"^\s*\*\*Statut\s*:\*\*\s*en\s+cours\b", re.I)
 REMPLISSAGE = set("curateur applique appliquer appliques appliquez la le les l et n numero numeros no proposition propositions "
                   "oui juste seulement stp svp ok d de des du vas y va s il te plait".split())
+# les seuls mots permis autour des numeros : tout autre mot (« laisse la 2 », « garde la 2 », « de 1 a 4 »,
+# « les 2 premieres ») fait redemander, plutot qu'appliquer ce qui n'etait pas voulu
+PERMIS = REMPLISSAGE | set("je j veux voudrais bien accord daccord merci seule seul uniquement aussi puis ensuite ces celle celles "
+                           "ci fais faire go c est ca bon parfait alors donc maintenant moi archi pour er re ere "
+                           "egalement choisis choisi prends prend accepte valide valider and".split())
 NEGATIONS = re.compile(r"\b(sauf|pas|mais|sans|excepte|exceptee|exceptees|hormis|moins|non|ni)\b")
+CHIFFRE_EN_LETTRES = r"(?:deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze)"
 NOMBRES = {"un": 1, "une": 1, "deux": 2, "trois": 3, "quatre": 4, "cinq": 5, "six": 6, "sept": 7, "huit": 8, "neuf": 9,
            "dix": 10, "onze": 11, "douze": 12, "premiere": 1, "premier": 1}
 
@@ -170,7 +177,7 @@ class Verrou:
                 return self
             except OSError:
                 try:
-                    if time.time() - os.path.getmtime(self.dossier) > 60:
+                    if abs(time.time() - os.path.getmtime(self.dossier)) > 60:      # abs : horloge revenue en arriere
                         os.rmdir(self.dossier)
                         continue
                 except OSError:
@@ -486,11 +493,17 @@ def examiner(par="demande", avec_modele=True, appel=None):
     ancien = lire_json(chemin("propositions.json"), {})
     if en_cours(ancien):
         liste, appliquees = fusionner(ancien, gardees)
+        debut = ancien.get("debut") or ancien.get("cree")
     else:
         liste, appliquees = gardees[:MAX_PROPOSITIONS], []
         for i, p in enumerate(liste):
             p["n"] = i + 1
-    etat = {"cree": maintenant().isoformat(timespec="seconds"), "par": par, "fiches": len(fiches), "modele": modele,
+        debut = maintenant().isoformat(timespec="seconds")
+        # une nouvelle liste : les annulations de l'ancienne sont oubliees (leurs numeros ne veulent plus rien dire,
+        # et une ligne secrete retiree ne doit jamais revenir des semaines plus tard)
+        if os.path.exists(chemin("annulation.json")):
+            ecrire_json(chemin("annulation.json"), {"etapes": [], "oubliee": debut})
+    etat = {"cree": maintenant().isoformat(timespec="seconds"), "debut": debut, "par": par, "fiches": len(fiches), "modele": modele,
             "propositions": liste, "appliquees": appliquees}
     ecrire_json(chemin("propositions.json"), etat)
     return etat
@@ -505,13 +518,21 @@ def en_cours(etat):
     """une liste encore en cours : recente, avec des propositions annoncees et pas encore appliquees"""
     try:
         cree = datetime.datetime.fromisoformat(etat.get("cree"))
+        debut = datetime.datetime.fromisoformat(etat.get("debut") or etat.get("cree"))
     except (TypeError, ValueError):
         return False
-    return maintenant() - cree <= VALIDITE and any(p.get("type") != "info" for p in en_attente(etat))
+    return (maintenant() - cree <= VALIDITE and maintenant() - debut <= DUREE_LISTE
+            and any(p.get("type") != "info" for p in en_attente(etat)))
 
 
 def cle_prop(p):
-    return (p.get("fiche"), json.dumps(p.get("action"), sort_keys=True))
+    """ce que vise une proposition (fiche, sorte, ligne visee, ce qui est propose). Seul le texte propose pour un projet
+    endormi est laisse de cote : il porte la date du jour. La cible proposee d'un lien casse, elle, fait partie du sens :
+    si elle change, c'est une autre proposition (le numero entendu n'applique jamais une autre cible)."""
+    a = p.get("action")
+    if isinstance(a, dict) and p.get("type") == "projet_endormi":
+        a = {k: v for k, v in a.items() if k != "nouveau"}
+    return (p.get("fiche"), p.get("type"), json.dumps(a, sort_keys=True))
 
 
 def fusionner(ancien, trouvees):
@@ -524,10 +545,11 @@ def fusionner(ancien, trouvees):
         if not isinstance(p, dict) or not isinstance(p.get("n"), int):
             continue
         k = cle_prop(p)
-        vues.add(k)
-        if p["n"] in deja:
+        if p["n"] in deja:          # deja appliquee : si le meme souci revient, c'est un nouveau souci (nouveau numero)
             liste.append(p)
-        elif k in par_cle:          # retrouvee (meme une « plus d'actualite » qui revient) : meme numero, meme sens
+            continue
+        vues.add(k)
+        if k in par_cle:          # retrouvee (meme une « plus d'actualite » qui revient) : meme numero, meme sens
             q = dict(par_cle[k], n=p["n"])
             q.pop("obsolete", None)
             liste.append(q)
@@ -603,15 +625,27 @@ def numeros_de(s, attente):
     s = plat(s)
     if NEGATIONS.search(s):
         raise Erreur("Dis-moi seulement les numéros à appliquer, sans exception : par exemple « curateur, 1 et 3 ».")
-    chiffres = [int(x) for x in re.findall(r"\d+", s)]
-    reste = [m for m in re.findall(r"[a-z]+", s) if m not in REMPLISSAGE]
+    if re.search(r"\d\s*[-–—]\s*\d", s):        # « 1-3 » : de 1 a 3, ou 1 et 3 ?
+        raise Erreur("Je n'ai pas compris : dis chaque numéro, par exemple « curateur, 1, 2 et 3 ».")
+    jetons = re.findall(r"\d+|[a-z]+", s)
+    mots = [m for m in jetons if not m.isdigit()]
+    if any(m not in PERMIS and m not in NOMBRES and m not in ("tout", "toutes", "tous") for m in mots):
+        raise Erreur("Je n'ai pas compris : dis seulement les numéros à appliquer (par exemple « curateur, 1 et 3 »), "
+                     "ou « curateur, tout ».")
+    reste = [m for m in mots if m not in PERMIS]
     tout = [m for m in reste if m in ("tout", "toutes", "tous")]
-    if tout and (chiffres or len(tout) != len(reste)):
+    chiffres_dits = any(m.isdigit() for m in jetons)
+    if tout and (chiffres_dits or len(tout) != len(reste)):
         raise Erreur("Je n'ai pas compris : dis « curateur, tout », ou seulement des numéros, par exemple « curateur, 1 et 3 ».")
     if tout:
         return sorted(attente)
-    if not chiffres:
-        chiffres = [NOMBRES[m] for m in reste if m in NOMBRES]
+    # « les deux » = les deux propositions, ou la n°2 ? « les 2 » dicte pareil. Avec un seul numero dit, on redemande.
+    les = re.findall(r"\bles\s+(\d+|%s)\b" % CHIFFRE_EN_LETTRES, s)
+    if les and (any(not m.isdigit() for m in les) or len([m for m in jetons if m.isdigit() or m in NOMBRES]) == 1):
+        raise Erreur("Je n'ai pas compris : dis chaque numéro à appliquer, par exemple « curateur, 1 et 3 », ou « curateur, tout ».")
+    # dans l'ordre dit ; « un », « une » sont des articles quand un chiffre est dit (« une seule : la 4 » -> 4)
+    chiffres = [int(m) if m.isdigit() else NOMBRES[m] for m in jetons
+                if m.isdigit() or (m in NOMBRES and not (chiffres_dits and m in ("un", "une")))]
     vus = []
     for x in chiffres:
         if x not in vus:
@@ -736,7 +770,8 @@ def act_appliquer(d):
             if archiver:
                 dossier, nom = os.path.split(rel)
                 vers = "/".join(x for x in ("_archives", dossier, "%s_%s.md" % (nom[:-3], maintenant().strftime("%Y%m%d_%H%M%S"))) if x)
-                plan.append({"type": "archive", "fiche": rel, "vers": vers, "avant": texte, "numeros": nums, "_nouveau": nouveau, "_retires": retires})
+                plan.append({"type": "archive", "fiche": rel, "vers": vers, "avant": texte, "apres": empreinte(nouveau), "numeros": nums,
+                             "_nouveau": nouveau, "_retires": retires})
             elif nouveau != texte:
                 plan.append({"type": "modif", "fiche": rel, "avant": texte, "apres": empreinte(nouveau), "numeros": nums,
                              "_nouveau": nouveau, "_retires": retires})
@@ -780,8 +815,8 @@ def act_appliquer(d):
     if sautees:
         phrase += " Pas fait : " + " ; ".join("%d (%s)" % s for s in sautees) + "."
     if secrets and faites:
-        phrase += (" La ligne retirée reste dans les copies de sécurité (dossier curateur, copies) : efface-les si tu veux "
-                   "qu'elle disparaisse tout à fait.")
+        phrase += (" La ligne retirée reste dans les copies de sécurité du curateur (dossier curateur : copies, et annulation.json "
+                   "jusqu'à la prochaine liste) : efface les copies si tu veux qu'elle disparaisse tout à fait.")
     return repondre(bool(faites), phrase, faites=faites, sautees=[n for n, _ in sautees], copie=copie)
 
 
@@ -813,7 +848,21 @@ def act_annuler(_d):
                         rendus |= nums
                         textes[e["fiche"]] = e["avant"]
                     elif os.path.exists(c) and not os.path.exists(cv):
-                        rendus |= nums      # jamais archivee (panne au milieu) : rien a defaire
+                        # jamais archivee (panne au milieu) : la fiche a peut-etre deja ete reecrite (ligne retiree)
+                        try:
+                            with open(c, encoding="utf-8", newline="") as h:
+                                actuel = h.read()
+                        except OSError:
+                            actuel = None
+                        if actuel == e["avant"]:
+                            rendus |= nums
+                        elif actuel is not None and e.get("apres") and empreinte(actuel) == e["apres"]:
+                            ecrire_texte(c, e["avant"])
+                            remises.append(e["fiche"])
+                            rendus |= nums
+                            textes[e["fiche"]] = e["avant"]
+                        else:
+                            laissees.append(e["fiche"])
                     else:
                         laissees.append(e["fiche"])
                     continue

@@ -344,10 +344,112 @@ r = appel(action="examiner", sans_modele="oui")
 tout_ = json.dumps(r, ensure_ascii=False) + json.dumps(propositions(), ensure_ascii=False)
 verif("le lien d'une ligne secrete n'est ni dit ni ecrit", "Soleil2026" not in tout_ and "Zorglub99" not in tout_, r)
 
-# ---------------------------------------------------------------- 13. le mode d'emploi
+# ---------------------------------------------------------------- 13. relecture 2 : les phrases de numeros (liste blanche)
+chateau()
+appel(action="examiner", sans_modele="oui")
+avant = empreinte_memoire()
+for phrase in ["laisse la 2 et applique les autres", "garde la 2, applique le reste", "oublie la 3", "all except 2",
+               "les 2 premières", "de 1 à 4", "la 1 ou la 2", "toutes les nouvelles", "les deux", "applique les 2",
+               "1-3", "1 – 3"]:
+    r = appel(action="appliquer", numeros=phrase)
+    verif("phrase pas claire : on redemande (%s)" % phrase, r["ok"] is False and empreinte_memoire() == avant, r)
+ne_ = numero("projet_endormi")
+r = appel(action="appliquer", numeros="oui je veux bien la %d merci" % ne_)
+verif("des mots polis autour du numero : compris", r["ok"] and r["faites"] == [ne_], r)
+appel(action="annuler")
+
+# ---------------------------------------------------------------- 14. relecture 2 : un numero ne bouge pas d'un jour a l'autre
+chateau()
+appel(action="examiner", sans_modele="oui")
+ne_ = numero("projet_endormi")
+etat = propositions()
+for p in etat["propositions"]:          # la tournee d'hier : la phrase proposee portait la date d'hier
+    if p["type"] == "projet_endormi":
+        p["action"]["nouveau"] = p["action"]["nouveau"].replace("rangé par le curateur le", "rangé par le curateur le 01/01/2000, avant le")
+with open(os.path.join(D, "curateur", "propositions.json"), "w", encoding="utf-8") as h:
+    json.dump(etat, h, ensure_ascii=False)
+appel(action="examiner", sans_modele="oui")
+verif("le projet endormi garde son numero d'une tournee a l'autre", numero("projet_endormi") == ne_
+      and not any(p.get("obsolete") for p in propositions()["propositions"]), propositions()["propositions"])
+# un souci deja applique qui revient (la fiche remise a la main) : il est repropose, avec un nouveau numero
+appel(action="appliquer", numeros=str(ne_))
+ecrire("projets/serre.md", "## Projet : serre\n**Statut :** en cours.\n## Ajout du %s\nPlants semés.\n" % IL_Y_A(200))
+appel(action="examiner", sans_modele="oui")
+etat = propositions()
+nouveaux_ = [p["n"] for p in etat["propositions"] if p["type"] == "projet_endormi" and not p.get("obsolete")
+             and p["n"] not in etat["appliquees"]]
+verif("un souci applique qui revient est repropose (nouveau numero)", len(nouveaux_) == 1 and nouveaux_[0] != ne_, (ne_, nouveaux_))
+
+# ---------------------------------------------------------------- 15. relecture 2 : une nouvelle liste oublie les annulations
+chateau()
+appel(action="examiner", sans_modele="oui")
+nl_ = numero("lien_casse", "bibliotheque/four_solaire.md")
+appel(action="appliquer", numeros=str(nl_))
+apres_ = lire("bibliotheque/four_solaire.md")
+etat = propositions()
+etat["cree"] = etat["debut"] = "2000-01-01T10:00:00"      # une liste perimee
+with open(os.path.join(D, "curateur", "propositions.json"), "w", encoding="utf-8") as h:
+    json.dump(etat, h, ensure_ascii=False)
+appel(action="examiner", sans_modele="oui")
+r = appel(action="annuler")
+verif("nouvelle liste : les annulations de l'ancienne sont oubliees", r["ok"] is False and lire("bibliotheque/four_solaire.md") == apres_, r)
+with open(os.path.join(D, "curateur", "annulation.json"), encoding="utf-8") as h:
+    verif("annulation.json ne garde plus l'ancienne fiche", "four_solair]]" not in h.read())
+# une liste prolongee par des tournees ne vit pas plus de 4 semaines
+etat = propositions()
+etat["debut"] = "2000-01-01T10:00:00"
+with open(os.path.join(D, "curateur", "propositions.json"), "w", encoding="utf-8") as h:
+    json.dump(etat, h, ensure_ascii=False)
+appel(action="examiner", sans_modele="oui")
+verif("une liste de plus de 4 semaines repart de 1", propositions()["debut"] > "2000-01-01T10:00:00"
+      and min(p["n"] for p in propositions()["propositions"]) == 1, propositions().get("debut"))
+
+# ---------------------------------------------------------------- 16. relecture 2 : une archive coupee apres l'ecriture se defait
+chateau()
+ecrire("personnes/vide.md", "# Vide\n\n**Pièce :** personnes\n**Faits :**\n- iban\n")
+appel(action="examiner", sans_modele="oui")
+avant = empreinte_memoire()
+nv_, ns_ = numero("fiche_vide", "personnes/vide.md"), numero("secret", "personnes/vide.md")
+piege = os.path.join(MEM, "_archives", "personnes")       # un FICHIER la ou le dossier d'archives doit aller
+with open(piege, "w", encoding="utf-8") as h:
+    h.write("piege")
+r = appel(action="appliquer", numeros="%s et %s" % (nv_, ns_))
+os.remove(piege)
+verif("archive coupee : l'outil ne dit pas que c'est fait", nv_ and ns_ and r.get("ok") is not True, (nv_, ns_, r))
+verif("archive coupee : la fiche a deja perdu sa ligne", "iban" not in lire("personnes/vide.md"))
+r = appel(action="annuler")
+verif("archive coupee : annuler remet la fiche comme avant", r["ok"] and empreinte_memoire() == avant
+      and "iban" in lire("personnes/vide.md"), r)
+
+# ---------------------------------------------------------------- 17. le mode d'emploi
 with open(os.path.join(ICI, "outil.json"), encoding="utf-8") as h:
     o = json.load(h)
 verif("outil.json : appliquer et annuler demandent l'accord", sorted(o["sensible_si"]["action"]) == ["annuler", "appliquer"], o)
+
+# ---------------------------------------------------------------- 18. relecture 3 : les phrases de tous les jours, « les deux »
+sys.path.insert(0, ICI)
+import curateur as C  # noqa: E402
+A_ = [1, 2, 3, 4, 5]
+for phrase, attendu in (("Archi, applique la 2", [2]), ("pour la 2", [2]), ("ok pour la 1 et la 3", [1, 3]), ("la 1re", [1]),
+                        ("la 1er", [1]), ("la 1ère", [1]), ("je choisis la 3", [3]), ("j'accepte la 2", [2]),
+                        ("valide la 2", [2]), ("la 2 et également la 4", [2, 4]), ("1 and 3", [1, 3]),
+                        ("les 1 et 3", [1, 3]), ("deux et trois", [2, 3]), ("une seule : la 4", [4]), ("tout", A_)):
+    try:
+        x = C.numeros_de(phrase, A_)
+    except C.Erreur as e:
+        x = "refusee : %s" % e
+    verif("phrase normale comprise : %s" % phrase, x == attendu, x)
+for phrase in ("les deux", "applique les 2", "les deux, 1 et 3", "les trois", "1-3", "1 – 3", "2—4"):
+    try:
+        x = C.numeros_de(phrase, A_)
+    except C.Erreur:
+        x = "refusee"
+    verif("phrase ambigue : on redemande (%s)" % phrase, x == "refusee", x)
+# la cible proposee d'un lien casse fait partie du sens ; le texte date d'un projet endormi, non
+lien_ = lambda cible: {"fiche": "a.md", "type": "lien_casse", "action": {"type": "remplacer", "ancien": "[[x]]", "nouveau": cible}}
+endormi_ = lambda jour: {"fiche": "p.md", "type": "projet_endormi", "action": {"type": "remplacer", "ancien": "s", "nouveau": "le " + jour}}
+verif("lien casse : une autre cible est une autre proposition", C.cle_prop(lien_("[[y]]")) != C.cle_prop(lien_("[[z]]")))
+verif("projet endormi : la date du jour ne change pas la proposition", C.cle_prop(endormi_("01/11")) == C.cle_prop(endormi_("08/11")))
 
 shutil.rmtree(D, ignore_errors=True)
 serveur.shutdown()

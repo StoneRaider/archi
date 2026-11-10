@@ -100,24 +100,40 @@ Sans tunnel (`ARCHI_TUNNEL=non`), Archi marche sur le PC seul.
   « appliquer. » = « appliquer ») et refuse une action qui n'est pas un simple mot. L'outil revérifie de son côté :
   il ne connaît que le nom exact, et il exige l'accord que le lanceur lui transmet (`_accord`) ; un `_accord` glissé
   par le modèle dans les paramètres est retiré.
-- **Le curateur** garde une copie de chaque fiche avant de l'écrire, ne sort pas du dossier `memoire`, ne touche pas
-  une fiche modifiée depuis sa tournée, et ne répète jamais une ligne qui ressemble à un secret (ni un lien posé sur
-  cette ligne). « Annuler » défait toutes les applications, même une interrompue au milieu. Les numéros annoncés ne
-  changent pas de sens d'une tournée à l'autre, et une phrase avec une exception (« tout sauf la 2 ») est refusée.
+- **Le curateur** garde une copie zip de toute la mémoire avant d'écrire, ne sort pas du dossier `memoire`, ne touche
+  pas une fiche modifiée depuis sa tournée, et ne répète jamais une ligne qui ressemble à un secret (ni un lien posé sur
+  cette ligne). Une ligne secrète retirée reste dans ses copies de sécurité (`curateur/copies`, et `annulation.json`
+  jusqu'à la liste suivante) : il le dit, pour que tu les effaces si tu veux.
+- **« Annuler » défait toutes les applications de la liste en cours**, même une coupée au milieu. Une nouvelle liste
+  (au plus tard au bout de 4 semaines) oublie les annulations de l'ancienne : un vieux changement ne revient jamais.
+  « Annuler » ne défait alors plus ce qui a été appliqué avant : seule la copie zip (`curateur/copies`) le garde.
+- **Les numéros ne changent pas de sens** dans une liste : un souci retrouvé garde son numéro, un souci réglé à la main
+  devient « plus d'actualité » (son numéro n'est jamais redonné), un souci qui revient après avoir été appliqué prend
+  un nouveau numéro. Une phrase qui n'est pas qu'une liste de numéros (« tout sauf la 2 », « laisse la 2 »,
+  « de 1 à 4 », « 1-3 », « les deux ») fait redemander. Un lien cassé dont la cible proposée change devient une autre
+  proposition : un numéro entendu n'applique jamais une autre cible.
 - **Le mécanicien n'exécute aucun code écrit par le modèle.** Le modèle écrit une recette (des données), suivie par
   un moteur fixe, relu et testé. Le moteur :
   - ne lit que des pages `https` en JSON, sur le port 443, des sites que la recette annonce (3 au plus) ;
   - refuse une adresse IP, un nom local (`.local`, `.lan`, `.internal`…), et tout nom qui pointe vers le réseau
     local ou le PC lui-même, vérifié à la résolution ;
-  - se connecte à l'adresse déjà vérifiée (pas de seconde résolution du nom), le certificat restant vérifié ;
-  - ne suit pas les redirections, ignore le proxy du système, coupe à 10 s au total (même goutte à goutte) et à 1 Mo ;
-  - calcule avec son propre évaluateur (une liste fermée d'opérations et de fonctions), jamais `eval` ;
-  - nettoie chaque texte lu sur un site (une ligne, 80 caractères, sans `{}`, `=`, `[[`) : l'agent le reçoit balisé
-    comme du contenu, jamais comme une consigne.
+  - se connecte à l'adresse déjà vérifiée (pas de seconde résolution du nom), le certificat restant vérifié, en
+    essayant chaque adresse vérifiée à son tour ; une IPv4 cachée dans une IPv6 est jugée comme une IPv4 ;
+  - ne suit pas les redirections, ignore le proxy du système, coupe à 1 Mo et à 10 s au total une fois le nom trouvé
+    (une minuterie coupe la connexion, même pendant la poignée de main ou des en-têtes envoyés au goutte à goutte) ;
+    une réponse coupée en plein corps, ou plus courte que ce que le site annonce, est refusée (jamais lue à moitié) ;
+  - calcule avec son propre évaluateur (une liste fermée d'opérations et de fonctions, des nombres bornés), jamais `eval` ;
+  - nettoie chaque texte lu sur un site (une ligne, 80 caractères, chiffres et vraies lettres latines, grecques ou
+    cyrilliques, sans `{}`, `=`, `[[` ni sosies de ponctuation).
+- **Ce qu'un outil fabriqué dit arrive à l'agent balisé comme du contenu**, jamais comme une consigne : sa réponse
+  (même en échec) et les essais montrés par « voir ». L'annonce d'une fabrication ratée ne répète pas ce que l'outil
+  a lu. Seul « il manque un paramètre » est redit par le lanceur lui-même, à partir des noms vérifiés des paramètres,
+  pour que l'agent redemande.
 - **Il n'installe aucun module** et n'envoie aucune clé : une recette ne lit que des sites publics sans compte.
 - **Un outil fabriqué entre au registre seulement après « valide »**, et peut en être retiré. La copie du registre
   est gardée dans `atelier/`. Il ne contient que sa recette et un petit lanceur : le moteur reste au mécanicien, en
-  un seul exemplaire. Une installation ou un retrait en panne ne laisse rien à moitié.
+  un seul exemplaire. Une installation ou un retrait en panne ne laisse rien à moitié (une installation coupée en
+  plein milieu se termine au « valide » suivant).
 - **Une fabrication s'arrête au bout de 15 minutes** (un site ou un modèle bloqué) et l'idée passe « ratée ».
   Le journal des ratés ne garde que des codes fixes, jamais un bout de ce qu'un outil a sorti.
 
