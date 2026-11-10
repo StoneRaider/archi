@@ -201,7 +201,12 @@ Dire "n8n demarre (30 secondes environ), puis la page d'accueil s'ouvre dans ton
 Dire "Pour ARRETER Archi : ferme cette fenetre."
 Dire ""
 try {
-    if (Test-Path $n8nBin) { & $node $n8nBin start }
+    if (Test-Path $n8nBin) {
+        # n8n est suivi comme les autres aides : si cette fenetre disparait sans prevenir, le portail l'arrete aussi
+        $pn = Start-Process -FilePath $node -ArgumentList (Citer $n8nBin), "start" -NoNewWindow -PassThru
+        Suivre $pn
+        $pn.WaitForExit()
+    }
     else {
         $version = if ($env:ARCHI_N8N_VERSION) { $env:ARCHI_N8N_VERSION } else { "1" }
         npx --yes "n8n@$version"
