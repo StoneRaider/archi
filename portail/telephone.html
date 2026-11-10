@@ -54,7 +54,7 @@ const adresse = location.origin + '/webhook/telephone-archi';
 const brancher = document.getElementById('brancher'), secours = document.getElementById('secours');
 if (cle.length >= 16 && location.protocol === 'https:') {
   const q = 'u=' + encodeURIComponent(adresse) + '&k=' + encodeURIComponent(cle);
-  brancher.href = 'intent://brancher?' + q + '#Intent;scheme=archi;package=fr.archi.telephone;end';
+  brancher.href = 'intent://brancher?' + q + '#Intent;scheme=archi;package=fr.archi.local;end';
   secours.href = 'archi://brancher?' + q;
 } else {
   document.getElementById('souci').style.display = 'block';
