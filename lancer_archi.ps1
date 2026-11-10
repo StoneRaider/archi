@@ -2,7 +2,7 @@
 #   1. lit .env (sans jamais afficher les valeurs) : le .env gagne sur les variables de Windows ;
 #   2. reveille le cerveau (LM Studio : serveur + modele charge avec un contexte de 16k) ;
 #   3. ouvre la page d'accueil locale (le portail) et, pour le telephone, un tunnel HTTPS qui ne mene QU'AU portail ;
-#   4. demarre le serveur mails/agenda, puis n8n (dans cette fenetre : la fermer arrete Archi).
+#   4. demarre la voix (Pocket TTS), le serveur mails/agenda, puis n8n (dans cette fenetre : la fermer arrete Archi).
 # Marche avec les programmes prives poses par installation.bat (dossier programmes\), sinon avec ceux du PATH.
 # ASCII seulement.
 param([switch]$SansServeur, [switch]$SansNavigateur, [switch]$SansTunnel)
@@ -162,6 +162,29 @@ if ($env:WEBHOOK_URL) {
 if ($adresse) {
     [System.IO.File]::WriteAllText((Join-Path $etat "adresse_publique.txt"), $adresse, $script:utf8SansBom)
     Dire "  Telephone : $adresse  (scanne le QR code de la page d'accueil)" "Green"
+}
+
+# ---------------------------------------------------------------- la voix : Pocket TTS, un petit serveur local (127.0.0.1 seulement)
+$pVoix = if ($env:ARCHI_VOIX_PORT -match '^\d+$') { [int]$env:ARCHI_VOIX_PORT } else { 5683 }
+$env:ARCHI_VOIX_PORT = "$pVoix"
+$voixExe = TrouverExe "voix" "pocket-tts.exe"
+if ($env:ARCHI_VOIX -ne "non" -and $voixExe) {
+    if (PortLibre $pVoix) {
+        $langues = @{ fr = "french"; en = "english"; de = "german"; es = "spanish"; it = "italian"; pt = "portuguese"; nl = "dutch" }
+        $langue = $langues["$($env:ARCHI_LANGUE)"]
+        if (-not $langue) { $langue = "french" }
+        $nomVoix = if ($env:ARCHI_VOIX_NOM -match '^[a-z_]{2,30}$') { $env:ARCHI_VOIX_NOM } else { "charles" }
+        $jv = Join-Path $etat "voix.log"
+        # le modele de la voix reste dans le dossier d'Archi (pose par l'installateur) ; HF_HOME ne vaut que pour ce programme
+        $hfAvant = $env:HF_HOME
+        $env:HF_HOME = Join-Path $prog "voix\cache"
+        try {
+            Suivre (Start-Process -FilePath $voixExe -ArgumentList "serve", "--host", "127.0.0.1", "--port", "$pVoix", "--language", $langue, "--default-voice", $nomVoix `
+                -WindowStyle Hidden -PassThru -RedirectStandardError $jv -RedirectStandardOutput "$jv.out")
+            Dire "  Voix : Archi ecoute (Whisper) et parle (Pocket TTS, 127.0.0.1:$pVoix), tout en local."
+        } catch { Dire "  ! La voix n'a pas demarre : $($_.Exception.Message) (Archi repondra par ecrit)" "Yellow" }
+        finally { $env:HF_HOME = $hfAvant }
+    } else { Dire "  ! Le port $pVoix est pris : la voix n'est pas lancee (change ARCHI_VOIX_PORT dans .env)." "Yellow" }
 }
 
 # ---------------------------------------------------------------- la boite Docker (oeil, SearXNG, Presenton) : seulement si demandee
