@@ -433,13 +433,19 @@ A_ = [1, 2, 3, 4, 5]
 for phrase, attendu in (("Archi, applique la 2", [2]), ("pour la 2", [2]), ("ok pour la 1 et la 3", [1, 3]), ("la 1re", [1]),
                         ("la 1er", [1]), ("la 1ère", [1]), ("je choisis la 3", [3]), ("j'accepte la 2", [2]),
                         ("valide la 2", [2]), ("la 2 et également la 4", [2, 4]), ("1 and 3", [1, 3]),
-                        ("les 1 et 3", [1, 3]), ("deux et trois", [2, 3]), ("une seule : la 4", [4]), ("tout", A_)):
+                        ("les 1 et 3", [1, 3]), ("deux et trois", [2, 3]), ("une seule : la 4", [4]), ("tout", A_),
+                        ("la 2, puis la 5", [2, 5]), ("#1 et #3", [1, 3]), ("1, 2 et 3", [1, 2, 3]), ("1;3", [1, 3]),
+                        ("les numéros 1 et 3", [1, 3]), ("n°2", [2]), ("la 4.", [4])):
     try:
         x = C.numeros_de(phrase, A_)
     except C.Erreur as e:
         x = "refusee : %s" % e
     verif("phrase normale comprise : %s" % phrase, x == attendu, x)
-for phrase in ("les deux", "applique les 2", "les deux, 1 et 3", "les trois", "1-3", "1 – 3", "2—4"):
+for phrase in ("les deux", "applique les 2", "les deux, 1 et 3", "les trois", "1-3", "1 – 3", "2—4",
+               # controle du 3e passage : d'autres signes, « ces », des signes colles aux mots
+               "ces deux", "ces 2", "ces deux-là", "les,deux", "les-deux", "les.deux", "les_deux", "les deux propositions",
+               "les numéros deux", "1\u20103", "1\u20113", "1\u20123", "1\u20153", "1\u22123", "1\uff0d3", "1~3", "1..3",
+               "1\u20263", "1_3", "la 2 maintenant et la 3 ensuite"):
     try:
         x = C.numeros_de(phrase, A_)
     except C.Erreur:
