@@ -115,7 +115,7 @@ function CleAleatoire {
 }
 
 # ---------------------------------------------------------------- 0. bonjour
-Clear-Host
+try { Clear-Host } catch {}
 Dire ""
 Dire "   A R C H I   $VERSION_ARCHI" "Green"
 Dire "   Un agent IA 100 % local : le modele, la memoire et les outils tournent sur CE PC." "Green"
