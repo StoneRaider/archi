@@ -119,7 +119,7 @@ public class MainActivity extends Activity implements Conversation.Ecouteur {
                     .show();
             return true;
         });
-        if (!Reglages.pret(this)) Reglages.demander(this, null);
+        if (!Reglages.pret(this) && !Reglages.estLienBrancher(getIntent())) Reglages.demander(this, null);
         lunettes.setOnLongClickListener(v -> {
             diagnostic = !diagnostic;
             afficherDiagnostic();
@@ -270,6 +270,13 @@ public class MainActivity extends Activity implements Conversation.Ecouteur {
     private void traiterIntention(Intent i) {
         if (i == null) return;
         String a = i.getAction();
+        if (Reglages.estLienBrancher(i)) {   // QR code du PC : archi://brancher?u=...&k=...
+            Uri lien = i.getData();
+            i.setAction(Intent.ACTION_MAIN);
+            i.setData(null);
+            Reglages.proposer(this, lien.getQueryParameter("u"), lien.getQueryParameter("k"));
+            return;
+        }
         if (Intent.ACTION_SEND.equals(a)) {   // « Partager » depuis une autre appli
             Uri u = i.getParcelableExtra(Intent.EXTRA_STREAM);
             String t = i.getStringExtra(Intent.EXTRA_TEXT);

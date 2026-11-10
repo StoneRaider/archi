@@ -34,7 +34,8 @@ def mots_perso(ligne):
 
 FICHIERS_INTERDITS = re.compile(r"(?i)(^\.env$|secret|^cle.*\.txt$|\.pickle$|\.pkl$|credentials.*\.json$|\.keystore$|\.jks$|\.apk$|\.sqlite$)")
 PERMIS = {".env.example"}  # le detecteur se controle lui-meme (sauf ses motifs)
-IGNORER_DOSSIERS = {".git", "node_modules", "__pycache__", "build", ".gradle", ".local"}
+IGNORER_DOSSIERS = {".git", "node_modules", "__pycache__", "build", ".gradle", ".local",
+                    "programmes", "telechargements", "dist"}   # poses par installation.bat / faire_le_zip.py, ignores par git
 BINAIRES = (".jar", ".png", ".jpg", ".webp", ".zip")
 
 

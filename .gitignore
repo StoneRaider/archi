@@ -52,3 +52,11 @@ pc/voix/essais*/
 
 # Serveur : jetons Google/Microsoft, journaux, memoire des expediteurs
 serveur/donnees/
+
+# Ce que installation.bat pose dans le dossier (programmes prives, chateau, base n8n, bilan) et le ZIP fabrique
+/programmes/
+/telechargements/
+/chateau/
+/donnees/
+/dist/
+/installation.txt

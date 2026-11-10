@@ -3,7 +3,9 @@ package fr.archi.telephone;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.text.InputType;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -39,6 +41,45 @@ public final class Reglages {
         return url(c).startsWith("https://") && cle(c).length() >= 16;
     }
 
+    /** Vrai pour un lien « archi://brancher?... » (QR code affiche par le PC a la fin de l'installation). */
+    public static boolean estLienBrancher(Intent i) {
+        if (i == null || !Intent.ACTION_VIEW.equals(i.getAction()) || i.getData() == null) return false;
+        Uri d = i.getData();
+        return "archi".equals(d.getScheme()) && "brancher".equals(d.getHost());
+    }
+
+    /**
+     * Lien du QR code : on montre l'adresse et on demande l'accord AVANT d'enregistrer quoi que ce soit.
+     * Un lien piege ne peut donc pas rebrancher l'appli en douce sur un autre serveur.
+     */
+    public static void proposer(Activity a, String u, String k) {
+        u = u == null ? "" : u.trim();
+        k = k == null ? "" : k.trim();
+        Uri adresse = Uri.parse(u);
+        String hote = adresse.getHost();
+        boolean valide = u.startsWith("https://") && u.length() <= 300 && hote != null && !hote.isEmpty()
+                && adresse.getUserInfo() == null && k.length() >= 16 && k.length() <= 128;
+        if (!valide) {
+            Toast.makeText(a, "Lien Archi invalide : scanne de nouveau le QR code du PC.", Toast.LENGTH_LONG).show();
+            if (!pret(a)) demander(a, null);
+            return;
+        }
+        final String url = u, cle = k;
+        new AlertDialog.Builder(a)
+                .setTitle("Brancher Archi sur ce PC ?")
+                .setMessage("Adresse : " + hote + "\n\nTes messages, tes photos et ta position (pour les rappels de lieu) "
+                        + "iront à cette adresse. Accepte seulement si tu viens de scanner le QR code de TON PC.")
+                .setCancelable(false)
+                .setNegativeButton("Annuler", (d, x) -> {
+                    if (!pret(a)) demander(a, null);
+                })
+                .setPositiveButton("Brancher", (d, x) -> {
+                    p(a).edit().putString("url", url).putString("cle", cle).apply();
+                    Toast.makeText(a, "Appli branchée sur ton PC.", Toast.LENGTH_SHORT).show();
+                })
+                .show();
+    }
+
     /** Fenetre de saisie ; apres « Enregistrer », l'appli parle a ce serveur. */
     public static void demander(Activity a, Runnable apres) {
         LinearLayout l = new LinearLayout(a);
@@ -56,7 +97,7 @@ public final class Reglages {
         l.addView(cle);
         AlertDialog fenetre = new AlertDialog.Builder(a)
                 .setTitle("Brancher Archi sur ton PC")
-                .setMessage("Adresse du webhook n8n « telephone-archi » et clé ARCHI_CLE_TELEPHONE de ton fichier .env (voir docs/INSTALLATION.md).")
+                .setMessage("Le plus simple : scanne le QR code affiché par ton PC (page d'accueil d'Archi). Sinon, saisis l'adresse du webhook « telephone-archi » et la clé ARCHI_CLE_TELEPHONE de ton fichier .env.")
                 .setView(l)
                 .setCancelable(false)
                 .setNegativeButton("Plus tard", null)

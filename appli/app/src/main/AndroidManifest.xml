@@ -59,6 +59,13 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />
             </intent-filter>
+            <!-- lien « archi://brancher?u=...&k=... » (QR code du PC) : branche l'appli sur le PC, apres confirmation -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="archi" android:host="brancher" />
+            </intent-filter>
         </activity>
 
         <!-- passe-plat prive pour l'appareil photo -->

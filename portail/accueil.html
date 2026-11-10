@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Archi</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='26' fill='%233DDC97'/%3E%3C/svg%3E">
+<style>
+  :root { --fond:#0B1410; --fond2:#13221B; --fond3:#1A2E25; --vert:#3DDC97; --vert-sombre:#1E6B4C; --rouge:#FF6B5B;
+          --ambre:#F2B84B; --texte:#E6F2EC; --texte2:#8FA89B; --bord:#22382E; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--fond); color: var(--texte); font: 15px/1.5 "Segoe UI", system-ui, sans-serif; display: flex; flex-direction: column; }
+  a { color: var(--vert); }
+  header { display: flex; align-items: center; gap: 14px; padding: 14px 22px; border-bottom: 1px solid var(--bord); flex-wrap: wrap; }
+  .sphere { width: 42px; height: 42px; border-radius: 50%; flex: none;
+            background: radial-gradient(circle at 35% 30%, #B9FFE2 0%, var(--vert) 35%, var(--vert-sombre) 75%, #0d2a20 100%);
+            box-shadow: 0 0 22px rgba(61,220,151,.45); animation: souffle 4s ease-in-out infinite; }
+  .sphere.pense { animation: pense 1.1s ease-in-out infinite; }
+  @keyframes souffle { 50% { transform: scale(1.06); box-shadow: 0 0 34px rgba(61,220,151,.6); } }
+  @keyframes pense { 50% { transform: scale(.88); box-shadow: 0 0 44px rgba(61,220,151,.9); } }
+  @media (prefers-reduced-motion: reduce) { .sphere, .sphere.pense { animation: none; } }
+  h1 { font-size: 20px; letter-spacing: .32em; margin: 0; font-weight: 600; }
+  .sous { color: var(--texte2); font-size: 13px; }
+  .voyants { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+  .voyant { display: flex; align-items: center; gap: 7px; padding: 5px 11px; border: 1px solid var(--bord); border-radius: 999px;
+            font-size: 13px; color: var(--texte2); background: var(--fond2); }
+  .voyant i { width: 9px; height: 9px; border-radius: 50%; background: #45584f; flex: none; }
+  .voyant.ok { color: var(--texte); } .voyant.ok i { background: var(--vert); box-shadow: 0 0 8px var(--vert); }
+  .voyant.attente i { background: var(--ambre); } .voyant.non i { background: var(--rouge); }
+  main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 18px; padding: 18px 22px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; overflow: auto; } .voyants { margin-left: 0; } }
+  .carte { background: var(--fond2); border: 1px solid var(--bord); border-radius: 14px; }
+  #discussion { display: flex; flex-direction: column; min-height: 420px; }
+  #fil { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+  .bulle { max-width: 82%; padding: 10px 14px; border-radius: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .bulle.moi { align-self: flex-end; background: var(--vert-sombre); border-bottom-right-radius: 4px; }
+  .bulle.archi { align-self: flex-start; background: var(--fond3); border-bottom-left-radius: 4px; }
+  .bulle.rappel { align-self: center; background: transparent; border: 1px solid var(--ambre); color: var(--ambre); }
+  .bulle.souci { align-self: center; background: transparent; border: 1px solid var(--rouge); color: var(--rouge); }
+  .bulle img { display: block; max-width: 220px; max-height: 160px; border-radius: 8px; margin-bottom: 6px; }
+  .bulle small { display: block; color: var(--texte2); margin-top: 4px; font-size: 12px; }
+  #accueil { margin: auto; text-align: center; color: var(--texte2); max-width: 520px; }
+  #accueil b { color: var(--texte); font-size: 18px; font-weight: 600; display: block; margin-bottom: 6px; }
+  #idees { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 16px; }
+  .idee { background: var(--fond3); color: var(--texte); border: 1px solid var(--bord); border-radius: 999px; padding: 7px 13px; cursor: pointer; font: inherit; font-size: 13.5px; }
+  .idee:hover, .idee:focus-visible { border-color: var(--vert); outline: none; }
+  form { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--bord); align-items: flex-end; }
+  textarea { flex: 1; resize: none; background: var(--fond); color: var(--texte); border: 1px solid var(--bord); border-radius: 10px;
+             padding: 10px 12px; font: inherit; max-height: 140px; min-height: 44px; }
+  textarea:focus-visible { outline: 2px solid var(--vert-sombre); border-color: var(--vert); }
+  button.rond { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--bord); background: var(--fond3); color: var(--texte);
+                cursor: pointer; font-size: 18px; flex: none; }
+  button.rond.envoi { background: var(--vert); color: #062016; border-color: var(--vert); font-weight: 700; }
+  button.rond:disabled { opacity: .45; cursor: default; }
+  button.rond:focus-visible { outline: 2px solid var(--vert); outline-offset: 2px; }
+  #jointe { font-size: 12.5px; color: var(--texte2); padding: 0 14px 8px; display: none; }
+  aside { display: flex; flex-direction: column; gap: 14px; overflow-y: auto; min-height: 0; }
+  aside .carte { padding: 16px; }
+  h2 { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--texte2); margin: 0 0 10px; font-weight: 600; }
+  #qr { background: #fff; border-radius: 10px; padding: 8px; width: 196px; height: 196px; margin: 4px auto 10px; display: none; }
+  #qr svg { width: 100%; height: 100%; display: block; }
+  ol { margin: 0; padding-left: 20px; color: var(--texte2); font-size: 13.5px; } ol li { margin: 3px 0; } ol b { color: var(--texte); font-weight: 600; }
+  .note { color: var(--texte2); font-size: 13px; margin: 0; }
+  #outils { list-style: none; margin: 0; padding: 0; font-size: 13px; max-height: 260px; overflow-y: auto; }
+  #outils li { padding: 6px 0; border-top: 1px solid var(--bord); color: var(--texte2); } #outils li:first-child { border-top: 0; }
+  #outils b { color: var(--vert); font-weight: 600; font-family: Consolas, monospace; font-size: 12.5px; }
+  .accord { color: var(--ambre); font-size: 11.5px; border: 1px solid var(--ambre); border-radius: 4px; padding: 0 4px; margin-left: 4px; }
+  code { font-family: Consolas, monospace; font-size: 12.5px; background: var(--fond); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="sphere" id="sphere" aria-hidden="true"></div>
+  <div><h1>ARCHI</h1><div class="sous">Ton assistant 100 % local : rien ne part vers un service d'IA en ligne.</div></div>
+  <div class="voyants" aria-live="polite">
+    <span class="voyant attente" id="v-cerveau" title="Le modèle de langage, servi par LM Studio sur ce PC"><i></i><span>Cerveau</span></span>
+    <span class="voyant attente" id="v-n8n" title="L'orchestration : n8n, sur ce PC"><i></i><span>Agent</span></span>
+    <span class="voyant attente" id="v-tel" title="L'adresse HTTPS qui relie ton téléphone à ce PC"><i></i><span>Téléphone</span></span>
+    <span class="voyant" id="v-tg" title="Bot Telegram personnel (en option)"><i></i><span>Telegram</span></span>
+  </div>
+</header>
+<main>
+  <section class="carte" id="discussion" aria-label="Discussion avec Archi">
+    <div id="fil" aria-live="polite">
+      <div id="accueil">
+        <b id="bonjour">Bonjour.</b>
+        Archi tourne sur ce PC. Écris-lui comme à quelqu'un : il choisit lui-même ses outils.
+        <div id="idees"></div>
+      </div>
+    </div>
+    <div id="jointe"></div>
+    <form id="saisie">
+      <input type="file" id="photo" accept="image/*" hidden>
+      <button type="button" class="rond" id="b-photo" title="Joindre une photo : le modèle de vision local la décrit" aria-label="Joindre une photo">&#128247;</button>
+      <textarea id="texte" rows="1" placeholder="Écris à Archi…" aria-label="Ton message"></textarea>
+      <button type="submit" class="rond envoi" id="b-envoi" title="Envoyer (Entrée)" aria-label="Envoyer">&#10148;</button>
+    </form>
+  </section>
+  <aside>
+    <div class="carte">
+      <h2>Sur ton téléphone</h2>
+      <div id="qr" role="img" aria-label="QR code à scanner avec le téléphone"></div>
+      <div id="tel-texte"><p class="note">Ouverture de l'adresse HTTPS du PC…</p></div>
+    </div>
+    <div class="carte">
+      <h2>Ses outils (<span id="nb-outils">0</span>)</h2>
+      <ul id="outils"></ul>
+      <p class="note" style="margin-top:8px">Les outils marqués <span class="accord">accord</span> ne partent jamais sans ton « oui ».</p>
+    </div>
+    <div class="carte">
+      <h2>Dans les coulisses</h2>
+      <p class="note">Modèle : <code id="c-modele">…</code><br>Vision : <code id="c-vision">…</code><br>
+        Workflows : <a id="c-n8n" href="#" target="_blank" rel="noopener">ouvrir n8n</a> (sur ce PC seulement)<br>
+        Telegram : <span id="c-tg">…</span></p>
+    </div>
+  </aside>
+</main>
+<script src="/qrcode.js"></script>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const api = (chemin, options) => fetch(chemin, Object.assign({}, options, { headers: Object.assign({ 'X-Archi-Portail': '1' }, (options || {}).headers) }));
+const IDEES = [
+  'Quels outils as-tu ?',
+  'Rappelle-moi dans 2 minutes de boire un verre d\'eau',
+  'Que sais-tu sur le four solaire ?',
+  'Où en est mon projet de drone ?',
+  'Fais-moi un PDF qui résume ce que tu sais faire',
+];
+let occupe = false, lienActuel = null, pret = false;
+const vus = new Set(JSON.parse(localStorage.getItem('archi_rappels_vus') || '[]'));
+
+function bulle(type, texte, extra) {
+  const a = $('accueil'); if (a) a.remove();
+  const b = document.createElement('div');
+  b.className = 'bulle ' + type;
+  if (extra && extra.image) { const i = document.createElement('img'); i.src = extra.image; i.alt = 'Photo envoyée'; b.appendChild(i); }
+  b.appendChild(document.createTextNode(texte));
+  if (extra && extra.note) { const s = document.createElement('small'); s.textContent = extra.note; b.appendChild(s); }
+  $('fil').appendChild(b);
+  $('fil').scrollTop = $('fil').scrollHeight;
+  return b;
+}
+
+function voyant(id, etat, texte) { const v = $(id); v.className = 'voyant ' + etat; v.lastElementChild.textContent = texte; }
+
+async function majEtat() {
+  let e;
+  try { e = await (await api('/api/etat')).json(); } catch (x) { voyant('v-n8n', 'non', 'Portail arrêté'); return; }
+  if (e.utilisateur) $('bonjour').textContent = 'Bonjour ' + e.utilisateur + '.';
+  const c = e.cerveau;
+  voyant('v-cerveau', c.pret ? 'ok' : (c.joignable ? 'attente' : 'non'),
+    c.pret ? 'Cerveau prêt' : (c.joignable ? 'Modèle pas encore chargé' : 'LM Studio arrêté'));
+  voyant('v-n8n', e.n8n ? 'ok' : 'attente', e.n8n ? 'Agent prêt' : 'Agent en cours de démarrage');
+  voyant('v-tel', e.lien_telephone ? 'ok' : 'attente', e.lien_telephone ? 'Téléphone : prêt à brancher' : 'Téléphone : pas d\'adresse');
+  voyant('v-tg', e.telegram ? 'ok' : '', e.telegram ? 'Telegram branché' : 'Telegram : en option');
+  pret = e.n8n;
+  $('c-modele').textContent = c.modele; $('c-vision').textContent = c.vision + (c.vision_prete ? '' : ' (chargé à la première photo)');
+  $('c-n8n').href = e.n8n_url;
+  $('c-tg').textContent = e.telegram ? 'branché' : 'double-clique sur brancher_telegram.bat (2 minutes, guidé)';
+  if (e.lien_telephone !== lienActuel) {
+    lienActuel = e.lien_telephone;
+    const t = $('tel-texte');
+    if (lienActuel) {
+      const qr = qrcode(0, 'M'); qr.addData(lienActuel); qr.make();
+      $('qr').innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+      $('qr').style.display = 'block';
+      t.innerHTML = '<ol><li><b>Scanne ce QR code</b> avec l\'appareil photo du téléphone (Android).</li>' +
+        (e.apk ? '<li><b>Installe l\'appli</b> depuis la page qui s\'ouvre.</li>' : '<li>L\'appli (APK) n\'est pas sur ce PC : prends-la dans la page « Releases » du dépôt.</li>') +
+        '<li>Touche <b>« Brancher l\'appli »</b> : l\'adresse et la clé se règlent toutes seules.</li></ol>' +
+        '<p class="note" style="margin-top:8px">L\'adresse change à chaque démarrage du PC : il suffit de rescanner.</p>';
+    } else {
+      $('qr').style.display = 'none';
+      t.innerHTML = '<p class="note">Pas encore d\'adresse HTTPS pour le téléphone. Elle s\'ouvre toute seule au lancement ' +
+        '(tunnel Cloudflare, sans compte). Regarde la fenêtre « Archi » si elle ne vient pas.</p>';
+    }
+  }
+  const liste = $('outils');
+  if (liste.childElementCount !== e.outils.length) {
+    liste.textContent = '';
+    for (const o of e.outils) {
+      const li = document.createElement('li'), b = document.createElement('b');
+      b.textContent = o.nom; li.appendChild(b);
+      if (o.sensible) { const s = document.createElement('span'); s.className = 'accord'; s.textContent = 'accord'; li.appendChild(s); }
+      li.appendChild(document.createElement('br')); li.appendChild(document.createTextNode(o.quoi));
+      liste.appendChild(li);
+    }
+    $('nb-outils').textContent = e.outils.length;
+  }
+}
+
+async function envoyer(texte, fichier) {
+  if (occupe || (!texte && !fichier)) return;
+  occupe = true; $('b-envoi').disabled = true; $('sphere').classList.add('pense');
+  bulle('moi', texte || '(photo)', fichier ? { image: URL.createObjectURL(fichier) } : null);
+  const debut = Date.now();
+  const attente = bulle('archi', 'Archi réfléchit…', { note: 'Le modèle tourne sur ta carte graphique.' });
+  const minuteur = setInterval(() => { attente.lastChild.textContent = 'Le modèle tourne sur ta carte graphique : ' + Math.round((Date.now() - debut) / 1000) + ' s'; }, 1000);
+  try {
+    const corps = new FormData();
+    corps.append('texte', texte || '');
+    if (fichier) { corps.append('nom_fichier', fichier.name); corps.append('photo', fichier, 'photo' + (fichier.name.match(/\.\w{2,5}$/) || ['.jpg'])[0]); }
+    const rep = await api('/api/message', { method: 'POST', body: corps });
+    let t = '';
+    try { t = (await rep.json()).texte || ''; } catch (x) { t = ''; }
+    if (!rep.ok && !t) t = 'Archi n\'a pas pu répondre (code ' + rep.status + '). Le workflow « Archi » est-il activé dans n8n ?';
+    attente.remove();
+    bulle(rep.ok ? 'archi' : 'souci', t || '(réponse vide)', { note: 'en ' + Math.round((Date.now() - debut) / 1000) + ' s, en local' });
+  } catch (x) {
+    attente.remove();
+    bulle('souci', 'Le PC n\'a pas répondu. Vérifie que la fenêtre « Archi » est toujours ouverte.');
+  } finally {
+    clearInterval(minuteur); occupe = false; $('b-envoi').disabled = false; $('sphere').classList.remove('pense'); $('texte').focus();
+  }
+}
+
+async function rappels() {
+  if (!pret) return;
+  try {
+    const r = await (await api('/api/annonces', { method: 'POST' })).json();
+    for (const a of (r.annonces || [])) {
+      if (vus.has(a.id)) continue;
+      vus.add(a.id); localStorage.setItem('archi_rappels_vus', JSON.stringify([...vus].slice(-200)));
+      bulle('rappel', '⏰ ' + a.texte);
+    }
+  } catch (x) { /* le prochain passage reessaiera */ }
+}
+
+for (const i of IDEES) {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'idee'; b.textContent = i;
+  b.onclick = () => envoyer(i); $('idees').appendChild(b);
+}
+$('b-photo').onclick = () => $('photo').click();
+$('photo').onchange = () => { const f = $('photo').files[0]; $('jointe').style.display = f ? 'block' : 'none'; $('jointe').textContent = f ? 'Photo jointe : ' + f.name + ' (elle reste sur ce PC)' : ''; };
+$('saisie').onsubmit = ev => {
+  ev.preventDefault();
+  const t = $('texte').value.trim(), f = $('photo').files[0];
+  $('texte').value = ''; $('photo').value = ''; $('jointe').style.display = 'none'; $('texte').style.height = '';
+  envoyer(t, f);
+};
+$('texte').addEventListener('keydown', ev => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); $('saisie').requestSubmit(); } });
+$('texte').addEventListener('input', () => { const t = $('texte'); t.style.height = ''; t.style.height = Math.min(t.scrollHeight + 2, 140) + 'px'; });
+majEtat(); setInterval(majEtat, 5000); setInterval(rappels, 20000);
+$('texte').focus();
+</script>
+</body>
+</html>

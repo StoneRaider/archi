@@ -1,56 +1,192 @@
-# lancer_archi.ps1 - lance Archi avec les reglages du fichier .env (lance par lancer_archi.bat).
-#   1. lit .env (sans jamais afficher les valeurs) et le met dans l'environnement de cette fenetre ;
-#   2. cree ou met a jour les identifiants n8n (bot Telegram, LM Studio) a partir du .env ;
-#   3. demarre la boite Docker (si Docker est installe), le serveur mails/agenda, puis n8n.
-param([switch]$SansDocker, [switch]$SansServeur)
+# lancer_archi.ps1 - lance Archi avec les reglages du fichier .env (lance par lancer_archi.bat ou le raccourci du Bureau).
+#   1. lit .env (sans jamais afficher les valeurs) : le .env gagne sur les variables de Windows ;
+#   2. reveille le cerveau (LM Studio : serveur + modele charge avec un contexte de 16k) ;
+#   3. ouvre la page d'accueil locale (le portail) et, pour le telephone, un tunnel HTTPS qui ne mene QU'AU portail ;
+#   4. demarre le serveur mails/agenda, puis n8n (dans cette fenetre : la fermer arrete Archi).
+# Marche avec les programmes prives poses par installation.bat (dossier programmes\), sinon avec ceux du PATH.
+# ASCII seulement.
+param([switch]$SansServeur, [switch]$SansNavigateur, [switch]$SansTunnel)
 $ErrorActionPreference = "Stop"
+$ProgressPreference = "SilentlyContinue"
 $racine = Split-Path -Parent $MyInvocation.MyCommand.Path
-$envFichier = Join-Path $racine ".env"
-if (-not (Test-Path $envFichier)) { Write-Host "Pas de .env : copie .env.example en .env, remplis-le, puis relance."; exit 1 }
+$ENVF = Join-Path $racine ".env"
+. (Join-Path $racine "installer\commun.ps1")
+try { $Host.UI.RawUI.WindowTitle = "Archi" } catch {}
+if (-not (Test-Path $ENVF)) { Dire "Pas de fichier .env : double-clique d'abord sur installation.bat (ou copie .env.example en .env)." "Red"; exit 1 }
 
-$n = 0
-foreach ($l in Get-Content -LiteralPath $envFichier -Encoding UTF8) {
-    if ($l -match '^\s*#' -or $l -notmatch '^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$') { continue }
-    $nom = $Matches[1]; $v = $Matches[2]
-    # meme regle que archi_env.py : "valeur" ou 'valeur' (un commentaire peut suivre), sinon on coupe a " #"
-    if ($v.Length -ge 2 -and ('"', "'" -contains [string]$v[0]) -and $v.IndexOf($v[0], 1) -gt 0) { $v = $v.Substring(1, $v.IndexOf($v[0], 1) - 1) }
-    elseif ($v.Contains(' #')) { $v = $v.Substring(0, $v.IndexOf(' #')).TrimEnd() }
-    if ($v -ne "" -and -not [Environment]::GetEnvironmentVariable($nom, "Process")) {
-        [Environment]::SetEnvironmentVariable($nom, $v, "Process"); $n++
-    }
-}
+$n = ChargerEnv
 if (-not $env:ARCHI_DEPOT) { $env:ARCHI_DEPOT = $racine }
-# le chateau : les workflows et les outils en ont besoin (vide dans le .env = ~/.n8n-files)
 if (-not $env:ARCHI_BASE) { $env:ARCHI_BASE = Join-Path $env:USERPROFILE ".n8n-files" }
-Write-Host "Reglages charges depuis .env : $n valeurs (non affichees)."
+if (-not $env:ARCHI_LM_URL) { $env:ARCHI_LM_URL = "http://127.0.0.1:1234/v1" }
+$pN8n = if ($env:N8N_PORT) { [int]$env:N8N_PORT } else { 5678 }
+$pPortail = if ($env:ARCHI_PORTAIL_PORT) { [int]$env:ARCHI_PORTAIL_PORT } else { 5680 }
+$pServeur = if ($env:ARCHI_SERVEUR_PORT) { [int]$env:ARCHI_SERVEUR_PORT } else { 8765 }
+$env:N8N_PORT = "$pN8n"; $env:ARCHI_PORTAIL_PORT = "$pPortail"
+$etat = Join-Path $racine "donnees\etat"
+New-Item -ItemType Directory -Force $etat | Out-Null
+$env:ARCHI_ETAT = $etat
+Dire ""
+Dire "   A R C H I" "Green"
+Dire "Reglages charges depuis .env : $n valeurs (jamais affichees)."
 
+# ---------------------------------------------------------------- les programmes (prives d'abord)
+$prog = Join-Path $racine "programmes"
+function TrouverExe([string]$dossier, [string]$nom) {
+    $f = Get-ChildItem -Path (Join-Path $prog $dossier) -Recurse -Filter $nom -File -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($f) { return $f.FullName }
+    return $null
+}
+$node = TrouverExe "node" "node.exe"
+if ($node) { $env:PATH = (Split-Path $node) + ";" + $env:PATH } else { $node = "node" }
+$ff = TrouverExe "ffmpeg" "ffmpeg.exe"
+if ($ff) { $env:PATH = (Split-Path $ff) + ";" + $env:PATH }
 $py = if ($env:ARCHI_PY) { $env:ARCHI_PY } else { "python" }
-& $py -I (Join-Path $racine "archi_env.py")
+$n8nBin = Join-Path $prog "n8n\node_modules\n8n\bin\n8n"
+$cf = Join-Path $prog "cloudflared\cloudflared.exe"
 
-# identifiants n8n a partir du .env (le jeton ne passe que par un fichier temporaire, efface aussitot)
-& $py -I (Join-Path $racine "n8n\creer_identifiants.py")
-# workflows (principal + optionnels) avec leurs ID fixes : au premier lancement seulement (n8n est encore arrete ici)
-& $py -I (Join-Path $racine "n8n\importer_workflows.py")
+# ---------------------------------------------------------------- un seul Archi a la fois
+$fichierPids = Join-Path $etat "pids.txt"
+function ArreterAnciens {
+    # les aides (portail, tunnel, serveur) d'un lancement precedent ferme a la croix : on ne touche qu'a celles de CE dossier
+    if (-not (Test-Path $fichierPids)) { return }
+    foreach ($ligne in Get-Content $fichierPids) {
+        $id = 0
+        if (-not [int]::TryParse($ligne.Trim(), [ref]$id)) { continue }
+        try {
+            $p = Get-CimInstance Win32_Process -Filter "ProcessId=$id" -ErrorAction Stop
+            if ($p -and $p.CommandLine -and $p.CommandLine.ToLower().Contains($racine.ToLower())) { Stop-Process -Id $id -Force -ErrorAction SilentlyContinue }
+        } catch {}
+    }
+    Remove-Item $fichierPids -Force -ErrorAction SilentlyContinue
+}
+if (-not (PortLibre $pN8n)) {
+    if (-not (PortLibre $pPortail)) {
+        Dire "Archi tourne deja : j'ouvre sa page d'accueil." "Green"
+        Start-Process "http://127.0.0.1:$pPortail/"
+        exit 0
+    }
+    Dire "Le port $pN8n est deja pris par un autre programme (un autre n8n ?). Ferme-le, ou change N8N_PORT dans .env." "Red"; exit 1
+}
+ArreterAnciens
+if (-not (PortLibre $pPortail)) { Dire "Le port $pPortail est deja pris : change ARCHI_PORTAIL_PORT dans .env." "Red"; exit 1 }
+$aides = New-Object System.Collections.Generic.List[int]
+function Suivre($processus) { if ($processus) { $aides.Add($processus.Id); Add-Content -Path $fichierPids -Value $processus.Id } }
 
-if (-not $SansDocker -and (Get-Command docker -ErrorAction SilentlyContinue)) {
-    Write-Host "Boite Docker (oeil, SearXNG, Presenton)..."
+# ---------------------------------------------------------------- le cerveau : LM Studio
+function CerveauRepond { try { Invoke-RestMethod -Uri "$($env:ARCHI_LM_URL.TrimEnd('/'))/models" -TimeoutSec 3 | Out-Null; return $true } catch { return $false } }
+Titre "Le cerveau (LM Studio)"
+$lms = TrouverLms
+try {
+    if (-not (CerveauRepond) -and $lms) {
+        Dire "  demarrage du serveur de LM Studio..."
+        Lancer $lms @("server", "start") 120 | Out-Null
+        # LM Studio reprend son dernier port : on s'aligne dessus si ce n'est pas celui du .env
+        try {
+            $s = (Lancer $lms @("server", "status", "--json") 30).sortie | ConvertFrom-Json
+            if ($s.running -and $s.port -and $env:ARCHI_LM_URL -notmatch (":" + $s.port + "(/|$)")) {
+                $env:ARCHI_LM_URL = "http://127.0.0.1:$($s.port)/v1"
+                ReglerEnv "ARCHI_LM_URL" $env:ARCHI_LM_URL -Forcer
+                Dire "  LM Studio ecoute sur le port $($s.port) : le .env est mis a jour (relance creer_identifiants si n8n ne le voit pas)."
+            }
+        } catch {}
+    }
+    if (CerveauRepond) {
+        if ($lms -and $env:ARCHI_MODELE) {
+            $charges = @()
+            try { $charges = @(((Lancer $lms @("ps", "--json") 30).sortie | ConvertFrom-Json) | ForEach-Object { $_.identifier; $_.modelKey }) } catch {}
+            if ($charges -notcontains $env:ARCHI_MODELE) {
+                $contexte = if ($env:ARCHI_CONTEXTE) { $env:ARCHI_CONTEXTE } else { "16384" }
+                Dire "  chargement de $($env:ARCHI_MODELE) sur la carte graphique (contexte $contexte, 20 a 60 secondes)..."
+                $r = Lancer $lms @("load", $env:ARCHI_MODELE, "--context-length", $contexte, "-y") 600 -Points
+                if ($r.code -ne 0) { Dire "  ! Le modele ne s'est pas charge tout seul : il se chargera a la premiere question (plus lent)." "Yellow" }
+            }
+        }
+        Dire "  Cerveau pret : $($env:ARCHI_MODELE)" "Green"
+    } else {
+        Dire "  ! LM Studio ne repond pas sur $($env:ARCHI_LM_URL) : ouvre LM Studio, onglet Developer, et demarre le serveur." "Yellow"
+    }
+} catch { Dire "  ! LM Studio : $($_.Exception.Message)" "Yellow" }
+
+# ---------------------------------------------------------------- n8n : identifiants et workflows (seulement si quelque chose a change)
+Titre "L'agent (n8n)"
+try {
+    & $py -I (Join-Path $racine "n8n\creer_identifiants.py") --si-change
+    & $py -I (Join-Path $racine "n8n\importer_workflows.py")
+} catch { Dire "  ! Preparation de n8n : $($_.Exception.Message)" "Yellow" }
+
+# ---------------------------------------------------------------- le portail (page d'accueil) et le tunnel du telephone
+Titre "La page d'accueil et le telephone"
+Remove-Item (Join-Path $etat "adresse_publique.txt") -Force -ErrorAction SilentlyContinue
+$journal = Join-Path $etat "portail.log"
+Suivre (Start-Process -FilePath $node -ArgumentList ('"' + (Join-Path $racine "portail\portail.js") + '"') -WindowStyle Hidden -PassThru `
+    -RedirectStandardOutput $journal -RedirectStandardError "$journal.err")
+Dire "  Page d'accueil : http://127.0.0.1:$pPortail/"
+$adresse = ""
+if ($env:WEBHOOK_URL) {
+    $adresse = $env:WEBHOOK_URL.TrimEnd('/')
+    Dire "  Adresse HTTPS du .env (ton tunnel doit viser le port $pPortail, pas celui de n8n)."
+} elseif (-not $SansTunnel -and $env:ARCHI_TUNNEL -ne "non" -and (Test-Path $cf)) {
+    # tunnel Cloudflare 'rapide' : sans compte, une adresse au hasard a chaque lancement, qui ne mene qu'au portail
+    $jt = Join-Path $etat "tunnel.log"
+    Remove-Item $jt -Force -ErrorAction SilentlyContinue
+    Suivre (Start-Process -FilePath $cf -ArgumentList "tunnel", "--no-autoupdate", "--url", "http://127.0.0.1:$pPortail" -WindowStyle Hidden -PassThru `
+        -RedirectStandardError $jt -RedirectStandardOutput "$jt.out")
+    Dire "  ouverture de l'adresse HTTPS du telephone..."
+    for ($i = 0; $i -lt 40 -and -not $adresse; $i++) {
+        Start-Sleep -Seconds 1
+        try { $m = [regex]::Match((Get-Content $jt -Raw -ErrorAction Stop), 'https://[a-z0-9-]+\.trycloudflare\.com'); if ($m.Success) { $adresse = $m.Value } } catch {}
+    }
+    if ($adresse) { $env:WEBHOOK_URL = "$adresse/" }
+    else { Dire "  ! Le tunnel ne s'est pas ouvert (pas d'Internet ?) : la page d'accueil marche, le telephone attendra." "Yellow" }
+}
+if ($adresse) {
+    [System.IO.File]::WriteAllText((Join-Path $etat "adresse_publique.txt"), $adresse, $script:utf8SansBom)
+    Dire "  Telephone : $adresse  (scanne le QR code de la page d'accueil)" "Green"
+}
+
+# ---------------------------------------------------------------- la boite Docker (oeil, SearXNG, Presenton) : seulement si demandee
+if ($env:ARCHI_DOCKER -eq "oui" -and (Get-Command docker -ErrorAction SilentlyContinue)) {
+    Dire "Boite Docker (oeil, SearXNG, Presenton)..."
     Push-Location (Join-Path $racine "boite_outils")
     # services facultatifs : le globe seulement si son code est la, le tunnel seulement s'il a un jeton
     $profils = @()
     if (Test-Path (Join-Path $racine "boite_outils\gods-eye-view\package.json")) { $profils += "--profile", "oeil" }
     if ($env:TUNNEL_TOKEN -and $profils.Count -gt 0) { $profils += "--profile", "tunnel" }   # le tunnel a besoin de la porte (profil oeil)
-    try { docker compose --env-file $envFichier @profils up -d --build } catch { Write-Host "Docker : $($_.Exception.Message)" }
+    try { docker compose --env-file $ENVF @profils up -d --build } catch { Dire "Docker : $($_.Exception.Message)" "Yellow" }
     Pop-Location
 }
+
+# ---------------------------------------------------------------- le serveur mails et agenda
 if (-not $SansServeur) {
-    Write-Host "Serveur mails et agenda (127.0.0.1:$(if ($env:ARCHI_SERVEUR_PORT) { $env:ARCHI_SERVEUR_PORT } else { 8765 }))..."
-    # le serveur a son propre venv (serveur\venv, voir serveur\LISEZMOI.md), sinon le Python de ARCHI_PY ;
-    # lance DEPUIS son dossier (ses modules sont a cote) et dans une fenetre visible : une erreur se voit
-    $dosServeur = Join-Path $racine "serveur"
-    $pyServeur = Join-Path $dosServeur "venv\Scripts\python.exe"
-    if (-not (Test-Path $pyServeur)) { $pyServeur = $py }
-    Start-Process -FilePath $pyServeur -ArgumentList "archi_server.py" -WorkingDirectory $dosServeur
+    if (PortLibre $pServeur) {
+        # lance DEPUIS son dossier (ses modules sont a cote) et dans une fenetre reduite : une erreur reste visible
+        $dosServeur = Join-Path $racine "serveur"
+        $pyServeur = if ($env:ARCHI_SERVEUR_PY -and (Test-Path $env:ARCHI_SERVEUR_PY)) { $env:ARCHI_SERVEUR_PY } else { Join-Path $dosServeur "venv\Scripts\python.exe" }
+        if (-not (Test-Path $pyServeur)) { $pyServeur = $py }
+        try {
+            Suivre (Start-Process -FilePath $pyServeur -ArgumentList "archi_server.py" -WorkingDirectory $dosServeur -WindowStyle Minimized -PassThru)
+            Dire "  Serveur mails et agenda : 127.0.0.1:$pServeur (non branche tant que tu n'as pas ajoute tes comptes)"
+        } catch { Dire "  ! Serveur mails et agenda : $($_.Exception.Message)" "Yellow" }
+    } else { Dire "  ! Le port $pServeur est pris : le serveur mails et agenda n'est pas lance." "Yellow" }
 }
-Write-Host "n8n (http://127.0.0.1:$(if ($env:N8N_PORT) { $env:N8N_PORT } else { 5678 }))..."
-$version = if ($env:ARCHI_N8N_VERSION) { $env:ARCHI_N8N_VERSION } else { "1" }
-npx --yes "n8n@$version"
+
+# ---------------------------------------------------------------- n8n, dans cette fenetre
+if (-not $SansNavigateur) {
+    # la page d'accueil s'ouvre toute seule quand n8n repond
+    $attente = "for (`$i = 0; `$i -lt 120; `$i++) { try { Invoke-WebRequest -Uri 'http://127.0.0.1:$pN8n/healthz' -UseBasicParsing -TimeoutSec 2 | Out-Null; Start-Process 'http://127.0.0.1:$pPortail/'; break } catch { Start-Sleep -Seconds 2 } }"
+    Start-Process -FilePath "powershell" -ArgumentList "-NoProfile", "-WindowStyle", "Hidden", "-Command", $attente -WindowStyle Hidden
+}
+Dire ""
+Dire "n8n demarre (30 secondes environ), puis la page d'accueil s'ouvre dans ton navigateur." "Green"
+Dire "Pour ARRETER Archi : ferme cette fenetre."
+Dire ""
+try {
+    if (Test-Path $n8nBin) { & $node $n8nBin start }
+    else {
+        $version = if ($env:ARCHI_N8N_VERSION) { $env:ARCHI_N8N_VERSION } else { "1" }
+        npx --yes "n8n@$version"
+    }
+} finally {
+    foreach ($id in $aides) { Stop-Process -Id $id -Force -ErrorAction SilentlyContinue }
+    Remove-Item $fichierPids -Force -ErrorAction SilentlyContinue
+}
