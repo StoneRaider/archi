@@ -244,6 +244,8 @@ function outils(r) {
   } catch (e) { return []; }
 }
 
+const SAIN_DEPUIS = new WeakMap();   // par portail : depuis quand n8n repond
+
 /** Ce qu'Archi a retenu tout seul (outils/memoire) : le nombre de fiches et de faits, et les derniers faits ranges. */
 function memoire(r) {
   const resume = { fiches: 0, faits: 0, derniers: [] };
@@ -273,18 +275,26 @@ function memoire(r) {
 }
 
 async function etat(r, suivi) {
-  const [n8n, lm, etatVoix] = await Promise.all([
+  const [n8n, sonde, lm, etatVoix] = await Promise.all([
     voir('http://127.0.0.1:' + r.n8nPort + '/healthz', 2500),
+    // n8n se dit en bonne sante quelques secondes AVANT d'avoir active le workflow : un message envoye a ce moment-la
+    // se perd. Un GET sur le webhook (qui n'accepte que POST) ne lance rien, et sa reponse dit s'il est enregistre.
+    voir('http://127.0.0.1:' + r.n8nPort + '/webhook/telephone-archi', 2500),
     voir(r.lmUrl + '/models', 2500),
     r.voix ? voix.etat(r.voix).catch(() => null) : null,
   ]);
+  const sain = !!(n8n && n8n.code === 200);
+  if (!sain) SAIN_DEPUIS.delete(r); else if (!SAIN_DEPUIS.has(r)) SAIN_DEPUIS.set(r, Date.now());
+  const active = !!(sonde && sonde.code === 404 && /POST request/i.test(sonde.corps));
+  // si la reponse de n8n change de forme un jour, on ne reste pas bloque : au bout de 90 s de bonne sante, on le croit pret
+  const agentPret = sain && (active || Date.now() - SAIN_DEPUIS.get(r) > 90000);
   let modeles = [];
   try { modeles = (JSON.parse(lm.corps).data || []).map(m => String(m.id)); } catch (e) { modeles = []; }
   const pub = adressePublique(r);
   const pret = pub && r.cle.length >= 16;
   return {
     utilisateur: r.utilisateur,
-    n8n: !!(n8n && n8n.code === 200),
+    n8n: agentPret,   // pret a recevoir un message : n8n repond ET le workflow est active
     cerveau: { joignable: !!lm, modele: r.modele, pret: modeles.includes(r.modele), vision: r.modeleVision, vision_prete: modeles.includes(r.modeleVision) },
     telegram: r.telegram,
     // la memoire : ce qu'Archi a retenu tout seul, en fiches dans le chateau
