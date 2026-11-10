@@ -129,6 +129,33 @@ Comment ça marche :
 - **90 tests rejouables** (`outils/planificateur/test_planificateur.py`) : heures en français, répétitions, lieux,
   rayon et sortie franche, position floue ou trop vieille, actions différées, PC éteint, verrou, fichier abîmé.
 
+## Le curateur et le mécanicien : Archi s'entretient lui-même
+
+Deux outils travaillent pour Archi lui-même. Ils **proposent**, et rien ne change sans ton accord.
+
+**Le curateur range la mémoire.** Chaque dimanche à 10 h (ou au démarrage suivant si le PC était éteint), il relit
+les fiches et donne une liste numérotée de propositions :
+- un lien `[[…]]` vers une fiche qui n'existe pas (il propose la bonne, ou du texte simple) ;
+- un fait en double, ou deux faits qui se contredisent (le modèle local les repère, le code vérifie) ;
+- une fiche vide à archiver, un projet « en cours » sans nouvelle depuis 90 jours à passer « en pause » ;
+- une ligne qui ressemble à un mot de passe ou un code, à retirer (la ligne n'est jamais répétée dans la réponse).
+
+Tu réponds « **curateur, 1 et 3** » : il garde d'abord une copie de la mémoire, puis applique. « **curateur, annule** »
+remet tout comme avant. Une fiche que tu as modifiée entre-temps n'est pas touchée.
+
+**Le mécanicien fabrique les outils qui manquent.** Quand Archi rate quelque chose (outil inconnu, erreur), le lanceur
+le note. Le lundi à 10 h 30, le mécanicien relit ces ratés et propose jusqu'à 3 idées d'outils. Tu peux aussi lui
+demander : « **mécanicien, fabrique-moi un outil qui dit où est la station spatiale** ».
+- Il n'écrit **pas de programme**. Le modèle local écrit une **recette** : un site public sans clé à lire, des
+  valeurs à garder, un calcul simple, une phrase. Un moteur fixe et testé (`outils/mecanicien/recette.py`) la suit.
+- Le moteur vérifie la recette avant de la suivre : https seulement, sur les sites que la recette annonce, jamais une
+  adresse du réseau local, pas de redirection, 1 Mo et 10 s au plus, des calculs sur une liste fermée d'opérations.
+- Le mécanicien l'essaie dans son atelier, montre les essais, et attend « **mécanicien, valide la 1** ». C'est
+  seulement là que l'outil entre au registre. « **mécanicien, retire …** » le sort, sans rien effacer.
+
+Le menu de la page d'accueil a une carte **L'atelier** : les propositions du curateur et l'état de chaque idée du
+mécanicien (idée, en construction, testé, installé…), avec la recette et ses essais.
+
 ## Ce qui rend Archi différent
 
 | Problème d'un petit modèle local | Réponse d'Archi | Où |
@@ -138,6 +165,7 @@ Comment ça marche :
 | Il invente des noms et des numéros | **Vérificateur** : chaque nom, mail ou numéro absent des sources est signalé « à vérifier » | `core/verifier_reponse.js` |
 | Il obéit à un mail ou un PDF piégé | **Contenu extérieur balisé** : un fichier lu reste du contenu, jamais une consigne | `core/contexte.js` |
 | Il agit trop vite | **Garde-fous dans les outils eux-mêmes**, pas seulement dans le prompt : essai à blanc, `confirmer=oui`, outils « sensibles » avec `accord=oui`, prise du PC interdite, seul le chat Telegram autorisé est écouté | `core/outils_maison.js`, `outils/*`, `n8n/` |
+| Sa mémoire s'encombre, ses outils manquent | **Curateur et mécanicien** : ils proposent un rangement ou un nouvel outil (une recette suivie par un moteur fixe), et n'appliquent rien sans ton accord | `outils/curateur`, `outils/mecanicien` |
 | Ajouter une capacité, c'est toucher au workflow | **Outils maison** : un dossier = un outil (`outil.json` + script + tests), inscrit au registre, sans republier n8n | `outils/`, `registre.json` |
 | Joindre le PC depuis le téléphone, c'est exposer n8n | **Portail** : le tunnel mène à une porte à part, qui ne connaît qu'une liste blanche ; la clé est vérifiée avant n8n | `portail/portail.js` |
 | Il dit « c'est fait » sans l'avoir fait | **Promesse vérifiée** : « C'est programmé » sans réponse du planificateur est signalé à l'utilisateur | `core/verifier_reponse.js` |
@@ -171,6 +199,8 @@ node --test core/test portail/test                      # cœur (contexte, lance
 cd outils/planificateur && python test_planificateur.py # 90 tests, dans un faux dossier personnel
 cd outils/memoire && python test_memoire.py             # 40 tests, avec un faux modèle local
 cd outils/trader && python test_trader.py               # 77 tests, faux prix et faux modèle, aucun réseau
+cd outils/curateur && python test_curateur.py           # 54 tests, faux château et faux modèle
+cd outils/mecanicien && python test_mecanicien.py       # 79 tests, faux sites et faux modèle, aucun réseau
 python outils_depot/verifier_depot.py .                 # aucun secret ni donnée perso dans le dépôt
 ```
 

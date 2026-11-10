@@ -616,7 +616,47 @@ test('workflow de la demo : les outils de l agent sont relies aux deux agents, v
   assert.ok(nav.nodes.find(x => x.name === 'Navigateur').parameters.jsCode.includes('$env.TELEGRAM_BOT_TOKEN && $env.ARCHI_TELEGRAM_CHAT_ID'));
   assert.equal(nav.nodes.find(x => x.name === 'Envoyer capture').onError, 'continueRegularOutput');
   // ce qui n'est pas relie (monteur, pieces 3D, image par lien) est annonce « en cours de developpement », pas dans les outils
-  for (const mot of [/monteur/i, /pi[eè]ce 3D/i, /image/i, /curateur/i, /m[eé]canicien/i]) assert.ok(v.en_developpement.some(c => mot.test(c.titre)), String(mot));
+  for (const mot of [/monteur/i, /pi[eè]ce 3D/i, /image/i]) assert.ok(v.en_developpement.some(c => mot.test(c.titre)), String(mot));
   assert.ok(!v.outils.some(o => /monteur|impression3d|catalogues|analyse_image/.test(o.nom)));
+  // le curateur et le mecanicien sont des outils, plus des projets
+  const reg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'chateau_exemple', 'outils', 'registre.json'), 'utf8'));
+  for (const nom of ['curateur', 'mecanicien']) {
+    assert.ok(v.outils.some(o => o.nom === nom) && reg[nom], nom);
+    assert.ok(!v.en_developpement.some(c => new RegExp(nom.replace('e', '[eé]'), 'i').test(c.titre)), nom);
+  }
+  // le reveil de chaque minute lance aussi les tournees, avant de regarder s'il y a un chat Telegram
+  const reveil = wf.nodes.find(x => x.name === 'Reveil planificateur').parameters.jsCode;
+  assert.ok(reveil.indexOf('tournees.js') > 0 && reveil.indexOf('tournees.js') < reveil.indexOf('ARCHI_TELEGRAM_CHAT_ID'));
+});
+
+test('atelier : la page montre les propositions du curateur (jamais leur action) et les idees du mecanicien', () => {
+  const B = fs.mkdtempSync(path.join(os.tmpdir(), 'archi-atelier-'));
+  const r = { base: B, depot: path.join(__dirname, '..', '..') };
+  assert.deepStrictEqual(P.atelier(r).mecanicien.idees, []);
+  fs.mkdirSync(path.join(B, 'curateur'));
+  fs.writeFileSync(path.join(B, 'curateur', 'propositions.json'), JSON.stringify({ cree: '2026-11-08T10:00:00', fiches: 7, appliquees: [2],
+    propositions: [{ n: 1, titre: 'Dans « moi », la ligne 3 ressemble a un mot de passe', action: { type: 'retirer_ligne', ligne: '- code 1234 secret' } },
+      { n: 2, titre: 'Lien casse', action: { type: 'remplacer', ancien: '[[x]]', nouveau: 'x' } }, { n: 'pas un nombre', titre: 'abime' }] }));
+  fs.mkdirSync(path.join(B, 'atelier', '1_position_iss'), { recursive: true });
+  fs.writeFileSync(path.join(B, 'atelier', '1_position_iss', 'recette.json'), JSON.stringify({ nom: 'position_iss', hotes: ['api.wheretheiss.at'], essais: [{ x: 1 }] }));
+  fs.writeFileSync(path.join(B, 'atelier', 'atelier.json'), JSON.stringify({ idees: [
+    { n: 1, titre: 'Position ISS', quoi: 'Ou est la station', etat: 'teste', dossier: '1_position_iss', hotes: ['api.wheretheiss.at'],
+      essais: [{ parametres: { ville: 'Lyon' }, phrase: 'La station est la.', reussi: true }] },
+    { n: 2, titre: 'Piege', etat: 'teste', dossier: '../../etc' },
+    { n: 3, titre: 'Etat inconnu', etat: 'pirate' }] }));
+  const a = P.atelier(r);
+  assert.deepStrictEqual(a.curateur.propositions.map(p => [p.n, p.faite]), [[1, false], [2, true]]);
+  assert.doesNotMatch(JSON.stringify(a), /1234|retirer_ligne|\[\[x\]\]/, 'jamais le contenu d une action');
+  assert.deepStrictEqual(a.mecanicien.idees.map(i => i.n), [2, 1], 'les plus recentes d abord, un etat inconnu ecarte');
+  const iss = a.mecanicien.idees.find(i => i.n === 1);
+  assert.match(iss.recette, /api\.wheretheiss\.at/);
+  assert.doesNotMatch(iss.recette, /essais/, 'la recette sans ses essais (ils sont montres a part)');
+  assert.strictEqual(iss.essais[0].entree, 'ville = Lyon');
+  assert.strictEqual(a.mecanicien.idees.find(i => i.n === 2).recette, '', 'un dossier piege n est jamais lu');
+  const page = fs.readFileSync(path.join(__dirname, '..', 'accueil.html'), 'utf8');
+  for (const id of ['b-atelier', 'volet-atelier', 'cur-props', 'meca-idees']) assert.ok(page.includes('id="' + id + '"'), id);
+  assert.match(page, /function dessinerAtelier[\s\S]*textContent/);
+  assert.doesNotMatch(page.slice(page.indexOf('function dessinerAtelier'), page.indexOf('// ---- les volets')), /innerHTML/);
+  fs.rmSync(B, { recursive: true, force: true });
 });
 

@@ -3,6 +3,8 @@
  "outils": [
   {"nom": "planificateur", "titre": "Rappels et tâches", "quoi": "Te prévenir plus tard : à une heure, chaque semaine, ou quand tu arrives quelque part."},
   {"nom": "memoire", "titre": "Mémoire", "quoi": "Ce qu'il sait de toi, en fiches sur ton PC. Il retient tout seul ; dis « oublie… » pour effacer."},
+  {"nom": "curateur", "titre": "Curateur", "quoi": "Chaque dimanche, il relit la mémoire : liens cassés, doublons, secrets, faits qui se contredisent. Il propose, numéroté ; rien ne change sans ton accord."},
+  {"nom": "mecanicien", "titre": "Mécanicien", "quoi": "Il fabrique de nouveaux outils dans son atelier, à partir de tes idées ou de ce qui a raté, les essaie, et ne les installe qu'après ton « valide »."},
   {"nom": "enquete_osint", "agent": true, "titre": "Enquêtes (OSINT)", "quoi": "Hunter enquête en sources ouvertes : entreprise, site ou mail suspect, domaine, photo. Jamais la vie privée d'un particulier."},
   {"nom": "lire_page", "agent": true, "titre": "Lire une page web", "quoi": "Donne-lui un lien : il lit la page et te la résume."},
   {"nom": "Wikipedia", "agent": true, "titre": "Wikipédia", "quoi": "Vérifie un fait ou une définition dans l'encyclopédie."},
@@ -30,8 +32,6 @@
  ],
  "en_developpement": [
   {"titre": "Pilotage de drone", "quoi": "Piloter un drone depuis Archi (ArduPilot, MAVLink), avec ton accord avant chaque décollage."},
-  {"titre": "Curateur", "quoi": "Il relit sa mémoire : doublons, fiches dépassées, erreurs. Il propose, tu valides."},
-  {"titre": "Mécanicien", "quoi": "Il repère ses propres ratés, propose de nouveaux outils, les fabrique et te les soumet avant de les brancher."},
   {"titre": "Appel à l'expert", "quoi": "Pour une question trop dure : demander à un modèle plus puissant en ligne, seulement après ton accord."},
   {"titre": "Trader : le tour automatique", "quoi": "Aujourd'hui il décide quand tu le lui demandes. Bientôt : un tour par jour, tout seul, et d'autres marchés que les cryptos."},
   {"titre": "Concevoir une pièce 3D", "quoi": "Décrire une pièce simple : il en fait un fichier prêt à imprimer, ou la trouve dans un catalogue."},

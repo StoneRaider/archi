@@ -689,5 +689,66 @@
    "modele local",
    "dossier trader du chateau (portefeuille fictif)"
   ]
+ },
+ "curateur": {
+  "nom": "curateur",
+  "description": "MODE D EMPLOI : le curateur relit la memoire (les fiches du chateau) et PROPOSE du rangement, numerote : lien casse, fait en double, secret, fiche vide, projet endormi, faits qui se contredisent. Il ne change rien tout seul. action=examiner (« curateur, fais ta tournee ») ; action=propositions (relire celles en attente) ; action=appliquer avec numeros (« 1 et 3 », « tout ») SEULEMENT quand l'utilisateur les a choisis, avec accord=oui ; action=annuler (accord=oui) remet comme avant. Repete sa phrase_pour_utilisateur telle quelle.",
+  "script": "curateur.py",
+  "parametres": [
+   {
+    "nom": "action",
+    "description": "examiner, propositions, appliquer ou annuler"
+   },
+   {
+    "nom": "numeros",
+    "description": "appliquer : les numeros choisis par l'utilisateur, ex. \"1 et 3\" ou \"tout\""
+   }
+  ],
+  "timeout_s": 150,
+  "touche": [
+   "memoire",
+   "appliquer ou annuler : accord=oui"
+  ],
+  "sensible_si": {
+   "action": [
+    "appliquer",
+    "annuler"
+   ]
+  }
+ },
+ "mecanicien": {
+  "nom": "mecanicien",
+  "description": "MODE D EMPLOI : le mecanicien fabrique de NOUVEAUX outils dans son atelier (une recette : un site public sans cle, un calcul, une phrase), les essaie, et ne les installe qu'apres le « valide » de l'utilisateur. action=construire avec texte (ce que l'outil doit faire) ou numero d'une idee, accord=oui quand l'utilisateur l'a demande ; action=valider avec numero, accord=oui apres son « valide » ; action=etat (l'atelier) ; action=voir avec numero ; action=idee avec texte (noter sans fabriquer) ; action=abandonner avec numero ; action=retirer avec nom, accord=oui. Repete sa phrase_pour_utilisateur telle quelle.",
+  "script": "mecanicien.py",
+  "parametres": [
+   {
+    "nom": "action",
+    "description": "etat, idee, construire, voir, valider, abandonner ou retirer"
+   },
+   {
+    "nom": "texte",
+    "description": "idee ou construire : ce que l'outil doit faire, avec les mots de l'utilisateur"
+   },
+   {
+    "nom": "numero",
+    "description": "le numero d'une idee de l'atelier"
+   },
+   {
+    "nom": "nom",
+    "description": "retirer : le nom de l'outil installe"
+   }
+  ],
+  "timeout_s": 60,
+  "touche": [
+   "nouveaux outils",
+   "construire, valider ou retirer : accord=oui"
+  ],
+  "sensible_si": {
+   "action": [
+    "construire",
+    "valider",
+    "retirer"
+   ]
+  }
  }
 }

@@ -65,6 +65,24 @@ ses consignes. Exemple avec `prises_shelly` et `planificateur` :
 - liste blanche des actions différées, et une action ratée de plus d'une heure (PC éteint) n'est pas rejouée ;
 - la prise du PC est refusée dans les deux sens.
 
+## Le curateur et le mécanicien
+- **Les tournées.** Le réveil « Chaque minute » de n8n lance `core/tournees.js`. Celui-ci lit `atelier/tournees.json` et
+  lance `curateur.py --tournee` le dimanche à 10 h, `mecanicien.py --tournee` le lundi à 10 h 30 (et le dimanche à 10 h 30).
+  Un créneau manqué (PC éteint) est rattrapé 5 minutes après le démarrage. `ARCHI_TOURNEES=non` coupe les tournées.
+  Le résultat arrive comme un rappel : `planificateur.py --annoncer` le pose dans les annonces, que la page, l'appli et
+  Telegram reçoivent déjà.
+- **Le curateur** (`outils/curateur`) écrit `curateur/propositions.json`. « appliquer » prend le verrou de la mémoire,
+  fait une copie zip (10 gardées), refuse une proposition de plus de 8 jours ou une fiche changée depuis
+  (empreinte), et écrit `annulation.json` pour « annuler ».
+- **Les ratés.** `core/outils_maison.js` note dans `atelier/rates.jsonl` un outil inconnu, une erreur ou un délai
+  dépassé (le nom de l'outil et l'erreur, jamais les paramètres).
+- **Le mécanicien** (`outils/mecanicien`) tient `atelier/atelier.json`. « construire » lance la fabrication en
+  arrière-plan : le modèle local écrit une recette (JSON, schéma imposé), `recette.py` la vérifie et la joue sur ses
+  essais, jusqu'à 3 tentatives. « valider » copie `recette.py` et la recette dans `outils/<nom>/` et inscrit l'outil au
+  registre (copie du registre avant), avec la marque `mecanicien`. « retirer » ne touche qu'aux outils qui la portent.
+- **La carte « L'atelier »** de la page lit ces deux fichiers par `/api/etat` (route locale, pas derrière le tunnel) :
+  les titres des propositions, jamais leur contenu.
+
 ## L'appli Android (`appli/`)
 Elle est écrite en Java, sans bibliothèque externe. Elle propose :
 - une sphère animée pour parler ou écrire, avec pièces jointes (photo, document) ;

@@ -196,8 +196,12 @@ const r = planificateur(['--boite'], it.body || {});
 return [{ json: { code: 200, reponse: { annonces: r.annonces || [], suivre_position: !!r.suivre_position } } }];
 """
 
-# Le reveil : les rappels a heure fixe partent sur Telegram.
+# Le reveil : les tournees du curateur et du mecanicien (core/tournees.js decide, avec rattrapage), puis les rappels a
+# heure fixe partent sur Telegram.
 REVEIL = APPEL_PLANIF + r"""
+try {   // avec ou sans Telegram : les tournees partent en arriere-plan et previennent par une annonce
+  cp.execFileSync('node', [path.join($env.ARCHI_DEPOT || '', 'core', 'tournees.js')], { timeout: 15000, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
+} catch (e) { /* une tournee ne doit jamais bloquer les rappels */ }
 const chat = String($env.ARCHI_TELEGRAM_CHAT_ID || '').split(',')[0].trim();
 if (!chat) return [];   // sans chat, on ne reveille pas : les rappels ne sont pas marques partis
 const r = planificateur(['--tick']);

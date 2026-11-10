@@ -721,6 +721,7 @@ def main():
     ap.add_argument("--tick", action="store_true")
     ap.add_argument("--boite", action="store_true")
     ap.add_argument("--position", action="store_true")   # position partagee ailleurs (Telegram) : --fichier {lat, lon}
+    ap.add_argument("--annoncer", action="store_true")   # une annonce d'un autre outil (le curateur, le mecanicien) : --fichier {texte, de}
     a = ap.parse_args()
     p = {}
     if a.fichier:
@@ -757,6 +758,19 @@ def main():
                    if distance_m(pos[0], pos[1], float(v_.get("lat", 0)), float(v_.get("lon", 0))) <= float(v_.get("rayon") or 150)]
             repondre(True, "Position notée" + (f" : tu es à « {ici[0]} »." if ici else ".")
                      + " Tu peux dire « retiens cet endroit : ici » pour en faire un lieu.", lieu=ici[0] if ici else "")
+            return
+        if a.annoncer:                            # elle part comme un rappel : Telegram, appli, page du PC
+            texte = re.sub(r"\s+", " ", str(p.get("texte") or "")).strip()[:600]
+            de = re.sub(r"[^a-z_]", "", sans_accent(p.get("de") or "outil"))[:20] or "outil"
+            if not texte:
+                raise Erreur("Annonce vide.")
+            with Verrou(20) as v:
+                if not v.pris:
+                    raise Erreur("Le planificateur est occupé : annonce pas posée.")
+                annonces = lire(ANNONCES, [])
+                nouvelle_annonce({"id": "tournee_" + de}, texte, annonces)
+                ecrire(ANNONCES, annonces)
+            repondre(True, "Annonce posée.")
             return
         if a.boite:
             with Verrou(15) as v:

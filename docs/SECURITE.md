@@ -93,6 +93,22 @@ Sans tunnel (`ARCHI_TUNNEL=non`), Archi marche sur le PC seul.
 - **Tu gardes la main** : « oublie… » montre d'abord ce qui serait effacé, puis efface après ton accord. Tu peux aussi
   ouvrir, corriger ou supprimer les fiches à la main. `ARCHI_MEMOIRE=non` dans le `.env` coupe la mémoire automatique.
 
+## Le curateur et le mécanicien
+- **Rien sans accord** : « appliquer », « annuler », « construire », « valider » et « retirer » sont des actions
+  sensibles (`accord=oui`). Les mots qui ressemblent (« range », « vérifie », « état ») ne font que regarder.
+- **Le curateur** garde une copie de la mémoire avant de modifier, ne sort pas du dossier `memoire`, ne touche pas
+  une fiche modifiée depuis sa tournée, et ne répète jamais une ligne qui ressemble à un secret.
+- **Le mécanicien n'exécute aucun code écrit par le modèle.** Le modèle écrit une recette (des données), suivie par
+  un moteur fixe, relu et testé. Le moteur :
+  - ne lit que des pages `https` en JSON, sur le port 443, des sites que la recette annonce (3 au plus) ;
+  - refuse une adresse IP, un nom local (`.local`, `.lan`, `.internal`…), et tout nom qui pointe vers le réseau
+    local ou le PC lui-même, vérifié à la résolution ;
+  - ne suit pas les redirections, ignore le proxy du système, coupe à 10 s et à 1 Mo ;
+  - calcule avec son propre évaluateur (une liste fermée d'opérations et de fonctions), jamais `eval`.
+- **Il n'installe aucun module** et n'envoie aucune clé : une recette ne lit que des sites publics sans compte.
+- **Un outil fabriqué entre au registre seulement après « valide »**, et peut en être retiré. La copie du registre
+  est gardée dans `atelier/`.
+
 ## La voix
 - **Tout est local** : ta voix est transcrite sur le PC (whisper.cpp), la réponse est dite par un serveur local
   (Pocket TTS). Aucun son ne part vers un service en ligne.
