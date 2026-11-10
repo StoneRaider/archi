@@ -62,6 +62,11 @@ test('raccourcir : une longue reponse s arrete a la fin d une phrase', () => {
   assert.ok(sansPoint.endsWith(". La suite est à l'écran.") && sansPoint.length < 140, sansPoint);
 });
 
+test('prononcer : les noms d outils se disent comme des mots', () => {
+  assert.equal(V.prononcer('planificateur, prises_shelly et imprimante_3d'), 'planificateur, prises shelly et imprimante trois D');
+  assert.equal(V.prononcer('Un fichier 3D, ou 3 d, pas 30 degres ni 3dsmax.'), 'Un fichier trois D, ou trois D, pas 30 degres ni 3dsmax.');
+});
+
 test('nettoyerSimple : ni lien, ni symbole, ni emoji a prononcer', () => {
   assert.equal(V.nettoyerSimple('**Voici** le lien : https://exemple.fr/a?b=1 \u{1F600} `code`'), 'Voici le lien : code');
 });
@@ -185,4 +190,8 @@ test('en ligne de commande : une ligne JSON, meme quand la voix est coupee', () 
   const etat = cp.execFileSync(process.execPath, [path.join(__dirname, '..', 'voix.js')], {
     input: '{}', encoding: 'utf8', env: Object.assign({}, process.env, { ARCHI_SANS_ENV: '1', ARCHI_VOIX: 'non' }) });
   assert.deepEqual(JSON.parse(etat.trim().split(/\r?\n/).pop()), { active: false, oreille: false, parole: false });
+  // PowerShell (le verificateur) envoie une marque d'ordre des octets devant le JSON : l'action doit etre comprise quand meme
+  const bom = cp.execFileSync(process.execPath, [path.join(__dirname, '..', 'voix.js')], {
+    input: '﻿{"action":"boucle"}\r\n', encoding: 'utf8', env: Object.assign({}, process.env, { ARCHI_SANS_ENV: '1', ARCHI_VOIX: 'non' }) });
+  assert.deepEqual(JSON.parse(bom.trim().split(/\r?\n/).pop()), { ok: false, etape: 'parole', raison: 'voix_desactivee', detail: '' });
 });

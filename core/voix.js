@@ -106,6 +106,11 @@ function raccourcir(texte, max) {
   return (fin > max / 3 ? debut.slice(0, fin + 1) : debut.replace(/\s+\S*$/, '') + '.') + " La suite est à l'écran.";
 }
 
+/** Ce que la voix prononcerait mal : les noms d'outils (prises_shelly, imprimante_3d) et « 3D ». */
+function prononcer(texte) {
+  return String(texte || '').replace(/_/g, ' ').replace(/\b3 ?d\b/gi, 'trois D');
+}
+
 /** Secours si le nettoyeur complet manque : on retire ce qui ne se prononce pas. */
 function nettoyerSimple(texte) {
   return String(texte || '').replace(/https?:\/\/\S+/g, ' ').replace(/[*#_`>|~\[\]{}<]/g, ' ')
@@ -150,7 +155,7 @@ async function dire(texte, r, deps) {
   const L = (deps && deps.lancer) || lancer;
   const S = (deps && deps.synthese) || synthese;
   if (!r.active) return { ok: false, raison: 'voix_desactivee' };
-  const dit = raccourcir(await nettoyer(texte, r, L));
+  const dit = raccourcir(await nettoyer(prononcer(texte), r, L));
   if (!dit) return { ok: false, raison: 'rien_a_dire' };
   const base = path.join(os.tmpdir(), 'archi_voix_' + crypto.randomBytes(6).toString('hex'));
   try {
@@ -207,7 +212,8 @@ async function boucle(r, deps) {
 if (require.main === module) {
   (async () => {
     let e = {};
-    try { e = JSON.parse(fs.readFileSync(0, 'utf8') || '{}'); } catch (x) { e = {}; }
+    // PowerShell (verifier_archi.bat) glisse parfois une marque d'ordre des octets devant ce qu'il envoie : on l'enleve
+    try { e = JSON.parse(fs.readFileSync(0, 'utf8').replace(/^﻿/, '').trim() || '{}'); } catch (x) { e = {}; }
     let s;
     if (e.action === 'transcrire') s = await transcrire(String(e.fichier || ''));
     else if (e.action === 'dire') s = await dire(String(e.texte || ''));
@@ -217,4 +223,4 @@ if (require.main === module) {
   })().catch(x => { process.stdout.write('\n' + JSON.stringify({ ok: false, raison: 'erreur', detail: String((x && x.message) || x).slice(0, 200) }) + '\n'); });
 }
 
-module.exports = { reglages, trouver, entendre, raccourcir, nettoyerSimple, corpsMultipart, transcrire, dire, etat, boucle, synthese, paroleVivante, MAX_DIT };
+module.exports = { reglages, trouver, entendre, raccourcir, prononcer, nettoyerSimple, corpsMultipart, transcrire, dire, etat, boucle, synthese, paroleVivante, MAX_DIT };

@@ -81,9 +81,20 @@ messages. C'est le prix du « sans compte ». Pour un chiffrement de bout en bou
 (`tailscale funnel 5681`) et mets son adresse dans `WEBHOOK_URL` : le tunnel rapide n'est alors plus lancé.
 Sans tunnel (`ARCHI_TUNNEL=non`), Archi marche sur le PC seul.
 
+## La voix
+- **Tout est local** : ta voix est transcrite sur le PC (whisper.cpp), la réponse est dite par un serveur local
+  (Pocket TTS). Aucun son ne part vers un service en ligne.
+- **Le serveur de voix n'écoute que `127.0.0.1`**, et il n'est pas derrière la porte du téléphone : le tunnel ne le voit pas.
+- **Ce qui est gardé** : les fichiers de travail (la question, la réponse) sont effacés aussitôt. En revanche n8n range
+  l'historique de ses exécutions, sons compris, dans sa base locale (`donnees\n8n`), et l'efface de lui-même au bout de
+  quelques jours (14 par défaut). Cette base ne quitte pas le PC.
+- **Aucun clonage** : Archi utilise une voix du catalogue de Pocket TTS, et le modèle qu'il télécharge est la version
+  « sans clonage de voix ».
+- **Le micro de la page d'accueil** ne s'ouvre que sur ton clic, et il est rendu dès que le message part.
+
 ## L'installation
 - **Rien pour tout Windows** : Python, Node.js, n8n, le tunnel et ffmpeg sont posés dans le dossier d'Archi.
-- **Téléchargements vérifiés** : uv, Node.js, cloudflared et ffmpeg sont pris dans une version précise, et leur
+- **Téléchargements vérifiés** : uv, Node.js, cloudflared, ffmpeg, whisper.cpp, son modèle et Pocket TTS sont pris dans une version précise, et leur
   empreinte SHA-256 est comparée à celle écrite dans `installer/installer.ps1`. Un fichier différent est refusé.
 - **Le `.env` gagne** : les variables `N8N_…` ou `WEBHOOK_URL` d'un autre n8n du PC sont retirées de la fenêtre
   d'Archi. Elles ne changent pas son comportement en silence.
@@ -94,7 +105,8 @@ Sans tunnel (`ARCHI_TUNNEL=non`), Archi marche sur le PC seul.
   clé stable est la prochaine étape : aujourd'hui, une nouvelle version ne s'installe pas par-dessus l'ancienne.
 - n8n n'a pas de compte propriétaire tant que tu n'as pas ouvert son éditeur. Il n'écoute que `127.0.0.1` et
   n'est pas derrière le tunnel, mais crée ce compte si tu utilises l'éditeur.
-- Les modèles de LM Studio et les paquets Python et npm ne sont pas vérifiés par empreinte.
+- Les modèles de LM Studio, le modèle de voix que Pocket TTS télécharge lui-même, et les paquets Python et npm ne sont
+  pas vérifiés par empreinte.
 
 ## Appli
 - La clé partagée est comparée en temps constant côté n8n, par empreinte sha256, avec 16 caractères au minimum.
