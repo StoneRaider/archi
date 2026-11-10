@@ -413,7 +413,8 @@ def lire_site(u, ips, fabrique, debut):
             return brut
         except Erreur:
             raise
-        except (OSError, http.client.HTTPException, ValueError) as e:
+        except (OSError, http.client.HTTPException, ValueError, AttributeError) as e:    # AttributeError : ssl coupe
+            # par la minuterie au milieu d'une lecture
             raise Erreur("le site est trop lent" if coupe else "site injoignable (%s)" % type(e).__name__)
         finally:
             c.close()

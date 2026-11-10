@@ -338,6 +338,20 @@ x = moteur.lire_api("https://api.exemple.org/x", ["api.exemple.org"], connexion=
 verif("poignee de main cassee : la suivante est essayee", x == {"ok": 1} and len(ESSAYEES) == 2, (x, ESSAYEES))
 
 
+# controle du 3e passage : ssl coupe par la minuterie au milieu d'une lecture peut lever AttributeError : une erreur dite
+class LectureCassee(PremiereEnPanne):
+    def getresponse(self):
+        raise AttributeError("'NoneType' object has no attribute 'read'")
+
+
+x = None
+try:
+    moteur.lire_api("https://api.exemple.org/x", ["api.exemple.org"], connexion=LectureCassee)
+except moteur.Erreur as e:
+    x = str(e)
+verif("lecture cassee par ssl : une erreur du site, pas un plantage", x is not None and x.startswith("site injoignable"), x)
+
+
 # relecture 3 : une poignee de main ratee ferme la socket chiffree tout de suite
 class FauxContexte:
     def __init__(self):

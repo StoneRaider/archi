@@ -61,7 +61,7 @@ REMPLISSAGE = set("curateur applique appliquer appliques appliquez la le les l e
                   "oui juste seulement stp svp ok d de des du vas y va s il te plait".split())
 # les seuls mots permis autour des numeros : tout autre mot (« laisse la 2 », « garde la 2 », « de 1 a 4 »,
 # « les 2 premieres ») fait redemander, plutot qu'appliquer ce qui n'etait pas voulu
-PERMIS = REMPLISSAGE | set("je j veux voudrais bien accord daccord merci seule seul uniquement aussi puis ensuite ces celle celles "
+PERMIS = REMPLISSAGE | set("je j veux voudrais bien accord daccord merci seule seul uniquement aussi puis ces celle celles "
                            "ci fais faire go c est ca bon parfait alors donc maintenant moi archi pour er re ere "
                            "egalement choisis choisi prends prend accepte valide valider and".split())
 NEGATIONS = re.compile(r"\b(sauf|pas|mais|sans|excepte|exceptee|exceptees|hormis|moins|non|ni)\b")
@@ -625,8 +625,11 @@ def numeros_de(s, attente):
     s = plat(s)
     if NEGATIONS.search(s):
         raise Erreur("Dis-moi seulement les numéros à appliquer, sans exception : par exemple « curateur, 1 et 3 ».")
-    if re.search(r"\d\s*[-–—]\s*\d", s):        # « 1-3 » : de 1 a 3, ou 1 et 3 ?
-        raise Erreur("Je n'ai pas compris : dis chaque numéro, par exemple « curateur, 1, 2 et 3 ».")
+    # entre deux chiffres, seuls des mots (verifies plus bas) et ces signes : « 1-3 », « 1−3 », « 1~3 », « 1..3 »,
+    # « 1_3 » (de 1 a 3, ou 1 et 3 ?) font redemander
+    for entre in re.findall(r"(?<=\d)\D+(?=\d)", s):
+        if not re.fullmatch(r"[\s,;/&+#°']*", re.sub(r"[a-z]+", " ", entre)):
+            raise Erreur("Je n'ai pas compris : dis chaque numéro, par exemple « curateur, 1, 2 et 3 ».")
     jetons = re.findall(r"\d+|[a-z]+", s)
     mots = [m for m in jetons if not m.isdigit()]
     if any(m not in PERMIS and m not in NOMBRES and m not in ("tout", "toutes", "tous") for m in mots):
@@ -639,10 +642,19 @@ def numeros_de(s, attente):
         raise Erreur("Je n'ai pas compris : dis « curateur, tout », ou seulement des numéros, par exemple « curateur, 1 et 3 ».")
     if tout:
         return sorted(attente)
-    # « les deux » = les deux propositions, ou la n°2 ? « les 2 » dicte pareil. Avec un seul numero dit, on redemande.
-    les = re.findall(r"\bles\s+(\d+|%s)\b" % CHIFFRE_EN_LETTRES, s)
-    if les and (any(not m.isdigit() for m in les) or len([m for m in jetons if m.isdigit() or m in NOMBRES]) == 1):
-        raise Erreur("Je n'ai pas compris : dis chaque numéro à appliquer, par exemple « curateur, 1 et 3 », ou « curateur, tout ».")
+    # « les deux », « ces deux-là » = les deux propositions, ou la n°2 ? « les 2 » dicte pareil : sur les mots (pas les
+    # signes entre eux), un nombre en lettres apres « les »/« ces », ou un seul numero dit, fait redemander
+    combien = len([m for m in jetons if m.isdigit() or m in NOMBRES])
+    for i, m in enumerate(jetons):
+        if m not in ("les", "ces"):
+            continue
+        j = i + 1
+        while j < len(jetons) and jetons[j] in ("numero", "numeros", "n", "no", "proposition", "propositions"):
+            j += 1
+        suivant = jetons[j] if j < len(jetons) else ""
+        if (suivant in NOMBRES and suivant not in ("un", "une")) or (suivant.isdigit() and combien == 1):
+            raise Erreur("Je n'ai pas compris : dis chaque numéro à appliquer, par exemple « curateur, 1 et 3 », "
+                         "ou « curateur, tout ».")
     # dans l'ordre dit ; « un », « une » sont des articles quand un chiffre est dit (« une seule : la 4 » -> 4)
     chiffres = [int(m) if m.isdigit() else NOMBRES[m] for m in jetons
                 if m.isdigit() or (m in NOMBRES and not (chiffres_dits and m in ("un", "une")))]
