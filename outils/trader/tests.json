@@ -1,0 +1,5 @@
+{
+ "ok": true,
+ "date": "2026-11-10",
+ "resume": "77 tests hors ligne OK (faux chateau, fausses bougies, faux modele local, fausse horloge, toute ouverture d'adresse fait echouer le test) : etat d'un portefeuille neuf sans reseau, indicateurs (nuage Ichimoku, RSI, moyennes), un tour avec un achat passe et deux decisions refusees (20 % par actif, ni levier ni vente a decouvert), delai de 15 minutes entre deux tours, Bitcoin sous son nuage = aucun achat mais vente possible, ordres par jour, ordre minimum, actif hors liste, montants illisibles, liquidites, modele en panne ou reponse sans JSON = rien ne bouge, analyse ou raison qui ressemble a un conseil retiree, ordre dicte par l'utilisateur refuse, stop et reprise, coupe-circuit de la semaine, remise a zero (essai a blanc puis archive), reglages bornes, service des prix en panne, verrou, liste fermee d'adresses (prix publics en lecture seule), aucun code de compte ni d'ordre reel."
+}

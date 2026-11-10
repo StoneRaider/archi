@@ -1,0 +1,36 @@
+{
+ "_mode_d_emploi": "La vitrine de la page d'accueil. « outils » : le nom lisible et la phrase de chaque outil, dans l'ordre d'affichage (un outil maison n'apparait que s'il est inscrit au registre ; agent=true : outil branche directement sur l'agent). « en_developpement » : les projets pas encore aboutis, affiches dans Menu > Outils en cours de developpement. Pour ajouter un projet : une ligne {\"titre\": \"...\", \"quoi\": \"...\"}.",
+ "outils": [
+  {"nom": "planificateur", "titre": "Rappels et tâches", "quoi": "Te prévenir plus tard : à une heure, chaque semaine, ou quand tu arrives quelque part."},
+  {"nom": "memoire", "titre": "Mémoire", "quoi": "Ce qu'il sait de toi, en fiches sur ton PC. Il retient tout seul ; dis « oublie… » pour effacer."},
+  {"nom": "enquete_osint", "agent": true, "titre": "Enquêtes (OSINT)", "quoi": "Hunter enquête en sources ouvertes : entreprise, site ou mail suspect, domaine, photo. Jamais la vie privée d'un particulier."},
+  {"nom": "creer_pdf", "titre": "Créer un PDF", "quoi": "Compte rendu, fiche ou carte de lieux, enregistré sur le PC."},
+  {"nom": "lire_pdf", "titre": "Lire un PDF", "quoi": "Facture, contrat, courrier : même scanné, il le lit."},
+  {"nom": "transmettre_document", "titre": "Donner un document", "quoi": "T'envoie un PDF rangé sur le PC.", "besoin": "Telegram"},
+  {"nom": "telephone", "titre": "Les mains sur le téléphone", "quoi": "Préparer un WhatsApp ou un SMS, lancer une vidéo ou une musique dans l'appli.", "besoin": "l'appli Android"},
+  {"nom": "oeil", "titre": "L'œil", "quoi": "Avions en vol et séismes autour d'un lieu public, sur un globe."},
+  {"nom": "prises_shelly", "titre": "Prises connectées", "quoi": "Allumer, éteindre, lire la consommation. Écrit pour la marque Shelly, adaptable à une autre marque.", "besoin": "une prise Shelly"},
+  {"nom": "cameras", "titre": "Caméras", "quoi": "Les caméras de ton réseau local, sans cloud : photo et vidéo.", "besoin": "une caméra du réseau"},
+  {"nom": "imprimante_3d", "titre": "Imprimante 3D", "quoi": "État, envoi d'un fichier, lancement, pause : Klipper, OctoPrint ou PrusaLink.", "besoin": "une imprimante 3D"},
+  {"nom": "camera_imprimante", "titre": "Voir l'impression", "quoi": "La vidéo en direct de l'imprimante 3D.", "besoin": "une imprimante avec caméra"},
+  {"nom": "trader", "titre": "Trader (simulation)", "quoi": "Un portefeuille fictif de 1 000 $ qu'il gère seul, avec les vrais prix. Aucun ordre réel, jamais de conseil."},
+  {"nom": "indicateur_polymarket", "titre": "Baromètre Polymarket", "quoi": "Ce que les marchés de prédiction estiment sur un sujet d'actualité. Lecture seule, jamais de pari."},
+  {"nom": "musique", "titre": "Musique", "quoi": "Te propose des morceaux selon tes goûts, tirés de ta bibliothèque."},
+  {"nom": "vision_video", "titre": "Regarder une vidéo", "quoi": "Il regarde et écoute une vidéo en entier, en local, et en range une fiche."},
+  {"nom": "recolte_youtube", "titre": "Récolte YouTube", "quoi": "Transforme les vidéos d'une chaîne en fiches dans ta bibliothèque."},
+  {"nom": "presentation", "titre": "Présentation", "quoi": "Fabrique un diaporama écrit par le modèle local.", "besoin": "Presenton"},
+  {"nom": "ranger_mails", "titre": "Ranger les mails", "quoi": "Chercher et ranger dans Gmail ou Outlook. Rien ne bouge sans ton accord.", "besoin": "un compte mail relié"},
+  {"nom": "liasse_fiscale", "titre": "Liasse fiscale", "quoi": "Prépare la liasse annuelle d'une petite entreprise individuelle."},
+  {"nom": "retro", "titre": "Rétro-ingénierie", "quoi": "Comprendre comment marche un logiciel ou un appareil qui t'appartient."},
+  {"nom": "appli_telephone", "titre": "L'appli Android", "quoi": "T'envoie la dernière version de l'appli.", "besoin": "Telegram"}
+ ],
+ "en_developpement": [
+  {"titre": "Pilotage de drone", "quoi": "Piloter un drone depuis Archi."},
+  {"titre": "Appel à l'expert", "quoi": "Pour une question trop dure : demander à un modèle plus puissant en ligne, seulement après ton accord."},
+  {"titre": "Trader : le tour automatique", "quoi": "Aujourd'hui il décide quand tu le lui demandes. Bientôt : un tour par jour, tout seul, et d'autres marchés que les cryptos."},
+  {"titre": "Concevoir une pièce 3D", "quoi": "Décrire une pièce simple : il en fait un fichier prêt à imprimer, ou la trouve dans un catalogue."},
+  {"titre": "Navigateur", "quoi": "Ouvrir une page, la lire, remplir un formulaire. Jamais de mot de passe ni de paiement."},
+  {"titre": "Monteur vidéo", "quoi": "Monter les temps forts d'une soirée, avec sous-titres."},
+  {"titre": "Mails et agenda à la voix", "quoi": "Lire ses mails, préparer un brouillon, voir son agenda."}
+ ]
+}

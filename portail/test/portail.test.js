@@ -439,7 +439,7 @@ test('page d accueil : sphere, mot magique et polices sont servis au PC seulemen
     }).on('error', non);
   });
   try {
-    for (const [chemin, type, debut] of [['/sphere.js', 'text/javascript', '// sphere.js'], ['/ecoute.js', 'text/javascript', '// ecoute.js'],
+    for (const [chemin, type, debut] of [['/sphere.js', 'text/javascript', '// sphere.js'], ['/ecoute.js', 'text/javascript', '// ecoute.js'], ['/logo.js', 'text/javascript', '// logo.js'],
       ['/polices/fraunces.woff2', 'font/woff2', 'wOF2'], ['/polices/fraunces-italique.woff2', 'font/woff2', 'wOF2'], ['/polices/nunito.woff2', 'font/woff2', 'wOF2']]) {
       const f = await voir(local, chemin);
       assert.equal(f.code, 200, chemin);
@@ -504,4 +504,83 @@ test('micro continu : /api/ecouter transcrit une phrase sur le PC, pour la page 
     await new Promise(x => setTimeout(x, 200));   // la porte finit d'ecrire son journal dans ce dossier
     fs.rmSync(d, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
+});
+
+test('vitrine : noms lisibles, outils de l agent, « a brancher » et projets en cours ; sans vitrine, la page marche quand meme', () => {
+  const d = chateau(false);
+  try {
+    fs.mkdirSync(path.join(d, 'outils'));
+    fs.writeFileSync(path.join(d, 'outils', 'registre.json'), JSON.stringify({
+      planificateur: { description: 'MODE D EMPLOI : faire quelque chose PLUS TARD. action=ajouter' },
+      lire_pdf: { description: 'lit un PDF. action=lire', sensible: true },
+      prises_shelly: { description: 'MODE D EMPLOI : prises connectees. action=etat', sensible: true },
+      abime: 'pas une fiche' }));
+    const r = { depot: d, base: d };
+    // sans config/vitrine.json : la premiere phrase du mode d'emploi, dans l'ordre du registre
+    assert.deepEqual(P.outils(r).map(o => [o.nom, o.titre, o.quoi]), [['planificateur', '', 'faire quelque chose PLUS TARD'], ['lire_pdf', '', 'lit un PDF'], ['prises_shelly', '', 'prises connectees']]);
+    assert.deepEqual(P.chantiers(r), []);
+    fs.mkdirSync(path.join(d, 'config'));
+    fs.writeFileSync(path.join(d, 'config', 'vitrine.json'), JSON.stringify({
+      outils: [
+        { nom: 'prises_shelly', titre: 'Prises connectées', quoi: 'Écrit pour la marque Shelly, adaptable à une autre marque.', besoin: 'une prise Shelly' },
+        { nom: 'enquete_osint', agent: true, titre: 'Enquêtes (OSINT)', quoi: 'Hunter enquête en sources ouvertes.' },
+        { nom: 'trader', titre: 'Trader (simulation)', quoi: 'pas inscrit au registre : pas affiche' },
+        { nom: 'prises_shelly', titre: 'en double' }, { titre: 'sans nom' }, null, 'texte',
+        { nom: 'lire_pdf', titre: 'x'.repeat(500), quoi: 7 },
+      ],
+      en_developpement: [{ titre: 'Pilotage de drone', quoi: 'Piloter un drone depuis Archi.' }, { quoi: 'sans titre' }, null, { titre: '  ' }, { titre: 'Appel à l\'expert' }],
+    }));
+    const L = P.outils(r);
+    // l'ordre de la vitrine, puis les outils du registre qu'elle ne connait pas ; l'outil de l'agent est la sans etre au registre
+    assert.deepEqual(L.map(o => o.nom), ['prises_shelly', 'enquete_osint', 'lire_pdf', 'planificateur']);
+    assert.deepEqual(L[0], { nom: 'prises_shelly', titre: 'Prises connectées', quoi: 'Écrit pour la marque Shelly, adaptable à une autre marque.', besoin: 'une prise Shelly', sensible: true });
+    assert.deepEqual(L[1], { nom: 'enquete_osint', titre: 'Enquêtes (OSINT)', quoi: 'Hunter enquête en sources ouvertes.', besoin: '', sensible: false });
+    assert.equal(L[2].titre.length, 60);   // rien de demesure n'arrive a la page
+    assert.equal(L[2].quoi, '');
+    assert.equal(L[2].sensible, true);     // « accord » vient du registre, pas de la vitrine
+    assert.deepEqual(P.chantiers(r), [{ titre: 'Pilotage de drone', quoi: 'Piloter un drone depuis Archi.' }, { titre: 'Appel à l\'expert', quoi: '' }]);
+    // une vitrine abimee ne casse rien
+    for (const abime of ['{', '[]', '"texte"', '{"outils": "non", "en_developpement": {}}']) {
+      fs.writeFileSync(path.join(d, 'config', 'vitrine.json'), abime);
+      assert.equal(P.outils(r).length, 3, abime);
+      assert.deepEqual(P.chantiers(r), [], abime);
+    }
+  } finally { fs.rmSync(d, { recursive: true, force: true }); }
+});
+
+test('vitrine du depot : chaque outil du registre d exemple a son nom lisible, et rien n est annonce qui ne soit pas branche', () => {
+  const depot = path.join(__dirname, '..', '..');
+  const v = JSON.parse(fs.readFileSync(path.join(depot, 'config', 'vitrine.json'), 'utf8'));
+  const reg = JSON.parse(fs.readFileSync(path.join(depot, 'chateau_exemple', 'outils', 'registre.json'), 'utf8'));
+  const fiches = v.outils.filter(f => !f.agent).map(f => f.nom);
+  assert.deepEqual(Object.keys(reg).filter(n => !fiches.includes(n)), [], 'outil du registre sans fiche dans la vitrine');
+  assert.deepEqual(fiches.filter(n => !reg[n]), [], 'fiche de la vitrine sans outil au registre');
+  for (const f of v.outils) assert.ok(f.titre && f.quoi && f.titre.length <= 60 && f.quoi.length <= 200, f.nom);
+  // un outil « agent » doit etre un vrai noeud outil du workflow de la demo
+  const wf = fs.readFileSync(path.join(depot, 'n8n', 'archi_demo.json'), 'utf8');
+  for (const f of v.outils.filter(x => x.agent)) assert.ok(wf.includes('"name": "' + f.nom + '"') || wf.includes('"name":"' + f.nom + '"'), f.nom + ' absent du workflow');
+  assert.ok(v.en_developpement.some(c => /drone/i.test(c.titre)), 'le pilotage de drone est annonce en cours de developpement');
+  // la marque des prises : Shelly, mais adaptable
+  assert.match(v.outils.find(f => f.nom === 'prises_shelly').quoi, /Shelly, adaptable/);
+  assert.match(reg.prises_shelly.description, /ecrit pour la marque Shelly, adaptable a une autre marque/);
+  // les modes d'emploi parlent de « l'utilisateur », plus de « J »
+  assert.doesNotMatch(JSON.stringify(reg), /(?<![A-Za-z0-9_'’\\])J(?![A-Za-z0-9_'’])/);
+  const page = P.outils({ depot, base: path.join(depot, 'chateau_exemple') });
+  assert.equal(page.length, Object.keys(reg).length + v.outils.filter(x => x.agent).length);
+  assert.ok(page.every(o => o.titre), 'chaque outil de la page a un nom lisible');
+});
+
+test('page d accueil : un menu (visite guidee, ses outils, outils en cours de developpement) et le logo partout ou « Archi » est ecrit', () => {
+  const page = fs.readFileSync(path.join(__dirname, '..', 'accueil.html'), 'utf8');
+  const menu = page.slice(page.indexOf('<nav class="haut"'), page.indexOf('</nav>'));
+  assert.ok(menu.includes('id="b-menu"') && menu.includes('aria-expanded="false"') && menu.includes('id="menu" role="menu" hidden'));
+  const ordre = ['id="b-visite">Visite guidée', 'id="b-coulisses">Ses outils', 'id="b-chantier">Outils en cours de développement'].map(x => menu.indexOf(x));
+  assert.ok(ordre[0] > 0 && ordre[0] < ordre[1] && ordre[1] < ordre[2], JSON.stringify(ordre));
+  assert.ok(page.includes('id="volet-chantier"') && page.includes('<ul id="chantiers">'));
+  assert.ok(page.includes("$('b-chantier').hidden = !chantiers.length;"), 'sans projet, la ligne du menu disparait');
+  assert.ok(page.includes("$('b-chantier').onclick = () => { menu(false); volet('volet-chantier'); };"));
+  // le logo : un symbole dans la page, et logo.js qui le pose
+  assert.ok(page.includes('<symbol id="mot-archi" viewBox="0 0 120 34"') && page.includes('<script src="/logo.js">'));
+  assert.ok(page.includes('if (window.ArchiLogo) ArchiLogo.installer(document);'));
+  assert.ok(page.includes('.mot-archi svg {'));
 });

@@ -85,6 +85,10 @@ Archi écoute et parle, **sans quitter le PC** : whisper.cpp transcrit ta voix, 
 - **Sur la page d'accueil du PC** : clique sur le micro, il t'écoute **en continu**, comme dans une conversation. Dis
   « fin de transmission » pour envoyer, « Archi, annule » pour effacer. Le haut-parleur coupe ou remet la voix.
 - La même sphère que sur le téléphone respire, écoute, réfléchit et parle. Une visite guidée s'ouvre au premier lancement.
+- En haut à droite, un **menu** : la visite guidée, **ses outils** (avec un nom lisible, et « à brancher » quand il faut
+  ton matériel ou ton compte) et les **outils en cours de développement** (les projets pas encore aboutis). Ces listes
+  viennent de `config/vitrine.json` : pour annoncer un projet, ajoute-lui une ligne.
+- Partout où le mot « Archi » est écrit sur la page, c'est son logo qui s'affiche (`portail/logo.js`).
 - Les deux tournent sur le processeur : la carte graphique reste au modèle de langage.
 - `verifier_archi.bat` le contrôle sans micro : la voix dit une phrase, l'oreille la réécoute, et les mots sont comparés.
 
@@ -166,6 +170,7 @@ Le détail se trouve dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 node --test core/test portail/test                      # cœur (contexte, lanceur, vérificateur) et portail (liste blanche)
 cd outils/planificateur && python test_planificateur.py # 90 tests, dans un faux dossier personnel
 cd outils/memoire && python test_memoire.py             # 40 tests, avec un faux modèle local
+cd outils/trader && python test_trader.py               # 77 tests, faux prix et faux modèle, aucun réseau
 python outils_depot/verifier_depot.py .                 # aucun secret ni donnée perso dans le dépôt
 ```
 

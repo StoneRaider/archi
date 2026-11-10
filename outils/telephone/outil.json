@@ -1,6 +1,6 @@
 {
  "nom": "telephone",
- "description": "MODE D EMPLOI : les MAINS d'Archi sur le telephone de J (appli Archi). parametres = {\"action\":..., ...}. Actions : whatsapp (a=contact, texte=message) : WhatsApp s'ouvre avec le texte pret, J choisit le contact et appuie sur Envoyer (tu ne lis pas WhatsApp) ; sms (a, texte) : confirmation a l'ecran ; youtube (recherche) ; musique (commande=lire|pause|suivant|precedent, ou recherche=titre) ; appel (a=nom ou numero) : il faut appuyer sur « Appeler » ; secours (numero=112|15|17|18, message) : composeur ouvert, J appuie ; lampe (etat=on|off) ; alarme (heure=7:30, libelle) ; minuteur (minutes ou secondes, libelle) ; navigation (destination, mode=voiture|pied|velo|transports) ; ouvrir (appli) ; volume (niveau=0-100|plus|moins|muet) ; web (url ou requete) ; agenda (titre, debut=AAAA-MM-JJTHH:MM, duree_min, lieu) ; reglages (panneau=wifi|bluetooth|son|batterie|ecran) ; photo ; arreter. Depuis Telegram il ne se passe rien. Repete la phrase_pour_utilisateur.",
+ "description": "MODE D EMPLOI : les MAINS d'Archi sur le telephone de l'utilisateur (appli Archi). parametres = {\"action\":..., ...}. Actions : whatsapp (a=contact, texte=message) : WhatsApp s'ouvre avec le texte pret, l'utilisateur choisit le contact et appuie sur Envoyer (tu ne lis pas WhatsApp) ; sms (a, texte) : confirmation a l'ecran ; youtube (recherche) ; musique (commande=lire|pause|suivant|precedent, ou recherche=titre) ; appel (a=nom ou numero) : il faut appuyer sur « Appeler » ; secours (numero=112|15|17|18, message) : composeur ouvert, l'utilisateur appuie ; lampe (etat=on|off) ; alarme (heure=7:30, libelle) ; minuteur (minutes ou secondes, libelle) ; navigation (destination, mode=voiture|pied|velo|transports) ; ouvrir (appli) ; volume (niveau=0-100|plus|moins|muet) ; web (url ou requete) ; agenda (titre, debut=AAAA-MM-JJTHH:MM, duree_min, lieu) ; reglages (panneau=wifi|bluetooth|son|batterie|ecran) ; photo ; arreter. Depuis Telegram il ne se passe rien. Repete la phrase_pour_utilisateur.",
  "script": "telephone.py",
  "parametres": [
   {
@@ -13,7 +13,7 @@
   },
   {
    "nom": "texte",
-   "description": "whatsapp/sms : le message exact valide par J"
+   "description": "whatsapp/sms : le message exact valide par l'utilisateur"
   },
   {
    "nom": "recherche",

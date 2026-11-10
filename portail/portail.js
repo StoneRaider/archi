@@ -232,16 +232,44 @@ function codeCourt(cle) {
   return crypto.createHash('sha256').update(String(cle || ''), 'utf8').digest('hex').slice(0, 4).toUpperCase();
 }
 
-function outils(r) {
-  // la vitrine : nom + premiere phrase de chaque outil maison inscrit au registre
+/** config/vitrine.json : le nom lisible et la phrase de chaque outil, et les projets pas encore aboutis. */
+function vitrine(r) {
   try {
-    const reg = JSON.parse(fs.readFileSync(path.join(r.base, 'outils', 'registre.json'), 'utf8'));
-    return Object.keys(reg).map(nom => {
-      const d = String(reg[nom].description || '').replace(/^MODE D.?EMPLOI\s*:\s*/i, '');
-      const phrase = d.split(/(?<=[.!?:])\s/)[0].replace(/[:.]\s*$/, '');
-      return { nom, quoi: phrase.slice(0, 110), sensible: !!reg[nom].sensible };
-    });
-  } catch (e) { return []; }
+    const v = JSON.parse(fs.readFileSync(path.join(r.depot, 'config', 'vitrine.json'), 'utf8'));
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+  } catch (e) { return {}; }
+}
+const court = (x, n) => (typeof x === 'string' ? x.trim().slice(0, n) : '');
+
+function outils(r) {
+  // Les outils maison inscrits au registre, et les outils branches directement sur l'agent (agent=true dans la vitrine).
+  // La vitrine donne l'ordre, le nom lisible et la phrase ; un outil qu'elle ne connait pas garde la premiere phrase de son mode d'emploi.
+  let reg = {};
+  try { reg = JSON.parse(fs.readFileSync(path.join(r.base, 'outils', 'registre.json'), 'utf8')); } catch (e) { reg = {}; }
+  if (!reg || typeof reg !== 'object' || Array.isArray(reg)) reg = {};
+  const inscrit = nom => Object.prototype.hasOwnProperty.call(reg, nom) && reg[nom] && typeof reg[nom] === 'object';
+  const v = vitrine(r);
+  const fiches = (Array.isArray(v.outils) ? v.outils : []).filter(f => f && typeof f.nom === 'string');
+  const liste = [], vus = new Set();
+  for (const f of fiches) {
+    if (vus.has(f.nom) || !(f.agent === true || inscrit(f.nom))) continue;
+    vus.add(f.nom);
+    liste.push({ nom: f.nom.slice(0, 40), titre: court(f.titre, 60), quoi: court(f.quoi, 200), besoin: court(f.besoin, 60),
+      sensible: f.agent === true ? !!f.sensible : !!reg[f.nom].sensible });
+  }
+  for (const nom of Object.keys(reg)) {
+    if (vus.has(nom) || !inscrit(nom)) continue;
+    const d = String(reg[nom].description || '').replace(/^MODE D.?EMPLOI\s*:\s*/i, '');
+    const phrase = d.split(/(?<=[.!?:])\s/)[0].replace(/[:.]\s*$/, '');
+    liste.push({ nom, titre: '', quoi: phrase.slice(0, 110), besoin: '', sensible: !!reg[nom].sensible });
+  }
+  return liste;
+}
+
+/** Menu > Outils en cours de developpement : les projets pas encore aboutis (config/vitrine.json, « en_developpement »). */
+function chantiers(r) {
+  const L = vitrine(r).en_developpement;
+  return (Array.isArray(L) ? L : []).filter(c => c && court(c.titre, 80)).slice(0, 30).map(c => ({ titre: court(c.titre, 80), quoi: court(c.quoi, 240) }));
 }
 
 const SAIN_DEPUIS = new WeakMap();   // par portail : depuis quand n8n repond
@@ -310,6 +338,7 @@ async function etat(r, suivi) {
     // heures (ms) du dernier passage de chaque etape a la porte du telephone, 0 = jamais ; « maintenant » = l'heure du PC
     telephone: Object.assign({ maintenant: Date.now() }, suivi || nouveauSuivi()),
     outils: outils(r),
+    chantiers: chantiers(r),
     n8n_url: 'http://127.0.0.1:' + r.n8nPort,
   };
 }
@@ -320,6 +349,7 @@ const FICHIERS_PAGE = {
   '/qrcode.js': ['qrcode.js', 'text/javascript; charset=utf-8'],
   '/sphere.js': ['sphere.js', 'text/javascript; charset=utf-8'],     // la sphere d'Archi, comme sur le telephone
   '/ecoute.js': ['ecoute.js', 'text/javascript; charset=utf-8'],     // le micro continu et son mot magique
+  '/logo.js': ['logo.js', 'text/javascript; charset=utf-8'],         // le mot Archi s'ecrit avec son logo
   '/polices/fraunces.woff2': ['polices/fraunces.woff2', 'font/woff2'],
   '/polices/fraunces-italique.woff2': ['polices/fraunces-italique.woff2', 'font/woff2'],
   '/polices/nunito.woff2': ['polices/nunito.woff2', 'font/woff2'],
@@ -444,4 +474,4 @@ if (require.main === module) {
 }
 
 module.exports = { reglages, estLocal, appelDeLaPage, routePublique, memeCle, telegramAttendu, codeCourt, creerServeurLocal, creerServeurPorte,
-  surveillerLanceur, adressePublique, outils, nouveauSuivi, noterPassage, memoire };
+  surveillerLanceur, adressePublique, outils, chantiers, nouveauSuivi, noterPassage, memoire };

@@ -22,5 +22,6 @@
   "et": "([eé]cri|r[eé]dig|pr[eé]par|envoi|envoy)",
   "dire": "Un mail : tu prepares un BROUILLON et tu le montres. Tu n'envoies qu'apres « envoie ». Tu n'ajoutes aucune idee que l'utilisateur n'a pas donnee."
  },
- {"si": "\\b(oublie|oublier|efface de ta m[eé]moire|retire de ta m[eé]moire)\\b", "dire": "Oublier un fait : outil memoire, action=oublier, texte = quelques mots du fait. D'abord l'essai a blanc (il montre ce qui serait efface), puis confirmer=oui seulement apres le oui de l'utilisateur."}
+ {"si": "\\b(oublie|oublier|efface de ta m[eé]moire|retire de ta m[eé]moire)\\b", "dire": "Oublier un fait : outil memoire, action=oublier, texte = quelques mots du fait. D'abord l'essai a blanc (il montre ce qui serait efface), puis confirmer=oui seulement apres le oui de l'utilisateur."},
+ {"si": "\\b(trader|trading|portefeuille fictif)\\b", "dire": "Le trader : outil trader. action=etat pour dire ou il en est, action=tour pour qu'il decide maintenant, action=marche pour les prix. C'est une SIMULATION (argent fictif) : repete sa phrase telle quelle et n'ajoute aucun conseil d'achat ou de vente."}
 ]

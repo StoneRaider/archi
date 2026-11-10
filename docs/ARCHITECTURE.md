@@ -43,9 +43,17 @@ outils/<nom>/
   <nom>.py     reçoit --fichier demande.json, écrit UNE ligne JSON à la fin
   tests.json   résumé des tests passés chez moi (date, nombre)
 ```
-Dans ce dépôt, seul le planificateur fournit ses tests rejouables (`test_planificateur.py`, 90 tests). Pour les
-autres outils, `tests.json` résume les essais faits sur mon PC avec du vrai matériel ; leurs tests rejouables
-viendront ensuite.
+Plusieurs outils fournissent leurs tests rejouables (planificateur, mémoire, trader, caméras, imprimante 3D…). Pour
+les autres, `tests.json` résume les essais faits sur mon PC avec du vrai matériel.
+
+**Le trader est une simulation.** `outils/trader` gère un portefeuille **fictif** avec les vrais prix publics des
+cryptos : aucun compte, aucune clé, aucun ordre réel, et pas de code pour en passer. C'est le modèle local qui décide,
+dans des règles écrites dans le programme (liste fermée d'actifs, ni levier ni vente à découvert, part maximale par
+actif, coupe-circuit de la semaine). On ne lui dicte pas d'ordre, et il ne donne jamais de conseil.
+
+**La vitrine.** `config/vitrine.json` donne à la page d'accueil le nom lisible de chaque outil, ce qu'il lui faut
+(« à brancher »), les outils branchés directement sur l'agent (les enquêtes de Hunter) et les projets en cours de
+développement. Archi s'en sert aussi pour dire la liste de ses outils.
 Un outil reste « en construction » tant que ses tests ne passent pas. Il n'est inscrit au registre
 qu'après l'accord de l'utilisateur.
 

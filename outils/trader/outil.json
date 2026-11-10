@@ -1,0 +1,11 @@
+{
+ "nom": "trader",
+ "description": "MODE D EMPLOI : le trader d'Archi, EN SIMULATION seulement : 1000 dollars FICTIFS, vrais prix publics des cryptos, aucun compte, aucun ordre reel. Le trader decide SEUL, dans des garde-fous ecrits : on ne lui dicte pas d'ordre. action=etat (defaut) : valeur du portefeuille fictif, positions, dernier tour. action=tour : il lit les prix, decide et note ses ordres fictifs (jusqu'a 2 minutes ; un tour toutes les 15 minutes au plus). action=marche : les prix et indicateurs du moment. action=stop ou reprendre. action=remise_a_zero : ESSAI A BLANC d'abord, puis confirmer=oui quand l'utilisateur dit oui. Repete la phrase telle quelle : c'est un exercice, JAMAIS un conseil d'achat ou de vente, et n'en ajoute aucun.",
+ "script": "trader.py",
+ "parametres": [
+  {"nom": "action", "description": "etat (defaut), tour, marche, stop, reprendre ou remise_a_zero"},
+  {"nom": "confirmer", "description": "remise_a_zero : oui seulement quand l'utilisateur a dit oui ; sinon essai a blanc"}
+ ],
+ "timeout_s": 240,
+ "touche": ["internet (prix publics Kraken, lecture seule)", "modele local", "dossier trader du chateau (portefeuille fictif)"]
+}

@@ -1,7 +1,7 @@
 {
  "planificateur": {
   "nom": "planificateur",
-  "description": "MODE D EMPLOI : faire quelque chose PLUS TARD. action=ajouter avec texte + UN moment : a (\"11h\", \"demain 9h\", \"dans 20 min\"), tous_les (\"lundi\", \"jour\", \"mois\") + heure, ou lieu (\"chalet\") quand J y arrive. Action differee (radiateur) : outil=prises_shelly + outil_parametres ; exige accord=oui (apres un oui de J), essai a blanc puis confirmer=oui. Autres : lister, annuler (quoi), retenir_lieu (nom, ou=ici), lieux.",
+  "description": "MODE D EMPLOI : faire quelque chose PLUS TARD. action=ajouter avec texte + UN moment : a (\"11h\", \"demain 9h\", \"dans 20 min\"), tous_les (\"lundi\", \"jour\", \"mois\") + heure, ou lieu (\"chalet\") quand l'utilisateur y arrive. Action differee (radiateur) : outil=prises_shelly + outil_parametres ; exige accord=oui (apres un oui de l'utilisateur), essai a blanc puis confirmer=oui. Autres : lister, annuler (quoi), retenir_lieu (nom, ou=ici), lieux.",
   "script": "planificateur.py",
   "parametres": [
    {
@@ -10,7 +10,7 @@
    },
    {
     "nom": "texte",
-    "description": "ajouter : ce qu'il faut rappeler a J"
+    "description": "ajouter : ce qu'il faut rappeler a l'utilisateur"
    },
    {
     "nom": "a",
@@ -22,7 +22,7 @@
    },
    {
     "nom": "lieu",
-    "description": "ajouter : a l'arrivee de J sur ce lieu (chaque_fois=oui pour toujours) ; retenir_lieu : nom=, ou=ici ou adresse, rayon="
+    "description": "ajouter : a l'arrivee de l'utilisateur sur ce lieu (chaque_fois=oui pour toujours) ; retenir_lieu : nom=, ou=ici ou adresse, rayon="
    },
    {
     "nom": "outil",
@@ -34,7 +34,7 @@
    },
    {
     "nom": "confirmer",
-    "description": "oui quand J a dit vas-y pour une action differee ; annuler : oui si plusieurs"
+    "description": "oui quand l'utilisateur a dit vas-y pour une action differee ; annuler : oui si plusieurs"
    }
   ],
   "timeout_s": 60,
@@ -101,7 +101,7 @@
  },
  "prises_shelly": {
   "nom": "prises_shelly",
-  "description": "MODE D EMPLOI : prises Shelly de J. action=etat (prise facultatif) : allumee ou eteinte, watts, kWh. action=allumer ou eteindre avec prise=radiateur : ESSAI A BLANC d'abord, puis confirmer=oui quand J dit vas-y. allumer : extinction automatique apres duree_min (180 par defaut). La prise du PC ne s'allume et ne s'eteint jamais depuis Archi.",
+  "description": "MODE D EMPLOI : prises connectees (ecrit pour la marque Shelly, adaptable a une autre marque de prises wifi). action=etat (prise facultatif) : allumee ou eteinte, watts, kWh. action=allumer ou eteindre avec prise=radiateur : ESSAI A BLANC d'abord, puis confirmer=oui quand l'utilisateur dit vas-y. allumer : extinction automatique apres duree_min (180 par defaut). La prise du PC ne s'allume et ne s'eteint jamais depuis Archi.",
   "script": "prises_shelly.py",
   "parametres": [
    {
@@ -118,11 +118,11 @@
    },
    {
     "nom": "sans_limite",
-    "description": "allumer : oui pour ne pas mettre d'extinction automatique (seulement si J le demande)"
+    "description": "allumer : oui pour ne pas mettre d'extinction automatique (seulement si l'utilisateur le demande)"
    },
    {
     "nom": "confirmer",
-    "description": "oui seulement quand J a dit vas-y ; sinon essai a blanc"
+    "description": "oui seulement quand l'utilisateur a dit vas-y ; sinon essai a blanc"
    }
   ],
   "timeout_s": 30,
@@ -134,7 +134,7 @@
  },
  "telephone": {
   "nom": "telephone",
-  "description": "MODE D EMPLOI : les MAINS d'Archi sur le telephone de J (appli Archi). parametres = {\"action\":..., ...}. Actions : whatsapp (a=contact, texte=message) : WhatsApp s'ouvre avec le texte pret, J choisit le contact et appuie sur Envoyer (tu ne lis pas WhatsApp) ; sms (a, texte) : confirmation a l'ecran ; youtube (recherche) ; musique (commande=lire|pause|suivant|precedent, ou recherche=titre) ; appel (a=nom ou numero) : il faut appuyer sur « Appeler » ; secours (numero=112|15|17|18, message) : composeur ouvert, J appuie ; lampe (etat=on|off) ; alarme (heure=7:30, libelle) ; minuteur (minutes ou secondes, libelle) ; navigation (destination, mode=voiture|pied|velo|transports) ; ouvrir (appli) ; volume (niveau=0-100|plus|moins|muet) ; web (url ou requete) ; agenda (titre, debut=AAAA-MM-JJTHH:MM, duree_min, lieu) ; reglages (panneau=wifi|bluetooth|son|batterie|ecran) ; photo ; arreter. Depuis Telegram il ne se passe rien. Repete la phrase_pour_utilisateur.",
+  "description": "MODE D EMPLOI : les MAINS d'Archi sur le telephone de l'utilisateur (appli Archi). parametres = {\"action\":..., ...}. Actions : whatsapp (a=contact, texte=message) : WhatsApp s'ouvre avec le texte pret, l'utilisateur choisit le contact et appuie sur Envoyer (tu ne lis pas WhatsApp) ; sms (a, texte) : confirmation a l'ecran ; youtube (recherche) ; musique (commande=lire|pause|suivant|precedent, ou recherche=titre) ; appel (a=nom ou numero) : il faut appuyer sur « Appeler » ; secours (numero=112|15|17|18, message) : composeur ouvert, l'utilisateur appuie ; lampe (etat=on|off) ; alarme (heure=7:30, libelle) ; minuteur (minutes ou secondes, libelle) ; navigation (destination, mode=voiture|pied|velo|transports) ; ouvrir (appli) ; volume (niveau=0-100|plus|moins|muet) ; web (url ou requete) ; agenda (titre, debut=AAAA-MM-JJTHH:MM, duree_min, lieu) ; reglages (panneau=wifi|bluetooth|son|batterie|ecran) ; photo ; arreter. Depuis Telegram il ne se passe rien. Repete la phrase_pour_utilisateur.",
   "script": "telephone.py",
   "parametres": [
    {
@@ -147,7 +147,7 @@
    },
    {
     "nom": "texte",
-    "description": "whatsapp/sms : le message exact valide par J"
+    "description": "whatsapp/sms : le message exact valide par l'utilisateur"
    },
    {
     "nom": "recherche",
@@ -207,7 +207,7 @@
  },
  "oeil": {
   "nom": "oeil",
-  "description": "MODE D EMPLOI : l'OEIL d'Archi. (1) Regarder EN DIRECT autour d'un lieu public : avions en vol (OpenSky), seismes des 7 derniers jours (EMSC), lien du globe. parametres = {\"action\":\"avions\"|\"seismes\"|\"globe\"|\"tout\", \"lieu\":\"Lyon\", \"rayon_km\":50}. (2) MONTRER quelque chose a J dans l'oeil de son appli telephone (le globe s'ouvre tout seul sur son ecran) : parametres = {\"action\":\"montrer\", \"cible\":\"avion\"|\"bateau\"|\"feux\"|\"cables\"|\"rue\"|\"lieu\"|\"camera\", \"lieu\":\"Lyon\" ou \"ici\"}. cible avion = l'avion le plus proche (suivi en direct) ; bateau = le bateau le plus proche (AIS, suivi) ; feux = les feux vus par satellite (24 h) ; cables = les cables sous-marins ; rue = les photos de rue (Mapillary) ; lieu = un endroit (ville, detroit, pays, site) ; camera = la camera publique la plus proche. lieu \"ici\" (ou vide) = la position de J. La reponse contient phrase_pour_utilisateur : repete-la, sans lire les liens a voix haute.",
+  "description": "MODE D EMPLOI : l'OEIL d'Archi. (1) Regarder EN DIRECT autour d'un lieu public : avions en vol (OpenSky), seismes des 7 derniers jours (EMSC), lien du globe. parametres = {\"action\":\"avions\"|\"seismes\"|\"globe\"|\"tout\", \"lieu\":\"Lyon\", \"rayon_km\":50}. (2) MONTRER quelque chose a l'utilisateur dans l'oeil de son appli telephone (le globe s'ouvre tout seul sur son ecran) : parametres = {\"action\":\"montrer\", \"cible\":\"avion\"|\"bateau\"|\"feux\"|\"cables\"|\"rue\"|\"lieu\"|\"camera\", \"lieu\":\"Lyon\" ou \"ici\"}. cible avion = l'avion le plus proche (suivi en direct) ; bateau = le bateau le plus proche (AIS, suivi) ; feux = les feux vus par satellite (24 h) ; cables = les cables sous-marins ; rue = les photos de rue (Mapillary) ; lieu = un endroit (ville, detroit, pays, site) ; camera = la camera publique la plus proche. lieu \"ici\" (ou vide) = la position de l'utilisateur. La reponse contient phrase_pour_utilisateur : repete-la, sans lire les liens a voix haute.",
   "script": "oeil.py",
   "parametres": [
    {
@@ -220,7 +220,7 @@
    },
    {
     "nom": "lieu",
-    "description": "ville, aeroport, port, site, detroit, pays, coordonnees 'lat,lon', ou 'ici' (position de J)"
+    "description": "ville, aeroport, port, site, detroit, pays, coordonnees 'lat,lon', ou 'ici' (position de l'utilisateur)"
    },
    {
     "nom": "rayon_km",
@@ -238,7 +238,7 @@
  },
  "appli_telephone": {
   "nom": "appli_telephone",
-  "description": "MODE D EMPLOI : envoie a J sur Telegram la derniere version de l'appli Archi du telephone (fichier .apk a installer). Aucun parametre. Quand il dit « envoie-moi l'appli », « la nouvelle version de l'appli ». Repete la phrase_pour_utilisateur.",
+  "description": "MODE D EMPLOI : envoie a l'utilisateur sur Telegram la derniere version de l'appli Archi du telephone (fichier .apk a installer). Aucun parametre. Quand il dit « envoie-moi l'appli », « la nouvelle version de l'appli ». Repete la phrase_pour_utilisateur.",
   "script": "appli_telephone.py",
   "parametres": [],
   "timeout_s": 30,
@@ -248,7 +248,7 @@
  },
  "transmettre_document": {
   "nom": "transmettre_document",
-  "description": "MODE D EMPLOI : donne a J sur Telegram un PDF deja range sur le PC dans documents (lettre a imprimer, note, fiche). action=donner, nom = un bout du nom du PDF ou de son dossier (ex. facture, ou contrats). Un PDF par appel : si plusieurs correspondent, l outil les liste, redemande avec un nom plus precis. action=liste (mot facultatif) : les PDF disponibles, du plus recent au plus ancien.",
+  "description": "MODE D EMPLOI : donne a l'utilisateur sur Telegram un PDF deja range sur le PC dans documents (lettre a imprimer, note, fiche). action=donner, nom = un bout du nom du PDF ou de son dossier (ex. facture, ou contrats). Un PDF par appel : si plusieurs correspondent, l outil les liste, redemande avec un nom plus precis. action=liste (mot facultatif) : les PDF disponibles, du plus recent au plus ancien.",
   "script": "transmettre_document.py",
   "parametres": [
    {
@@ -280,7 +280,7 @@
    },
    {
     "nom": "sujet",
-    "description": "de quoi parle J, en quelques mots anglais si possible (ex. France government, Ukraine ceasefire, Fed December)"
+    "description": "de quoi parle l'utilisateur, en quelques mots anglais si possible (ex. France government, Ukraine ceasefire, Fed December)"
    },
    {
     "nom": "quoi",
@@ -452,7 +452,7 @@
    },
    {
     "nom": "question",
-    "description": "facultatif : ce que J cherche dans la video (ex. le reglage de la buse)"
+    "description": "facultatif : ce que l'utilisateur cherche dans la video (ex. le reglage de la buse)"
    },
    {
     "nom": "debut",
@@ -479,7 +479,7 @@
  },
  "presentation": {
   "nom": "presentation",
-  "description": "MODE D EMPLOI : fabrique une PRESENTATION (diaporama) avec Presenton sur le PC, ecrite par le modele local. parametres = {\"sujet\":\"...\", \"contenu\":\"notes, plan ou texte de J (facultatif)\", \"diapos\":8, \"ton\":\"professionnel|detendu|drole|pedagogique|vente\", \"format\":\"pdf\"}. Duree : 5 a 10 minutes. Le fichier part tout seul sur Telegram et dans l'appli. Si J demande un PowerPoint (modifiable), mets \"format\":\"pptx\". Repete la phrase_pour_utilisateur.",
+  "description": "MODE D EMPLOI : fabrique une PRESENTATION (diaporama) avec Presenton sur le PC, ecrite par le modele local. parametres = {\"sujet\":\"...\", \"contenu\":\"notes, plan ou texte de l'utilisateur (facultatif)\", \"diapos\":8, \"ton\":\"professionnel|detendu|drole|pedagogique|vente\", \"format\":\"pdf\"}. Duree : 5 a 10 minutes. Le fichier part tout seul sur Telegram et dans l'appli. Si l'utilisateur demande un PowerPoint (modifiable), mets \"format\":\"pptx\". Repete la phrase_pour_utilisateur.",
   "script": "presentation.py",
   "parametres": [
    {
@@ -500,7 +500,7 @@
    },
    {
     "nom": "format",
-    "description": "pdf (defaut) ou pptx si J veut un PowerPoint"
+    "description": "pdf (defaut) ou pptx si l'utilisateur veut un PowerPoint"
    }
   ],
   "timeout_s": 900,
@@ -514,7 +514,7 @@
  },
  "retro": {
   "nom": "retro",
-  "description": "MODE D EMPLOI : retro-ingenierie d'un logiciel, d'une appli ou d'un appareil QUI APPARTIENT A J, pour comprendre comment ca marche (interoperabilite) puis reecrire a neuf. action=triage (defaut) : identifie la cible (type, empreinte, structure, adresses/URL utiles) et prepare une MISSION pre-remplie pour l'expert ; cible = chemin complet ou un bout du nom ; but = ce que J veut comprendre. action=liste : les cibles analysables trouvees sur le PC. Lecture seule : ne lance JAMAIS le programme (l'analyse dynamique est un geste separe decide par J) et n'analyse pas les fichiers sensibles (cles, base n8n, .env). Rien n'est contourne (licence, protection, DRM).",
+  "description": "MODE D EMPLOI : retro-ingenierie d'un logiciel, d'une appli ou d'un appareil QUI APPARTIENT A l'utilisateur, pour comprendre comment ca marche (interoperabilite) puis reecrire a neuf. action=triage (defaut) : identifie la cible (type, empreinte, structure, adresses/URL utiles) et prepare une MISSION pre-remplie pour l'expert ; cible = chemin complet ou un bout du nom ; but = ce que l'utilisateur veut comprendre. action=liste : les cibles analysables trouvees sur le PC. Lecture seule : ne lance JAMAIS le programme (l'analyse dynamique est un geste separe decide par l'utilisateur) et n'analyse pas les fichiers sensibles (cles, base n8n, .env). Rien n'est contourne (licence, protection, DRM).",
   "script": "retro.py",
   "parametres": [
    {
@@ -667,6 +667,27 @@
   "timeout_s": 60,
   "touche": [
    "memoire du chateau (fiches Markdown)"
+  ]
+ },
+ "trader": {
+  "nom": "trader",
+  "description": "MODE D EMPLOI : le trader d'Archi, EN SIMULATION seulement : 1000 dollars FICTIFS, vrais prix publics des cryptos, aucun compte, aucun ordre reel. Le trader decide SEUL, dans des garde-fous ecrits : on ne lui dicte pas d'ordre. action=etat (defaut) : valeur du portefeuille fictif, positions, dernier tour. action=tour : il lit les prix, decide et note ses ordres fictifs (jusqu'a 2 minutes ; un tour toutes les 15 minutes au plus). action=marche : les prix et indicateurs du moment. action=stop ou reprendre. action=remise_a_zero : ESSAI A BLANC d'abord, puis confirmer=oui quand l'utilisateur dit oui. Repete la phrase telle quelle : c'est un exercice, JAMAIS un conseil d'achat ou de vente, et n'en ajoute aucun.",
+  "script": "trader.py",
+  "parametres": [
+   {
+    "nom": "action",
+    "description": "etat (defaut), tour, marche, stop, reprendre ou remise_a_zero"
+   },
+   {
+    "nom": "confirmer",
+    "description": "remise_a_zero : oui seulement quand l'utilisateur a dit oui ; sinon essai a blanc"
+   }
+  ],
+  "timeout_s": 240,
+  "touche": [
+   "internet (prix publics Kraken, lecture seule)",
+   "modele local",
+   "dossier trader du chateau (portefeuille fictif)"
   ]
  }
 }

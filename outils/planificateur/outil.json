@@ -1,6 +1,6 @@
 {
  "nom": "planificateur",
- "description": "MODE D EMPLOI : faire quelque chose PLUS TARD. action=ajouter avec texte + UN moment : a (\"11h\", \"demain 9h\", \"dans 20 min\"), tous_les (\"lundi\", \"jour\", \"mois\") + heure, ou lieu (\"chalet\") quand J y arrive. Action differee (radiateur) : outil=prises_shelly + outil_parametres ; exige accord=oui (apres un oui de J), essai a blanc puis confirmer=oui. Autres : lister, annuler (quoi), retenir_lieu (nom, ou=ici), lieux.",
+ "description": "MODE D EMPLOI : faire quelque chose PLUS TARD. action=ajouter avec texte + UN moment : a (\"11h\", \"demain 9h\", \"dans 20 min\"), tous_les (\"lundi\", \"jour\", \"mois\") + heure, ou lieu (\"chalet\") quand l'utilisateur y arrive. Action differee (radiateur) : outil=prises_shelly + outil_parametres ; exige accord=oui (apres un oui de l'utilisateur), essai a blanc puis confirmer=oui. Autres : lister, annuler (quoi), retenir_lieu (nom, ou=ici), lieux.",
  "script": "planificateur.py",
  "parametres": [
   {
@@ -9,7 +9,7 @@
   },
   {
    "nom": "texte",
-   "description": "ajouter : ce qu'il faut rappeler a J"
+   "description": "ajouter : ce qu'il faut rappeler a l'utilisateur"
   },
   {
    "nom": "a",
@@ -21,7 +21,7 @@
   },
   {
    "nom": "lieu",
-   "description": "ajouter : a l'arrivee de J sur ce lieu (chaque_fois=oui pour toujours) ; retenir_lieu : nom=, ou=ici ou adresse, rayon="
+   "description": "ajouter : a l'arrivee de l'utilisateur sur ce lieu (chaque_fois=oui pour toujours) ; retenir_lieu : nom=, ou=ici ou adresse, rayon="
   },
   {
    "nom": "outil",
@@ -33,7 +33,7 @@
   },
   {
    "nom": "confirmer",
-   "description": "oui quand J a dit vas-y pour une action differee ; annuler : oui si plusieurs"
+   "description": "oui quand l'utilisateur a dit vas-y pour une action differee ; annuler : oui si plusieurs"
   }
  ],
  "timeout_s": 60,
