@@ -52,7 +52,7 @@ try {
     // sans reponse a garder, l'ancienne est effacee (elle ne traine pas)
     try {
       if (reponse) {
-        const tmp = fEchange + '.' + process.pid + '.tmp';
+        const tmp = fEchange + '.' + Date.now() + Math.random().toString(36).slice(2, 6) + '.tmp';
         fs.writeFileSync(tmp, JSON.stringify({ quand: Date.now(), reponse: reponse.slice(0, 900) }));
         fs.renameSync(tmp, fEchange);
       } else if (fs.existsSync(fEchange)) fs.unlinkSync(fEchange);

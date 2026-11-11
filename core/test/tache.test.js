@@ -26,7 +26,7 @@ test('une tache : debut, deux etapes, fin ; la page voit tout dans l ordre', () 
   h.avance(1200);
   assert.ok(c.etapeFin({ n, ok: true, phrase: "C'est programmé." }));
   h.avance(300);
-  assert.ok(c.fin({ ok: true, outils: ['outils_maison', 'lire_page'] }));
+  assert.ok(c.fin({ ok: true, outils: ['outils_maison', 'outils maison appli', 'lire_page'] }));
   v = c.voir();
   assert.strictEqual(v.tache.en_cours, false);
   assert.strictEqual(v.tache.ok, true);
