@@ -449,6 +449,8 @@ test('page d accueil : sphere, mot magique et polices sont servis au PC seulemen
   });
   try {
     for (const [chemin, type, debut] of [['/sphere.js', 'text/javascript', '// sphere.js'], ['/ecoute.js', 'text/javascript', '// ecoute.js'], ['/logo.js', 'text/javascript', '// logo.js'],
+      ['/orbe.js', 'text/javascript', '// orbe.js'], ['/curseur.js', 'text/javascript', '// curseur.js'], ['/decor/lac_base.webp', 'image/webp', 'RIFF'], ['/decor/lac_lumiere.webp', 'image/webp', 'RIFF'],
+      ['/decor/lac_profondeur.webp', 'image/webp', 'RIFF'],
       ['/polices/fraunces.woff2', 'font/woff2', 'wOF2'], ['/polices/fraunces-italique.woff2', 'font/woff2', 'wOF2'], ['/polices/nunito.woff2', 'font/woff2', 'wOF2']]) {
       const f = await voir(local, chemin);
       assert.equal(f.code, 200, chemin);
@@ -458,13 +460,15 @@ test('page d accueil : sphere, mot magique et polices sont servis au PC seulemen
     }
     assert.match((await voir(local, '/polices/nunito.woff2')).cache, /max-age/);
     // aucun chemin ne vient de la demande : pas de fichier hors de la liste
-    for (const chemin of ['/polices/../portail.js', '/polices/OFL-Nunito.txt', '/portail.js', '/polices/', '/sphere.js/..%2f..%2f.env']) {
+    for (const chemin of ['/polices/../portail.js', '/polices/OFL-Nunito.txt', '/portail.js', '/polices/', '/sphere.js/..%2f..%2f.env',
+      '/decor/', '/decor/lac.json', '/decor/../portail.js']) {
       assert.equal((await voir(local, chemin)).code, 404, chemin);
     }
     // la page n'appelle aucun autre site : polices et scripts viennent du PC
     const page = fs.readFileSync(path.join(__dirname, '..', 'accueil.html'), 'utf8');
     assert.doesNotMatch(page, /https?:\/\/(?!www\.w3\.org)[a-z0-9.-]+\.[a-z]{2,}/i, 'aucune adresse exterieure dans la page');
     assert.ok(page.includes('url("/polices/fraunces.woff2")') && page.includes('<script src="/sphere.js">') && page.includes('<script src="/ecoute.js">'));
+    assert.ok(page.includes('<script src="/orbe.js">') && page.includes("'/decor/lac_base.webp'"));
   } finally {
     local.close(); porte.close();
     await new Promise(x => setTimeout(x, 200));   // la porte finit d'ecrire son journal dans ce dossier
@@ -564,7 +568,11 @@ test('vitrine du depot : chaque outil du registre d exemple a son nom lisible, e
   const fiches = v.outils.filter(f => !f.agent).map(f => f.nom);
   assert.deepEqual(Object.keys(reg).filter(n => !fiches.includes(n)), [], 'outil du registre sans fiche dans la vitrine');
   assert.deepEqual(fiches.filter(n => !reg[n]), [], 'fiche de la vitrine sans outil au registre');
-  for (const f of v.outils) assert.ok(f.titre && f.quoi && f.titre.length <= 60 && f.quoi.length <= 200, f.nom);
+  for (const f of v.outils) assert.ok(f.titre && f.titre.length <= 60 && typeof f.quoi === 'string' && f.quoi.length <= 200, f.nom);
+  // une phrase courte, ou rien quand le nom parle de lui-meme (choix de J, 11/11)
+  for (const nom of ['lire_page', 'Wikipedia', 'navigateur', 'creer_pdf']) assert.equal(v.outils.find(f => f.nom === nom).quoi, '', nom);
+  for (const f of v.outils.filter(x => x.quoi)) assert.ok(f.quoi.length <= 130, f.nom + ' : phrase trop longue pour la vitrine');
+  assert.match(v.outils.find(f => f.nom === 'planificateur').quoi, /réveil.*quand tu arrives quelque part/);
   // un outil « agent » doit etre un vrai noeud outil du workflow de la demo
   const wf = fs.readFileSync(path.join(depot, 'n8n', 'archi_demo.json'), 'utf8');
   for (const f of v.outils.filter(x => x.agent)) assert.ok(wf.includes('"name": "' + f.nom + '"') || wf.includes('"name":"' + f.nom + '"'), f.nom + ' absent du workflow');
@@ -579,11 +587,12 @@ test('vitrine du depot : chaque outil du registre d exemple a son nom lisible, e
   assert.ok(page.every(o => o.titre), 'chaque outil de la page a un nom lisible');
 });
 
-test('page d accueil : un menu (visite guidee, ses outils, outils en cours de developpement) et le logo partout ou « Archi » est ecrit', () => {
+test('page d accueil : un menu (visite guidee, ses outils, outils en construction) et le logo partout ou « Archi » est ecrit', () => {
   const page = fs.readFileSync(path.join(__dirname, '..', 'accueil.html'), 'utf8');
   const menu = page.slice(page.indexOf('<nav class="haut"'), page.indexOf('</nav>'));
-  assert.ok(menu.includes('id="b-menu"') && menu.includes('aria-expanded="false"') && menu.includes('id="menu" role="menu" hidden'));
-  const ordre = ['id="b-visite">Visite guidée', 'id="b-coulisses">Ses outils', 'id="b-chantier">Outils en cours de développement'].map(x => menu.indexOf(x));
+  // ferme au depart : invisible, et hors d'atteinte du clavier et des lecteurs d'ecran (inert)
+  assert.ok(menu.includes('id="b-menu"') && menu.includes('aria-expanded="false"') && menu.includes('id="menu" role="menu" aria-hidden="true" inert'));
+  const ordre = ['id="b-visite">Visite guidée', 'id="b-coulisses">Ses outils', 'id="b-chantier">Outils en construction'].map(x => menu.indexOf(x));
   assert.ok(ordre[0] > 0 && ordre[0] < ordre[1] && ordre[1] < ordre[2], JSON.stringify(ordre));
   assert.ok(page.includes('id="volet-chantier"') && page.includes('<ul id="chantiers">'));
   assert.ok(page.includes("$('b-chantier').hidden = !chantiers.length;"), 'sans projet, la ligne du menu disparait');
@@ -592,6 +601,245 @@ test('page d accueil : un menu (visite guidee, ses outils, outils en cours de de
   assert.ok(page.includes('<symbol id="mot-archi" viewBox="0 0 120 34"') && page.includes('<script src="/logo.js">'));
   assert.ok(page.includes('if (window.ArchiLogo) ArchiLogo.installer(document);'));
   assert.ok(page.includes('.mot-archi svg {'));
+});
+
+test('page d accueil epuree : « 100 % local » dit une fois, les modules aux bords, le logo en lettres separees, rien d inaccessible', () => {
+  const page = fs.readFileSync(path.join(__dirname, '..', 'accueil.html'), 'utf8');
+  // la phrase « 100 % local » : au lancement (body.annonce, retire apres quelques secondes) et pendant la visite, jamais ensuite
+  assert.ok(page.includes('<body class="annonce">') && page.includes('body:not(.annonce):not(.en-visite) .nom small { opacity: 0;'));
+  assert.match(page, /setTimeout\(\(\) => document\.body\.classList\.remove\('annonce'\), \d+\)/);
+  // les modules se cachent seulement a la souris, sur grand ecran : au doigt et sur telephone, tout reste visible
+  const epure = page.slice(page.indexOf('@media (hover: hover) and (pointer: fine) and (min-width: 981px) {'));
+  assert.ok(epure.length > 100 && epure.includes('.memoire h2, .memoire li, .memoire p, .jour :is(h2, h3, p, li, .tel) { opacity: 0;'));
+  assert.ok(page.includes("matchMedia('(hover: hover) and (pointer: fine) and (min-width: 981px)')"));
+  // ils restent joignables au clavier (tabindex) et se montrent pendant la visite (.vise)
+  assert.ok(page.includes('class="jour" id="jour" aria-label="Aujourd\'hui" tabindex="0"') && page.includes('class="memoire" id="zone-memoire" tabindex="0"'));
+  assert.ok(epure.includes('.memoire.vise li') && epure.includes('.memoire:focus-within'));
+  // les deux lisieres, et le logo en cinq lettres (A, R, C, H, I) qui peuvent tournoyer
+  assert.ok(page.includes('id="lis-gauche"') && page.includes('id="lis-droite"'));
+  const logo = page.slice(page.indexOf('<svg class="logo"'), page.indexOf('</svg>', page.indexOf('<svg class="logo"')));
+  assert.equal((logo.match(/class="lettre"/g) || []).length, 5);
+  // le dessin du logo n'a pas change : les memes traits qu'avant, juste ranges lettre par lettre
+  for (const trait of ['M2,32 L13,2 L24,32', 'M33,32 V2 H47 A4,4 0 0 1 51,6 V13 A4,4 0 0 1 47,17 H33 M42,17 L51,32', 'M80,2 H64 A4,4 0 0 0 60,6 V28 A4,4 0 0 0 64,32 H80', 'M89,2 V32 M109,2 V32 M89,17 H109', 'M118,2 V32'])
+    assert.ok(logo.includes('d="' + trait + '"'), trait);
+  // le menu : un astre du decor qui se signale (ping) et dit son nom quand on approche ; la visite le montre au dernier pas
+  assert.ok(page.includes('class="glyphe"') && page.includes('class="ping"') && page.includes("pointe: 'b-menu'"));
+  // et l'orbe repond : une eruption vers ce que la souris survole, si l'orbe 3D sait le faire
+  assert.ok(page.includes('if (!sphere.eclat || !el) return;'));
+});
+
+test('page d accueil : « Aujourd hui » au bord gauche, la discussion en haut et ce qui arrive dessous', () => {
+  const page = fs.readFileSync(path.join(__dirname, '..', 'accueil.html'), 'utf8');
+  const jour = page.slice(page.indexOf('<aside class="jour"'), page.indexOf('</aside>', page.indexOf('<aside class="jour"')));
+  // dans cet ordre : la date, le fil, les rappels a venir (ou une phrase s'il n'y en a pas), la tache en cours, le telephone
+  const ordre = ['id="j-date"', 'id="fil"', 'id="j-rappels"', 'id="j-rien"', 'id="j-tache"', 'id="j-tel"'].map(x => jour.indexOf(x));
+  assert.ok(ordre.every((x, i) => x > 0 && (i === 0 || x > ordre[i - 1])), JSON.stringify(ordre));
+  assert.ok(page.includes('majJour(e, branche);') && page.includes('majTache(v);') && page.includes("$('j-tel').onclick = () => volet('volet-tel');"));
+  // le module de gauche de la page epuree, c'est lui ; et le fil vide ne prend pas de place
+  assert.ok(page.includes("gauche: { module: $('jour')") && page.includes('.fil:empty { display: none; }'));
+  // le texte du rappel s'ecrit en texte, jamais en HTML
+  assert.ok(page.includes('li.appendChild(document.createTextNode(x.texte));') && !/j-rappels[^\n]*innerHTML/.test(page));
+});
+
+test('portail : les prochains rappels pour « Aujourd hui », lus dans le planificateur sans rien y changer', () => {
+  const B = fs.mkdtempSync(path.join(os.tmpdir(), 'archi-rappels-'));
+  const t0 = Date.parse('2026-11-11T20:00:00Z');
+  assert.deepStrictEqual(P.prochains({ base: B }, t0), []);   // pas de planificateur : rien, sans erreur
+  fs.mkdirSync(path.join(B, 'planificateur'));
+  const F = path.join(B, 'planificateur', 'taches.json');
+  fs.writeFileSync(F, 'pas du json');
+  assert.deepStrictEqual(P.prochains({ base: B }, t0), []);
+  const L = [
+    { texte: 'Demain matin', statut: 'attente', quand: { type: 'heure', a: '2026-11-12T08:00:00Z' } },
+    { texte: 'Tous les jours', statut: 'attente', quand: { type: 'boucle', prochaine: '2026-11-11T21:00:00Z' } },
+    { texte: 'En arrivant', statut: 'attente', quand: { type: 'lieu', lieu_nom: 'Maison', chaque_fois: true } },
+    { texte: 'Deja fait', statut: 'fait', quand: { type: 'heure', a: '2026-11-11T22:00:00Z' } },
+    { texte: 'Il y a trois heures', statut: 'attente', quand: { type: 'heure', a: '2026-11-11T17:00:00Z' } },
+    { texte: '', statut: 'attente', quand: { type: 'heure', a: '2026-11-11T22:00:00Z' } },
+    null, { texte: 'Sans quand', statut: 'attente' },
+  ];
+  fs.writeFileSync(F, JSON.stringify(L));
+  const avant = fs.readFileSync(F, 'utf8');
+  const p = P.prochains({ base: B }, t0);
+  // le plus proche d'abord, puis ceux qui attendent un lieu ; ni les faits, ni les vieux, ni les vides
+  assert.deepStrictEqual(p.map(x => x.texte), ['Tous les jours', 'Demain matin', 'En arrivant']);
+  assert.deepStrictEqual(p[0], { texte: 'Tous les jours', quand: Date.parse('2026-11-11T21:00:00Z'), boucle: true });
+  assert.deepStrictEqual(p[2], { texte: 'En arrivant', lieu: 'Maison', chaque_fois: true });
+  assert.equal(fs.readFileSync(F, 'utf8'), avant);   // lu, jamais ecrit
+  // six au plus
+  fs.writeFileSync(F, JSON.stringify(Array.from({ length: 9 }, (_, i) => ({ texte: 'R' + i, statut: 'attente', quand: { type: 'heure', a: new Date(t0 + (i + 1) * 60000).toISOString() } }))));
+  assert.equal(P.prochains({ base: B }, t0).length, 6);
+  fs.rmSync(B, { recursive: true, force: true });
+});
+
+test('portail : les documents d Archi, et seulement eux, peuvent etre ouverts sur le PC', async () => {
+  const d = chateau(false);
+  assert.deepStrictEqual(P.documents({ base: d }), []);   // pas encore de dossier documents : rien, sans erreur
+  fs.mkdirSync(path.join(d, 'documents'));
+  fs.writeFileSync(path.join(d, 'documents', 'ancien.pdf'), 'a');
+  fs.utimesSync(path.join(d, 'documents', 'ancien.pdf'), new Date(Date.now() - 3600000), new Date(Date.now() - 3600000));
+  fs.writeFileSync(path.join(d, 'documents', '2026-11-11_1326_Competences_d_Archi.pdf'), 'pdf');
+  fs.writeFileSync(path.join(d, 'documents', '.cache'), 'x');
+  fs.mkdirSync(path.join(d, 'documents', 'sous_dossier'));
+  fs.writeFileSync(path.join(d, 'secret.txt'), 'non');
+  const L = P.documents({ base: d });
+  assert.deepStrictEqual(L.map(x => x.nom), ['2026-11-11_1326_Competences_d_Archi.pdf', 'ancien.pdf']);   // le plus recent d'abord, ni cache ni dossier
+  assert.equal(L[0].taille, 3); assert.ok(L[0].quand > L[1].quand);
+  // un nom simple qui existe dans documents\ ; rien d'autre (dossier parent, chemin, sous-dossier, inexistant)
+  assert.equal(P.cheminDocument({ base: d }, 'ancien.pdf'), path.resolve(d, 'documents', 'ancien.pdf'));
+  for (const piege of ['../secret.txt', '..\\secret.txt', 'C:\\Windows\\win.ini', '/etc/passwd', '..', '.', 'sous_dossier', 'absent.pdf', '', null, 42, 'a"b.pdf', 'x'.repeat(201)])
+    assert.equal(P.cheminDocument({ base: d }, piege), null, String(piege));
+  // la route : seule la page peut demander, et seulement un document du chateau
+  const ouverts = [];
+  const r = { port: 0, n8nPort: 1, depot: d, base: d, etat: d, cle: CLE, lmUrl: 'http://127.0.0.1:1', modele: 'm', modeleVision: 'v', utilisateur: '', telegram: false,
+    ouvrir: (f, comment) => ouverts.push([f, comment]) };
+  const local = P.creerServeurLocal(r);
+  await new Promise(x => local.listen(0, '127.0.0.1', x));
+  r.port = local.address().port;
+  const demande = (corps, page) => appel(r.port, { path: '/api/ouvrir', method: 'POST',
+    headers: Object.assign({ host: '127.0.0.1:' + r.port, 'content-type': 'application/json' }, page === false ? {} : { 'x-archi-portail': '1' }) }, JSON.stringify(corps));
+  try {
+    assert.equal((await demande({ nom: 'ancien.pdf', comment: 'dossier' })).code, 200);
+    assert.equal((await demande({ nom: 'ancien.pdf' })).code, 200);
+    assert.equal((await demande({ nom: '../secret.txt' })).code, 404);
+    assert.equal((await demande({ nom: 'ancien.pdf' }, false)).code, 403);   // pas la page : refuse
+    assert.deepStrictEqual(ouverts, [[path.resolve(d, 'documents', 'ancien.pdf'), 'dossier'], [path.resolve(d, 'documents', 'ancien.pdf'), 'fichier']]);
+  } finally { await fermer(local); fs.rmSync(d, { recursive: true, force: true }); }
+});
+
+test('page d accueil : un chemin de fichier devient une pastille, « donne-le-moi » et « ouvre le dossier » restent sur le PC', () => {
+  const page = fs.readFileSync(path.join(__dirname, '..', 'accueil.html'), 'utf8');
+  // on reprend les vraies fonctions de la page et on les essaie sur la vraie phrase d'Archi
+  const morceau = nom => { const i = page.indexOf(nom); assert.ok(i > 0, nom); return page.slice(i, page.indexOf('\n', i)); };
+  const vm = require('vm'), bac = {};
+  vm.runInNewContext(['RE_CHEMIN', 'nomDoc', 'joliNom', 'DONNE', 'FAIRE', 'DOSSIER', 'sansDonne'].map(n => morceau('const ' + n + ' =')).join('\n') + '\n' +
+    page.slice(page.indexOf('function sansChemins(t) {'), page.indexOf('async function ouvrirDoc(')) +
+    '\nthis.f = { sansChemins, joliNom, DONNE, FAIRE, DOSSIER, sansDonne };', bac);
+  const { sansChemins, joliNom, DONNE, FAIRE, DOSSIER, sansDonne } = bac.f;
+  const r = sansChemins('Le PDF « Compétences d’Archi » est prêt :\n\n`C:\\Users\\Camille\\Archi\\chateau\\documents\\2026-11-11_1326_Competences_d_Archi.pdf`.');
+  assert.equal(r.texte, 'Le PDF « Compétences d’Archi » est prêt.');
+  assert.deepStrictEqual([...r.noms], ['2026-11-11_1326_Competences_d_Archi.pdf']);
+  const m = sansChemins('Je l\'ai mis dans C:\\docs\\plan_garage.pdf, tu veux que je l\'envoie ?');
+  assert.equal(m.texte, 'Je l\'ai mis dans « plan garage », tu veux que je l\'envoie ?');
+  assert.equal(sansChemins('Rien à signaler.').noms.length, 0);
+  assert.equal(joliNom('2026-11-11_1326_Competences_d_Archi.pdf'), 'Competences d Archi');
+  // ce que la page comprend toute seule ; « fais-moi un PDF et donne-le-moi » part bien au modele
+  for (const x of ['donne-le-moi', 'Donne le moi', 'passe-les-moi', 'donne-moi le fichier', 'donne moi les documents']) assert.ok(DONNE.test(x), x);
+  for (const x of ['donne-moi la météo', 'montre-moi la carte', 'donne-moi des idées']) assert.ok(!DONNE.test(x), x);
+  assert.ok(FAIRE.test('crée-moi un PDF et donne-le-moi') && FAIRE.test('fais-moi un résumé') && !FAIRE.test('donne-le-moi'));
+  assert.equal(sansDonne('Fais-moi un PDF qui résume ce que tu sais faire et donne-le-moi'), 'Fais-moi un PDF qui résume ce que tu sais faire');
+  assert.equal(sansDonne('Crée un PDF sur Médor, puis passe-le-moi.'), 'Crée un PDF sur Médor');
+  assert.ok(DOSSIER.test('ouvre-moi le dossier') && DOSSIER.test('Ouvre le dossier') && !DOSSIER.test('ouvre la porte'));
+  // la parole s'efface (45 s au moins), l'orbite et « Bonjour » restent 45 s, les idees 3 minutes
+  assert.ok(page.includes('Math.max(45000,') && page.includes('}, 45000);') && page.includes("$('idees').classList.add('efface'), 180000)"));
+  assert.ok(page.includes('.parole.efface > :not(.idees) { opacity: 0; }'));
+  // le module de gauche commence sous le nom
+  assert.match(page, /\.jour \{ grid-column: 1; grid-row: 1 \/ 3; align-self: start; margin-top: 1\d\dpx;/);
+});
+
+test('page d accueil : plein ecran, curseur d Archi, et « En construction » en bas de Ses outils', () => {
+  const page = fs.readFileSync(path.join(__dirname, '..', 'accueil.html'), 'utf8');
+  const cur = fs.readFileSync(path.join(__dirname, '..', 'curseur.js'), 'utf8');
+  // plein ecran : au premier geste (un navigateur refuse sans geste), Echap n'y renvoie pas, et le menu l'allume ou l'eteint
+  assert.ok(page.includes('id="b-plein">Plein écran') && page.includes("addEventListener('pointerdown', premierGeste, true)"));
+  assert.ok(page.includes("ev.key === 'Escape'") && page.includes("localStorage.setItem('archi_plein_ecran', oui ? 'oui' : 'non')"));
+  // le curseur : seulement a la souris, la saisie garde son curseur, et la fleche revient si le dessin casse ; ?curseur=non l'eteint
+  assert.ok(page.includes('<script src="/curseur.js">') && page.includes("s !== 'non' && window.ArchiCurseur"));
+  // l'etincelle, choix de J : le mini-Archi (?curseur=b) ne vaut que pour une visite, et un ancien « b » retenu s'efface
+  assert.ok(page.includes("if (q === 'a' || q === 'non') localStorage.setItem('archi_curseur', q);"));
+  assert.ok(page.includes("if (localStorage.getItem('archi_curseur') === 'b') localStorage.removeItem('archi_curseur');"));
+  assert.ok(page.includes("s = q === 'b' ? 'b' : (localStorage.getItem('archi_curseur') || 'a');"));
+  assert.ok(page.includes('html.curseur-archi :is(textarea, input, [contenteditable="true"]) { cursor: text !important; }'));
+  assert.ok(cur.includes("'(hover: hover) and (pointer: fine)'") && cur.includes("} catch (err) { stop(); }") && cur.includes("classList.remove('curseur-archi')"));
+  // les projets pas encore aboutis : dans le menu (Outils en construction) et en bas de Ses outils
+  assert.ok(page.includes('<h3 id="chantiers-titre" hidden>En construction</h3>') && page.includes("for (const ul of [$('chantiers'), $('chantiers-outils')])"));
+  // une phrase vide n'ajoute pas de ligne vide sous le nom de l'outil
+  assert.ok(page.includes('if (o.quoi) { li.appendChild(document.createElement(\'br\'))'));
+});
+
+test('orbe 3D : la souris touche la bulle, remue la brume et fait jaillir des eruptions', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'orbe.js'), 'utf8');
+  for (const u of ['uDoigt', 'uSourisP', 'uSourisV', 'uRegard']) assert.ok(src.includes('u.' + u + ','), u + ' est bien envoye au shader');
+  // le sillage divise par uSourisV.w : il ne doit jamais valoir 0 (sinon NaN dans la brume)
+  assert.match(src, /gl\.uniform4f\(u\.uSourisV, [^;]*, 0\.35 \+ 0\.6 \* brassage\)/);
+  assert.ok(src.includes('eclat(x, y, force) { eclat(x, y, force); return this; }'));
+  // une page sans souris (telephone) : rien ne bouge tant que pointermove ne vient pas d'une souris
+  assert.ok(src.includes("sourisLa = ev.pointerType !== 'touch'"));
+});
+
+test('orbe 3D : l allee de monolithes vit (glisse, monte, linteau) et ses signes s allument quand Archi reflechit', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'orbe.js'), 'utf8');
+  const page = fs.readFileSync(path.join(__dirname, '..', 'accueil.html'), 'utf8');
+  // le shader recoit l'allee, et seulement si elle n'est plus cuite dans l'image
+  for (const u of ['uMono', 'uMonoT', 'uNbMono', 'uPense', 'uCamR', 'uCamP', 'uTan', 'uVersLune', 'uOrbeM']) assert.ok(src.includes('u.' + u + ','), u);
+  assert.ok(src.includes('!sc0.monolithes_dans_image') && src.includes("['uGlyphes', decor.signes || vide]"));
+  // la page donne la scene de Blender : la camera, la lune, et les 10 monolithes de l'allee
+  const i = page.indexOf('scene: {'), sc = page.slice(i, page.indexOf('] } },', i));
+  assert.ok(i > 0 && sc.includes('monolithes_dans_image: false') && sc.includes('tan_h: 0.514286'));
+  assert.equal((sc.match(/\{ rang: \d/g) || []).length, 10);
+  // on reprend la vraie fonction creerAllee et on la fait vivre, a 60 images par seconde
+  const vm = require('vm'), bac = {};
+  vm.runInNewContext(src.slice(src.indexOf('  function creerAllee(liste, alea) {'), src.indexOf('  // ------------------------------------------------------------------ l\'orbe')) + '\nthis.creerAllee = creerAllee;', bac);
+  const liste = [];
+  for (let r = 0; r < 4; r++) for (const c of [-1, 1]) liste.push({ rang: r, cote: c, x: c * 3.7, y: 15 + r * 6, haut: 2 + r * 1.7 + (c > 0 ? 1 : 0), l: 0.6, p: 0.45, rot: 0 });
+  let g = 7; const alea = () => { g = (g * 16807) % 2147483647; return g / 2147483647; };
+  const A = bac.creerAllee(liste, alea);
+  const vivre = (sec, pense) => { for (let k = 0; k < sec * 60; k++) A.avancer(1 / 60, pense); };
+  // un linteau : il attend en l'air, descend, se pose pile sur deux monolithes mis a la meme hauteur, puis repart
+  A.evenement(false, 'linteau');
+  assert.ok(A.lin.actif && A.lin.a.rang > 0 && A.lin.a.rang === A.lin.b.rang, 'jamais sur le premier rang');
+  vivre(20, 0);
+  assert.equal(A.lin.etape, 'pose');
+  assert.ok(Math.abs(A.lin.a.h - A.lin.b.h) < 0.02, 'les deux piliers a la meme hauteur');
+  assert.ok(Math.abs(A.lin.z - (A.lin.a.h + 0.32)) < 0.05, 'pose pile dessus : ' + A.lin.z + ' / ' + A.lin.a.h);
+  let b = A.boites();
+  assert.equal(b.n, liste.length + 1);
+  assert.equal(b.tai[liste.length * 4 + 3], -1, 'le linteau ne porte pas de signes');
+  const paire = [A.lin.a, A.lin.b]; let parti = false;
+  for (let k = 0; k < 70 * 60 && !parti; k++) { A.avancer(1 / 60, 0); parti = !A.lin.actif || A.lin.a !== paire[0]; }
+  assert.ok(parti && !paire[0].porte && !paire[1].porte, 'le linteau est reparti, ses piliers sont libres');
+  // glisser et monter : jamais hors de l'allee, jamais sous l'eau
+  for (let k = 0; k < 40; k++) { A.evenement(false, k % 2 ? 'glisse' : 'monte'); vivre(1, 0); }
+  vivre(15, 0);
+  for (const m of A.M) { assert.ok(Math.abs(m.x) >= 2.6 && Math.abs(m.x) <= 4.8, 'x ' + m.x); assert.ok(m.h > 1.2 && m.h < 9.7, 'h ' + m.h); assert.equal(Math.sign(m.x), m.cote); }
+  // il reflechit : une partie des monolithes s'allume (pas tous d'un coup) ; il a fini : tout s'eteint doucement
+  vivre(1, 1);
+  assert.ok(A.M.filter(m => m.rang === 3).every(m => m.lueur < 0.5), 'en vague : le fond ne s allume pas en premier');
+  vivre(6, 1);
+  const allumes = A.M.filter(m => m.lueur > 0.99).length;
+  assert.ok(allumes >= 2, 'allumes ' + allumes);
+  vivre(2, 0);
+  assert.ok(A.M.some(m => m.lueur > 0.3), 'il ne s eteint pas d un coup');
+  vivre(5, 0);
+  assert.ok(A.M.every(m => m.lueur < 0.5), 'puis il s eteint');
+  b = A.boites();
+  for (let k = 0; k < b.n; k++) assert.ok(Number.isFinite(b.pos[k * 4]) && Number.isFinite(b.tai[k * 4 + 2]));
+  // l'alphabet est fait maison : dessine ici, aucune image ni police d'un jeu
+  assert.ok(src.includes('function texSignes(gl)') && src.includes("un alphabet maison (pas celui d'un jeu)"));
+});
+
+test('page d accueil : « Bonjour » et « Archi reflechit » ont leurs polices (A ou B), libres et servies par le portail', () => {
+  const page = fs.readFileSync(path.join(__dirname, '..', 'accueil.html'), 'utf8');
+  const portail = fs.readFileSync(path.join(__dirname, '..', 'portail.js'), 'utf8');
+  const dossier = path.join(__dirname, '..', 'polices');
+  // chaque police est un vrai woff2, avec sa licence libre (OFL) a cote, declaree dans la page et servie par le portail
+  for (const [fichier, famille, licence] of [['cormorant-italique', 'Cormorant Garamond', 'Cormorant'], ['cinzel', 'Cinzel', 'Cinzel'], ['orbitron', 'Orbitron', 'Orbitron'], ['michroma', 'Michroma', 'Michroma']]) {
+    assert.equal(fs.readFileSync(path.join(dossier, fichier + '.woff2')).subarray(0, 4).toString('latin1'), 'wOF2', fichier);
+    assert.match(fs.readFileSync(path.join(dossier, 'OFL-' + licence + '.txt'), 'utf8'), /SIL Open Font License/, licence);
+    assert.ok(page.includes('font-family: "' + famille + '"; src: url("/polices/' + fichier + '.woff2")'), famille);
+    assert.ok(portail.includes("'/polices/" + fichier + ".woff2': ['polices/" + fichier + ".woff2', 'font/woff2']"), fichier);
+  }
+  // A par defaut, B avec ?police=b (et le PC s'en souvient) ; le salut garde sa police quand le prenom arrive
+  assert.ok(page.includes('--salut:"Cormorant Garamond"') && page.includes('--pense:"Orbitron"'));
+  assert.ok(page.includes(':root[data-police="b"] { --salut:"Cinzel"') && page.includes('--pense:"Michroma"'));
+  // A, le choix de J : la B ne vaut que pour une visite (?police=b), et un ancien choix retenu s'efface
+  assert.ok(page.includes("try { localStorage.removeItem('archi_police'); } catch (x) {}") && page.includes('document.documentElement.dataset.police = policeChoisie;'));
+  assert.ok(page.includes("return new URLSearchParams(location.search).get('police') === 'b' ? 'b' : 'a';") && !page.includes("setItem('archi_police'"));
+  // « Archi » s'ecrit avec le logo, y compris dans « Archi réfléchit… » (logo.js le pose sur tout texte de la page)
+  assert.ok(page.includes("montrer((dit ? '🎙 ' : '') + (texte || '(photo)'), 'Archi réfléchit…', 'attente');") && page.includes('if (window.ArchiLogo) ArchiLogo.installer(document);'));
+  assert.ok(page.includes('<div class="reponse salut" id="p-reponse">') && page.includes("$('p-reponse').className = 'reponse salut';"));
+  assert.ok(page.includes('.reponse.salut {') && page.includes('.reponse.attente {') && page.includes('animation: balayage'));
+  assert.ok(page.includes('@media (prefers-reduced-motion: reduce) { .reponse.attente { animation: none;'));
 });
 
 test('workflow de la demo : les outils de l agent sont relies aux deux agents, vers des workflows optionnels qui existent', () => {

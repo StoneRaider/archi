@@ -269,7 +269,64 @@ function outils(r) {
   return liste;
 }
 
-/** Menu > Outils en cours de developpement : les projets pas encore aboutis (config/vitrine.json, « en_developpement »). */
+/** Le module « Aujourd'hui » (bord gauche de la page) : les prochains rappels du planificateur. Lecture seule de
+ *  planificateur/taches.json ; les rappels a une heure ou en boucle d'abord (les plus proches), puis ceux d'un lieu.
+ *  Une heure passee de plus d'une heure (rappel rate, PC eteint) n'est plus « a venir ». */
+/** Les derniers documents qu'Archi a fabriques (le dossier documents du chateau) : le nom, la date, la taille.
+ *  Jamais le contenu. La page en fait les petites lunes de l'orbite quand on lui dit « donne-le-moi ». */
+function documents(r, max) {
+  const dossier = path.join(r.base, 'documents');
+  let noms = [];
+  try { noms = fs.readdirSync(dossier, { withFileTypes: true }).filter(d => d.isFile() && !d.name.startsWith('.')).map(d => d.name); }
+  catch (e) { return []; }
+  const L = [];
+  for (const nom of noms) {
+    try { const s = fs.statSync(path.join(dossier, nom)); L.push({ nom, quand: Math.round(s.mtimeMs), taille: s.size }); } catch (e) { /* parti entre-temps */ }
+  }
+  return L.sort((a, b) => b.quand - a.quand).slice(0, max || 12);
+}
+
+/** Le chemin complet d'un document du chateau, ou null : un nom simple (pas de dossier, pas de « .. »),
+ *  qui existe vraiment dans documents\. C'est la seule chose que la page peut faire ouvrir sur le PC. */
+function cheminDocument(r, nom) {
+  if (typeof nom !== 'string' || !nom || nom.length > 200 || /[\\/:*?"<>|\x00-\x1f]/.test(nom) || /^\.+$/.test(nom)) return null;
+  const dossier = path.resolve(r.base, 'documents'), f = path.resolve(dossier, nom);
+  if (path.dirname(f) !== dossier || f.includes('"')) return null;
+  try { return fs.statSync(f).isFile() ? f : null; } catch (e) { return null; }
+}
+
+/** Ouvre un document (avec son logiciel habituel) ou son dossier (le fichier selectionne), sur ce PC. */
+function ouvrirSurLePC(f, comment) {
+  const dossier = comment === 'dossier';
+  let cmd, args, opts = { detached: true, stdio: 'ignore' };
+  if (process.platform === 'win32') {
+    // l'explorateur veut /select,"chemin" tel quel : le chemin est verifie (pas de guillemet) par cheminDocument
+    cmd = 'explorer.exe'; args = [dossier ? '/select,"' + f + '"' : '"' + f + '"']; opts.windowsVerbatimArguments = true;
+  } else if (process.platform === 'darwin') { cmd = 'open'; args = dossier ? ['-R', f] : [f]; }
+  else { cmd = 'xdg-open'; args = [dossier ? path.dirname(f) : f]; }
+  try { const p = require('child_process').spawn(cmd, args, opts); p.on('error', () => {}); p.unref(); } catch (e) { /* rien a ouvrir */ }
+}
+
+function prochains(r, maintenant) {
+  let L = [];
+  try { L = JSON.parse(fs.readFileSync(path.join(r.base, 'planificateur', 'taches.json'), 'utf8')); } catch (e) { return []; }
+  if (!Array.isArray(L)) return [];
+  const t0 = typeof maintenant === 'number' ? maintenant : Date.now(), sortie = [];
+  for (const t of L) {
+    if (!t || t.statut !== 'attente' || !court(t.texte, 120) || !t.quand || typeof t.quand !== 'object') continue;
+    const q = t.quand;
+    if (q.type === 'heure' || q.type === 'boucle') {
+      const ms = Date.parse(q.type === 'heure' ? q.a : q.prochaine);   // « 2026-11-12T09:00 » : heure du PC
+      if (Number.isFinite(ms) && ms > t0 - 3600000) sortie.push({ texte: court(t.texte, 120), quand: ms, boucle: q.type === 'boucle' });
+    } else if (q.type === 'lieu' && court(q.lieu_nom || q.lieu, 60)) {
+      sortie.push({ texte: court(t.texte, 120), lieu: court(q.lieu_nom || q.lieu, 60), chaque_fois: q.chaque_fois === true });
+    }
+  }
+  sortie.sort((a, b) => (a.quand || Infinity) - (b.quand || Infinity));
+  return sortie.slice(0, 6);
+}
+
+/** Menu > Outils en construction (et en bas de Ses outils) : les projets pas encore aboutis (config/vitrine.json, « en_developpement »). */
 function chantiers(r) {
   const L = vitrine(r).en_developpement;
   return (Array.isArray(L) ? L : []).filter(c => c && court(c.titre, 80)).slice(0, 30).map(c => ({ titre: court(c.titre, 80), quoi: court(c.quoi, 240) }));
@@ -385,6 +442,9 @@ async function etat(r, suivi) {
     telephone: Object.assign({ maintenant: Date.now() }, suivi || nouveauSuivi()),
     outils: outils(r),
     chantiers: chantiers(r),
+    // le module « Aujourd'hui » : ce qui arrive (les rappels du planificateur)
+    prochains: prochains(r),
+    documents: documents(r, 12),
     atelier: atelier(r),
     n8n_url: 'http://127.0.0.1:' + r.n8nPort,
   };
@@ -395,11 +455,20 @@ const CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 's
 const FICHIERS_PAGE = {
   '/qrcode.js': ['qrcode.js', 'text/javascript; charset=utf-8'],
   '/sphere.js': ['sphere.js', 'text/javascript; charset=utf-8'],     // la sphere d'Archi, comme sur le telephone
+  '/orbe.js': ['orbe.js', 'text/javascript; charset=utf-8'],         // la meme sphere en 3D, sur tout l'ecran (WebGL 2)
   '/ecoute.js': ['ecoute.js', 'text/javascript; charset=utf-8'],     // le micro continu et son mot magique
   '/logo.js': ['logo.js', 'text/javascript; charset=utf-8'],         // le mot Archi s'ecrit avec son logo
+  '/curseur.js': ['curseur.js', 'text/javascript; charset=utf-8'],   // la souris d'Archi : une etincelle ou un mini-Archi
+  '/decor/lac_base.webp': ['decor/lac_base.webp', 'image/webp'],     // le decor « b » de l'orbe (rendu dans Blender)
+  '/decor/lac_lumiere.webp': ['decor/lac_lumiere.webp', 'image/webp'],
+  '/decor/lac_profondeur.webp': ['decor/lac_profondeur.webp', 'image/webp'],
   '/polices/fraunces.woff2': ['polices/fraunces.woff2', 'font/woff2'],
   '/polices/fraunces-italique.woff2': ['polices/fraunces-italique.woff2', 'font/woff2'],
   '/polices/nunito.woff2': ['polices/nunito.woff2', 'font/woff2'],
+  '/polices/cormorant-italique.woff2': ['polices/cormorant-italique.woff2', 'font/woff2'],   // « Bonjour », variante A
+  '/polices/cinzel.woff2': ['polices/cinzel.woff2', 'font/woff2'],                           // « Bonjour », variante B
+  '/polices/orbitron.woff2': ['polices/orbitron.woff2', 'font/woff2'],                       // « Archi réfléchit », A
+  '/polices/michroma.woff2': ['polices/michroma.woff2', 'font/woff2'],                       // « Archi réfléchit », B
 };
 let fileEcoute = Promise.resolve();   // une transcription a la fois : Whisper prend tous les coeurs du processeur
 function fichier(res, nom, type, extra) {
@@ -454,6 +523,15 @@ function creerServeurLocal(r, suivi) {
       }
       if (methode === 'POST' && chemin === '/api/message') {
         return relayer(req, res, r, '/webhook/telephone-archi', await lireCorps(req, MAX_CORPS), { 'x-archi-cle': r.cle });
+      }
+      if (methode === 'POST' && chemin === '/api/ouvrir') {
+        // un document d'Archi, ou son dossier : seulement un nom du dossier documents du chateau, rien d'autre
+        let d = {};
+        try { d = JSON.parse((await lireCorps(req, 4096)).toString('utf8')) || {}; } catch (e) { d = {}; }
+        const f = cheminDocument(r, d.nom);
+        if (!f) return json(res, 404, { ok: false, raison: 'introuvable' });
+        (r.ouvrir || ouvrirSurLePC)(f, d.comment === 'dossier' ? 'dossier' : 'fichier');
+        return json(res, 200, { ok: true });
       }
       if (methode === 'POST' && chemin === '/api/annonces') {
         // les rappels du planificateur, comme pour l'appli (sans accuse de reception : le telephone les recoit aussi)
@@ -523,4 +601,4 @@ if (require.main === module) {
 }
 
 module.exports = { reglages, estLocal, appelDeLaPage, routePublique, memeCle, telegramAttendu, codeCourt, creerServeurLocal, creerServeurPorte,
-  surveillerLanceur, adressePublique, outils, chantiers, atelier, nouveauSuivi, noterPassage, memoire };
+  surveillerLanceur, adressePublique, outils, chantiers, prochains, documents, cheminDocument, atelier, nouveauSuivi, noterPassage, memoire };

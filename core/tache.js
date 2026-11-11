@@ -104,7 +104,7 @@ function creer(options) {
     for (const s of t.etapes) if (!s.fin) { s.fin = maintenant(); s.ok = false; s.phrase = s.phrase || 'interrompu'; }
     // les outils branches directement sur l'agent : vus seulement maintenant, ajoutes « apres »
     for (const nom of (Array.isArray(e && e.outils) ? e.outils : []).map(nomOutil).filter(Boolean)) {
-      if (nom === 'outils_maison' || t.etapes.length >= MAX_ETAPES) continue;
+      if (/^outils[ _-]?maison/.test(nom) || t.etapes.length >= MAX_ETAPES) continue;   // deja suivi en direct (Telegram ou appli)
       t.etapes.push({ n: t.etapes.length + 1, outil: nom, action: '', debut: 0, fin: maintenant(), ok: true, phrase: '', estime_ms: 0, apres: true });
     }
     t.fin = maintenant(); t.ok = !(e && e.ok === false);
