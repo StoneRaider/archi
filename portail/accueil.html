@@ -11,7 +11,7 @@
   @font-face { font-family: "Fraunces"; src: url("/polices/fraunces.woff2") format("woff2"); font-weight: 400 900; font-style: normal; font-display: swap; }
   @font-face { font-family: "Fraunces"; src: url("/polices/fraunces-italique.woff2") format("woff2"); font-weight: 400 900; font-style: italic; font-display: swap; }
   @font-face { font-family: "Nunito"; src: url("/polices/nunito.woff2") format("woff2"); font-weight: 400 800; font-style: normal; font-display: swap; }
-  :root { --nuit:#060D0A; --vert:#3DDC97; --pale:#BFF7DC; --texte:#E6F2EC; --doux:#7E9A8C; --trait:rgba(127,240,192,.22); --corail:#FF7A5C; --ambre:#F2B84B;
+  :root { --nuit:#060D0A; --vert:#3DDC97; --pale:#BFF7DC; --texte:#E6F2EC; --doux:#7E9A8C; --trait:rgba(127,240,192,.22); --corail:#FF7A5C; --ambre:#F2B84B; --violet:#A78BFA;
           --titre:"Fraunces", Georgia, serif; --corps:"Nunito", "Segoe UI", system-ui, sans-serif; }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
@@ -56,6 +56,13 @@
   /* la sphere prend la place qui reste : quand la reponse est longue, elle rapetisse au lieu de passer dessous */
   .astre canvas { position: absolute; inset: 0; margin: auto; height: min(100%, 64vh); width: auto; max-width: 100%; aspect-ratio: 1; cursor: pointer; }
   .orbite { position: absolute; left: 50%; top: 50%; width: min(96%, 84vh); aspect-ratio: 1.55; max-height: 96%; transform: translate(-50%, -50%) rotate(-9deg); border: 1px solid var(--trait); border-radius: 50%; pointer-events: none; }
+  /* une fois tout pret, les satellites s'effacent : la sphere, ses orbites et ses eruptions prennent la place.
+     Un satellite en panne (.non) reste visible ; la visite guidee les montre tous. */
+  .orbite, .lune { transition: opacity 1.2s ease, border-color 1.2s ease; }
+  .astre.calme .orbite { border-color: transparent; }
+  .astre.calme .lune:not(.non) { opacity: 0; pointer-events: none; }
+  body.en-visite .astre.calme .lune { opacity: 1; pointer-events: auto; }
+  body.en-visite .astre.calme .orbite { border-color: var(--trait); }
   .lune { position: absolute; display: flex; align-items: center; gap: 9px; font: 700 13px var(--corps); color: var(--pale); white-space: nowrap; transform: rotate(9deg); pointer-events: auto; }
   .lune i { width: 9px; height: 9px; border-radius: 50%; background: #45584f; flex: none; }
   .lune em { font-style: normal; font-weight: 600; color: var(--doux); }
@@ -76,9 +83,27 @@
   .reponse.souci { color: var(--corail); font-size: clamp(18px, 1.8vw, 24px); }
   .duree { font: 700 12px var(--corps); letter-spacing: .12em; text-transform: uppercase; color: var(--doux); margin-top: 8px; min-height: 1.2em; }
   .notes { margin-top: 6px; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  /* --- la carte de la tache : ce qu'Archi fait, etape par etape (idee reprise de Brahma) --- */
+  .carte { margin: 10px auto 0; max-width: 34em; text-align: left; border-left: 1px dashed var(--trait); padding: 2px 0 2px 16px; }
+  .carte h4 { margin: 0 0 6px; font: 800 11.5px var(--corps); letter-spacing: .18em; text-transform: uppercase; color: var(--doux); }
+  .carte h4 b { color: var(--violet); font-weight: 800; }
+  .carte.finie h4 b { color: var(--vert); } .carte.ratee h4 b { color: var(--corail); }
+  .carte p.phrase { margin: 0 0 6px; font: italic 400 14px/1.35 var(--titre); color: var(--doux); }
+  .carte ol { list-style: none; margin: 0; padding: 0; }
+  .carte li { font: 600 14px/1.35 var(--corps); color: var(--texte); margin: 0 0 6px; }
+  .carte li i { font-style: normal; display: inline-block; width: 1.3em; color: var(--doux); }
+  .carte li.en-cours i { color: var(--violet); } .carte li.fait i { color: var(--vert); } .carte li.rate i { color: var(--corail); }
+  .carte li small { color: var(--doux); font-weight: 600; margin-left: 6px; }
+  .carte li .phrase { display: block; margin-left: 1.3em; font: italic 400 14px/1.35 var(--titre); color: var(--doux); }
+  .carte .barre { display: block; margin: 4px 0 0 1.3em; height: 3px; background: var(--trait); border-radius: 2px; overflow: hidden; max-width: 18em; }
+  .carte .barre span { display: block; height: 100%; background: var(--violet); transition: width .8s linear; }
+  .carte .barre.inconnu span { width: 35%; animation: va-vient 1.6s ease-in-out infinite; }
+  @keyframes va-vient { 0% { transform: translateX(-100%); } 100% { transform: translateX(290%); } }
+  @media (prefers-reduced-motion: reduce) { .carte .barre.inconnu span { animation: none; width: 100%; opacity: .4; } }
   .notes p { margin: 0; font: italic 600 16px var(--titre); color: var(--pale); }
   .notes p::before { font: 800 11.5px var(--corps); letter-spacing: .18em; text-transform: uppercase; color: var(--vert); font-style: normal; margin-right: 10px; }
   .notes p.retenu::before { content: "✦ retenu"; }
+  .notes p.lecon { color: var(--violet); } .notes p.lecon::before { content: "✎ leçon"; color: var(--violet); }
   .notes p.rappel { color: var(--ambre); } .notes p.rappel::before { content: "⏰ rappel"; color: var(--ambre); }
   .notes p.souci { color: var(--corail); } .notes p.souci::before { content: "! "; color: var(--corail); }
   .notes p.info { color: var(--doux); }
@@ -103,6 +128,9 @@
   .memoire li::before { content: ""; position: absolute; left: -23px; top: 8px; width: 9px; height: 9px; background: var(--pale); transform: rotate(45deg); box-shadow: 0 0 10px var(--vert); }
   .memoire li:nth-child(2) { margin-left: 16px; } .memoire li:nth-child(3) { margin-left: 5px; } .memoire li:nth-child(4) { margin-left: 12px; }
   .memoire li.neuf { color: var(--vert); }
+  .memoire h2.lecons { margin-top: 26px; }
+  .memoire ul.lecons li::before { background: var(--violet); box-shadow: 0 0 10px var(--violet); }
+  .memoire ul.lecons li { font-size: 15px; }
   .memoire p { font-size: 12.5px; color: var(--doux); margin: 4px 0 0; }
 
   /* --- en bas : une ligne pour parler, puis le ruban des outils --- */
@@ -195,6 +223,7 @@
     .fil, .memoire { grid-column: 1; grid-row: auto; padding: 14px 22px; max-height: none; -webkit-mask-image: none; mask-image: none; }
     .astre { grid-column: 1; grid-row: auto; display: flex; flex-direction: column; padding-top: 6px; }
     .lune { position: static; transform: none; display: inline-flex; margin: 3px 9px; }
+    body:not(.en-visite) .astre.calme .lune:not(.non) { display: none; }
     .orbite { position: static; transform: none; border: 0; width: auto; max-height: none; aspect-ratio: auto; text-align: center; order: 2; }
     .astre canvas { position: static; flex: none; width: min(86vw, 46vh); height: auto; max-width: none; margin: 0 auto; }
     .parole { grid-row: auto; padding: 8px 22px; } .saisie { grid-row: auto; padding: 16px 22px 14px; flex-wrap: wrap; } .magie { width: 100%; text-align: left; }
@@ -233,6 +262,7 @@
       <button type="button" role="menuitem" id="b-visite">Visite guidée<small>Le tour d'Archi, en sept étapes</small></button>
       <button type="button" role="menuitem" id="b-coulisses">Ses outils<small>Ce qu'il sait faire aujourd'hui</small></button>
       <button type="button" role="menuitem" id="b-atelier">L'atelier<small>Le curateur et le mécanicien au travail</small></button>
+      <button type="button" role="menuitem" id="b-tel-menu">Ton téléphone<small>Brancher l'appli, voir où elle en est</small></button>
       <button type="button" role="menuitem" id="b-chantier">Outils en cours de développement<small>Ce qui arrive ensuite</small></button>
     </div>
   </nav>
@@ -254,12 +284,16 @@
     <h2>Archi se souvient</h2>
     <ul id="memoire" aria-live="polite" aria-label="Les derniers faits retenus"></ul>
     <p id="memoire-note">Parle-lui de toi : il retient tout seul ce qui compte.</p>
+    <h2 class="lecons" id="lecons-titre" hidden>Ses leçons</h2>
+    <ul class="lecons" id="lecons" aria-label="Ce que tu lui as appris en le corrigeant"></ul>
+    <p id="lecons-note" hidden></p>
   </aside>
 
   <section class="parole" aria-live="polite">
     <div class="toi" id="p-toi"></div>
     <div class="reponse" id="p-reponse">Bonjour.</div>
     <div class="duree" id="p-duree"></div>
+    <div class="carte" id="carte" hidden aria-live="polite" aria-label="Ce qu'Archi est en train de faire"></div>
     <div class="notes" id="p-notes"></div>
     <div class="idees" id="idees"></div>
   </section>
@@ -353,8 +387,13 @@ const vus = new Set(JSON.parse(localStorage.getItem('archi_rappels_vus') || '[]'
 const sphere = ArchiSphere($('sphere'), { rayon: 0.4 });
 
 // ---- la sphere suit ce qui se passe : elle parle, reflechit, ecoute ou respire
+// les couleurs : repos et parle verts, ecoute cyan, reflechit orange, agit violet (un outil travaille), muet rouge (voix coupee)
+let tacheVue = null;   // la derniere carte lue (/api/tache)
 function humeur() {
-  sphere.mode(lecteur ? 'parle' : occupe ? 'reflechit' : micro ? 'ecoute' : 'repos');
+  const t = tacheVue && tacheVue.tache, enCours = !!(t && t.en_cours);
+  const outil = enCours && t.etapes.some(s => !s.fin && !s.apres);
+  sphere.mode(lecteur ? 'parle' : outil ? 'agit' : (occupe || enCours) ? 'reflechit' : micro ? 'ecoute'
+    : (!son && voix.parole) ? 'muet' : 'repos');
 }
 
 // ---- la discussion : l'echange en cours en grand, les precedents dans le fil de gauche
@@ -404,6 +443,7 @@ async function majEtat() {
   lune('v-tel', !e.lien_telephone ? 'attente' : 'ok', !e.lien_telephone ? 'pas d\'adresse' : (branche ? 'branché' : 'prêt à brancher'));
   suiviTelephone(e.lien_telephone ? tl : null);
   lune('v-tg', e.telegram ? 'ok' : '', e.telegram ? 'branché' : 'en option');
+  calmer(!!(c.pret && e.n8n));
   majVoix(e.voix);
   majMemoire(e.memoire);
   pret = e.n8n;
@@ -430,6 +470,7 @@ async function majEtat() {
     }
   }
   const titre = o => o.titre || o.nom.replace(/_/g, ' ');
+  for (const o of e.outils) titresOutils[o.nom] = titre(o);
   const noms = e.outils.map(o => o.nom + '=' + titre(o)).join('|');
   if ($('outils').dataset.cle !== noms) {
     $('outils').dataset.cle = noms; $('outils').textContent = ''; $('ruban-liste').textContent = '';
@@ -469,6 +510,18 @@ async function majEtat() {
   }
 }
 
+// ---- les satellites : utiles au lancement (on voit ce qui demarre), ils s'effacent une fois Archi pret.
+// La toute premiere fois, on les laisse un moment pour qu'on les decouvre ; ensuite, ils partent vite.
+let calmeMinuteur = 0;
+function calmer(pret) {
+  const a = $('astre');
+  if (!pret) { clearTimeout(calmeMinuteur); calmeMinuteur = 0; a.classList.remove('calme'); return; }
+  if (a.classList.contains('calme') || calmeMinuteur) return;
+  let deja = false;
+  try { deja = localStorage.getItem('archi_deja_lance') === 'oui'; localStorage.setItem('archi_deja_lance', 'oui'); } catch (x) { /* navigateur sans stockage */ }
+  calmeMinuteur = setTimeout(() => { calmeMinuteur = 0; a.classList.add('calme'); }, deja ? 2500 : 12000);
+}
+
 /** Où en est le téléphone : la porte du PC note l'heure de chaque étape (jamais la clé ni le contenu des messages). */
 function suiviTelephone(tl) {
   const s = $('tel-suivi');
@@ -499,7 +552,7 @@ function montrerQr(oui) {
 const ouverture = Date.now(), memoireVue = new Set();
 function majMemoire(m) {
   m = m || { faits: 0, fiches: 0, derniers: [] };
-  const derniers = (m.derniers || []).slice(-4).reverse(), liste = $('memoire');
+  const derniers = (m.derniers || []).filter(x => !x.lecon).slice(-4).reverse(), liste = $('memoire');
   const cle = derniers.map(x => x.quand + x.fait).join('|');
   if (liste.dataset.cle !== cle) {
     liste.dataset.cle = cle; liste.textContent = '';
@@ -508,10 +561,18 @@ function majMemoire(m) {
   $('memoire-note').textContent = m.faits
     ? m.faits + (m.faits > 1 ? ' souvenirs' : ' souvenir') + ', rangés en fiches sur ton PC. Tu peux les lire et les corriger. Dis « oublie… » pour en effacer un.'
     : 'Parle-lui de toi : il retient tout seul ce qui compte, en fiches que tu peux lire et corriger.';
+  // ses lecons : ce que tu lui as appris en le corrigeant ; il les relit avant chaque reponse
+  const L = m.dernieres_lecons || [], ll = $('lecons'), cleL = L.join('|');
+  $('lecons-titre').hidden = !m.lecons; $('lecons-note').hidden = !m.lecons;
+  if (ll.dataset.cle !== cleL) { ll.dataset.cle = cleL; ll.textContent = ''; for (const x of L) ll.appendChild(element('li', null, x)); }
+  $('lecons-note').textContent = m.lecons ? m.lecons + (m.lecons > 1 ? ' leçons' : ' leçon') + ' tirées de tes corrections. Il les relit avant chaque réponse. Dis « oublie la leçon… » pour en retirer une.' : '';
   // ce qui vient d'etre retenu pendant que la page est ouverte : une note sous sa reponse
   for (const x of (m.derniers || [])) {
     const k = x.quand + '|' + x.fait;
-    if (x.quand > ouverture - 5000 && !memoireVue.has(k)) { memoireVue.add(k); note('retenu', x.fait); auFil('Retenu', x.fait); }
+    if (x.quand > ouverture - 5000 && !memoireVue.has(k)) {
+      memoireVue.add(k);
+      note(x.lecon ? 'lecon' : 'retenu', x.fait); auFil(x.lecon ? 'Leçon' : 'Retenu', x.fait);
+    }
   }
 }
 
@@ -655,6 +716,8 @@ async function envoyer(texte, fichier, dit) {
   dernier = { toi: (dit ? '🎙 ' : '') + (texte || '(photo)'), archi: '' };
   humeur();
   const debut = Date.now();
+  dernierEnvoi = { debut, fin: Infinity };
+  majCarte();
   const minuteur = setInterval(() => { $('p-duree').textContent = 'le modèle tourne sur ta carte graphique · ' + Math.round((Date.now() - debut) / 1000) + ' s'; }, 1000);
   try {
     const corps = new FormData();
@@ -676,9 +739,68 @@ async function envoyer(texte, fichier, dit) {
     montrer(undefined, 'Le PC n\'a pas répondu. Vérifie que la fenêtre « Archi » est toujours ouverte.', 'souci');
     $('p-duree').textContent = '';
   } finally {
-    clearInterval(minuteur); occupe = false; $('b-envoi').disabled = false; humeur();
+    clearInterval(minuteur); occupe = false; $('b-envoi').disabled = false;
+    if (dernierEnvoi) dernierEnvoi.fin = Date.now();
+    majCarte();
     if (!micro) $('texte').focus();
   }
+}
+
+// ---- la carte de la tache : relue chaque seconde pendant qu'Archi travaille (toutes les 3 s sinon : un message Telegram s'y voit aussi)
+const titresOutils = { liste: 'La liste de ses outils', lire_page: 'Lire une page', videos_youtube: 'Vidéos YouTube', navigateur: 'Le navigateur',
+  enquete_osint: 'Enquête', wikipedia: 'Wikipédia' };
+const nomLisible = o => titresOutils[o] || String(o || '').replace(/_/g, ' ');
+const secondes = ms => { const s = Math.max(0, Math.round(ms / 1000)); return s < 90 ? s + ' s' : Math.round(s / 60) + ' min'; };
+function dessinerCarte(v) {
+  const c = $('carte'), t = v && v.tache;
+  // une carte sans aucun outil n'apprend rien une fois finie : on la montre seulement pendant qu'Archi travaille
+  const recente = t && t.fin && v.maintenant - t.fin < 10 * 60000 && t.etapes.length;
+  if (!t || !(t.en_cours || recente)) { c.hidden = true; return; }
+  c.hidden = false;
+  c.className = 'carte' + (t.en_cours ? '' : (t.ok === false ? ' ratee' : ' finie'));
+  c.textContent = '';
+  const h = element('h4');
+  const de = t.source === 'telegram' ? ' · message Telegram' : '';
+  if (t.en_cours) { h.appendChild(element('b', null, 'En cours')); h.appendChild(document.createTextNode(' · ' + secondes(v.maintenant - t.debut) + de)); }
+  else {
+    const n = t.etapes.length;
+    h.appendChild(element('b', null, t.ok === false ? 'Interrompu' : 'Fait'));
+    h.appendChild(document.createTextNode(' en ' + secondes(t.fin - t.debut) + ' · ' + n + (n > 1 ? ' étapes' : ' étape') + de));
+  }
+  c.appendChild(h);
+  if (t.source === 'telegram' && t.demande) c.appendChild(element('p', 'phrase', '« ' + t.demande + ' »'));
+  const ol = element('ol');
+  for (const s of t.etapes) {
+    const li = element('li', s.apres ? 'fait' : !s.fin ? 'en-cours' : s.ok ? 'fait' : 'rate');
+    li.appendChild(element('i', null, s.apres ? '·' : !s.fin ? '◐' : s.ok ? '✓' : '✗'));
+    li.appendChild(document.createTextNode(nomLisible(s.outil) + (s.action ? ' — ' + s.action : '')));
+    if (s.apres) li.appendChild(element('small', null, 'vu à la fin'));
+    else li.appendChild(element('small', null, secondes((s.fin || v.maintenant) - s.debut)));
+    if (!s.fin) {
+      // le pourcentage est une estimation (duree moyenne de cet outil) : jamais 100 % avant la vraie fin
+      const b = element('span', 'barre' + (s.estime_ms ? '' : ' inconnu')), r = element('span');
+      if (s.estime_ms) {
+        const pc = Math.min(95, Math.round((v.maintenant - s.debut) / s.estime_ms * 100));
+        r.style.width = pc + '%'; li.appendChild(element('small', null, '≈ ' + pc + ' %'));
+      }
+      b.appendChild(r); li.appendChild(b);
+    } else if (s.phrase) li.appendChild(element('span', 'phrase', s.phrase.length > 160 ? s.phrase.slice(0, 157) + '…' : s.phrase));
+    ol.appendChild(li);
+  }
+  if (t.etapes.length) c.appendChild(ol);
+}
+let carteMinuteur = 0, dernierEnvoi = null;   // dernierEnvoi : {debut, fin} de la derniere demande envoyee par cette page
+async function majCarte() {
+  clearTimeout(carteMinuteur);
+  try {
+    const v = await (await api('/api/tache')).json();
+    // la page sait que SA demande est finie (reponse recue) : une carte restee ouverte (n8n en erreur) ne la contredit pas
+    if (v.tache && v.tache.en_cours && !occupe && dernierEnvoi && v.tache.debut >= dernierEnvoi.debut - 2000 && v.tache.debut <= dernierEnvoi.fin) {
+      v.tache.en_cours = false; v.tache.ok = false; v.tache.fin = v.tache.fin || v.maintenant;
+    }
+    tacheVue = v; dessinerCarte(v); humeur();
+  } catch (x) { /* portail arrete : majEtat le dit deja */ }
+  carteMinuteur = setTimeout(majCarte, (occupe || (tacheVue && tacheVue.tache && tacheVue.tache.en_cours)) ? 1000 : 3000);
 }
 
 async function rappels() {
@@ -735,7 +857,7 @@ function volet(id) {
 }
 for (const b of document.querySelectorAll('[data-fermer]')) b.onclick = () => volet(null);
 document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { if (!$('visite').hidden) finVisite(); else if (!$('menu').hidden) { menu(false); $('b-menu').focus(); } else volet(null); } });
-$('scene').addEventListener('click', ev => { if (!ev.target.closest('#v-tel, #ruban, #b-coulisses, #b-chantier, #b-atelier')) volet(null); });
+$('scene').addEventListener('click', ev => { if (!ev.target.closest('#v-tel, #b-tel-menu, #ruban, #b-coulisses, #b-chantier, #b-atelier')) volet(null); });
 
 // ---- le menu (visite guidee, ses outils, outils en cours de developpement) : il se replie au choix, a Echap ou en cliquant ailleurs
 function menu(ouvert) { $('menu').hidden = !ouvert; $('b-menu').setAttribute('aria-expanded', ouvert ? 'true' : 'false'); }
@@ -793,12 +915,13 @@ for (const i of IDEES) {
 }
 $('b-photo').onclick = () => $('photo').click();
 $('b-micro').onclick = ouvrirMicro;
-$('b-son').onclick = () => { son = !son; localStorage.setItem('archi_son', son ? 'oui' : 'non'); if (!son) taire(); majVoix(voix); };
+$('b-son').onclick = () => { son = !son; localStorage.setItem('archi_son', son ? 'oui' : 'non'); if (!son) taire(); majVoix(voix); humeur(); };
 $('b-qr').onclick = () => montrerQr($('qr').style.display === 'none');
 $('v-tel').onclick = () => volet('volet-tel');
 $('ruban').onclick = () => volet('volet-outils');
 $('b-coulisses').onclick = () => { menu(false); volet('volet-outils'); };
 $('b-chantier').onclick = () => { menu(false); volet('volet-chantier'); };
+$('b-tel-menu').onclick = () => { menu(false); volet('volet-tel'); };
 $('b-atelier').onclick = () => { menu(false); volet('volet-atelier'); };
 $('sphere').onclick = () => { if (lecteur) taire(); else if (!$('b-micro').hidden) ouvrirMicro(); };
 $('photo').onchange = () => { const f = $('photo').files[0]; if (f) note('info', 'Photo jointe : ' + f.name + ' (elle reste sur ce PC).'); };
@@ -812,7 +935,7 @@ $('saisie').onsubmit = ev => {
 $('texte').addEventListener('keydown', ev => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); $('saisie').requestSubmit(); } });
 $('texte').addEventListener('input', grandir);
 if (window.ArchiLogo) ArchiLogo.installer(document);   // le mot Archi s'ecrit partout avec son logo
-majEtat(); setInterval(majEtat, 5000); setInterval(rappels, 20000);
+majEtat(); setInterval(majEtat, 5000); setInterval(rappels, 20000); majCarte();
 let dejaVue = false;
 try { dejaVue = localStorage.getItem('archi_visite_vue') === '1'; } catch (x) { dejaVue = true; }
 if (dejaVue) $('texte').focus(); else debutVisite();

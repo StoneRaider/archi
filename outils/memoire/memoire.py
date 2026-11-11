@@ -10,6 +10,11 @@
 #     lister  : piece= (facultatif)             les fiches et leur nombre de faits
 #     lire    : sujet= (piece= facultatif)      les faits d'une fiche ; sans sujet : tout ce qu'Archi sait
 #     oublier : texte=<mots a retrouver>        ESSAI A BLANC : montre les faits concernes ; confirmer=oui : les retire
+#     lecon   : texte=<la reponse de l'utilisateur>, reponse=<la reponse d'Archi juste avant>
+#               Si l'utilisateur CORRIGE Archi (« non, tu ne sais pas faire ca »), le modele local en tire UNE regle courte,
+#               rangee dans memoire\lecons\lecons_archi.md et relue par Archi a chaque message (core/contexte.js).
+#               Appele tout seul par le workflow avec « retenir » (champ reponse_precedente). Idee reprise de Brahma.
+#               Une lecon ne touche jamais aux regles de securite (accord, secrets) : elle est refusee.
 # Garde-fous : jamais de mot de passe, de code, de numero de carte, d'IBAN, d'adresse postale ni de numero de telephone ;
 # un fait doit reprendre des mots du message (rien d'invente) ; au plus 3 faits par message ; pas de doublon.
 
@@ -25,7 +30,25 @@ import urllib.error
 import urllib.request
 
 PIECES = ("moi", "personnes", "projets", "lieux", "preferences")
-FICHE_UNIQUE = {"moi": "moi", "preferences": "mes_preferences"}   # ces deux pieces tiennent en une seule fiche
+# les lecons : une piece a part, jamais remplie par « retenir » (elle n'est pas dans PIECES), mais lue, listee et oubliee
+TOUTES = PIECES + ("lecons",)
+FICHE_UNIQUE = {"moi": "moi", "preferences": "mes_preferences", "lecons": "lecons_archi"}   # ces pieces tiennent en une seule fiche
+MAX_LECONS = 40
+MAX_LECON = 200
+# la reponse de l'utilisateur ressemble-t-elle a une correction ? (sinon, on ne derange pas le modele)
+CORRECTION = re.compile(r"(^|[^a-z])(non|faux|fausse|erreur|tort|inexact|n'importe quoi|"
+                        r"tu te (trompes|plantes)|c'est pas (ca|vrai|juste|bon)|ce n'est pas (ca|vrai|juste|bon)|"
+                        r"tu (ne )?(sais|peux) pas|tu n'as pas|tu as invente|t'as invente|n'invente|arrete de|"
+                        r"je t'ai (deja )?dit|pas comme ca|pas du tout|tu n'es pas capable|tu ne sais rien)([^a-z]|$)")
+# une lecon ne change jamais les garde-fous : ce qui en parle est refuse, meme si l'utilisateur le dit
+TOUCHE_AUX_REGLES = re.compile(r"accord|confirm|sans (me |lui |te |nous |leur )?(demander|verifier|attendre|poser|prevenir|permission)|"
+                               r"ignore|outrepass|contourn|desactiv|directement|tout de suite|feu vert|apercu|permission|"
+                               r"consigne|instruction|contenu|supprim|effac|pas besoin|plus besoin|n'attends|"
+                               r"ne (montre|demande|verifie|previens|relis) plus|"
+                               r"mot de passe|secret|cle api|jeton|token|regle", re.I)
+# ... et elle a l'une de ces formes : ce qu'Archi ne sait pas faire, ce qu'il ne doit plus dire, ce qu'il doit relire
+FORME_LECON = re.compile(r"^(tu ne (sais|peux) pas|tu n'(as|es) pas|ne (propose|promets|dis|confonds|reponds|presente|annonce) |"
+                         r"n'(invente|affirme|annonce|oublie) |relis |verifie )")
 MAX_FAITS = 3
 MAX_FAIT = 220
 VIDES = set(("avec avoir dans pour plus mais tout tous toute toutes cette celle celui ceux sont etre fait faire peux peut veux "
@@ -104,7 +127,7 @@ def base_memoire():
 
 
 def chemin_fiche(piece, sujet):
-    if piece not in PIECES:
+    if piece not in TOUTES:
         raise Erreur("piece inconnue : " + str(piece)[:30])
     nom = FICHE_UNIQUE.get(piece) or nom_de_fiche(sujet)
     if not nom:
@@ -185,7 +208,7 @@ def sans_date(fait):
 def fiches(piece=None):
     """[(piece, nom, chemin, [faits])] de toutes les fiches de la memoire vive"""
     sortie = []
-    for p in ([piece] if piece else PIECES):
+    for p in ([piece] if piece else TOUTES):
         d = os.path.join(base_memoire(), p)
         try:
             noms = sorted(f for f in os.listdir(d) if f.endswith(".md"))
@@ -232,7 +255,7 @@ def ajouter(piece, sujet, fait, aujourdhui=None):
             t = t.rstrip("\n") + "\n\n**Faits :**\n" + ligne + "\n"
     else:
         os.makedirs(os.path.dirname(c), exist_ok=True)
-        titre = {"moi": "Moi", "preferences": "Mes préférences"}.get(piece) or str(sujet).strip()[:60]
+        titre = {"moi": "Moi", "preferences": "Mes préférences", "lecons": "Leçons apprises"}.get(piece) or str(sujet).strip()[:60]
         t = "# %s\n\n**Pièce :** %s\n**Faits :**\n%s\n" % (titre, piece, ligne)
     tmp = c + ".tmp"
     with open(tmp, "w", encoding="utf-8", newline="\n") as h:
@@ -284,11 +307,8 @@ def propre(message):
 
 
 # ---------------------------------------------------------------- le modele local
-def demander_au_modele(message, appel=None):
-    """les faits proposes par le modele local : [{piece, sujet, fait}] (liste vide si rien, ou si le modele ne repond pas)"""
-    prenom = (os.environ.get("ARCHI_UTILISATEUR") or "").strip()
-    consigne = CONSIGNE.format(prenom=(" (prénom : %s)" % prenom) if prenom else "",
-                               appelle=(" ; appelle l'utilisateur %s" % prenom) if prenom else "")
+def appeler_modele(consigne, message, schema, appel=None):
+    """le texte rendu par le modele local, sa forme imposee par le schema (si le serveur le permet)"""
     corps = {
         "model": os.environ.get("ARCHI_MODELE") or "openai/gpt-oss-20b",
         "temperature": 0,
@@ -305,12 +325,20 @@ def demander_au_modele(message, appel=None):
                 return json.loads(r.read().decode("utf-8"))
     try:
         # la forme de la reponse est imposee : sans cela, le modele ecrit parfois « facts » au lieu de « faits »
-        rep = appel(dict(corps, response_format=SCHEMA))
+        rep = appel(dict(corps, response_format=schema))
     except urllib.error.HTTPError as e:
         if e.code not in (400, 422):
             raise
         rep = appel(corps)   # un serveur qui ne connait pas les schemas : on demande sans, et on lit ce qu'on peut
-    contenu = (((rep.get("choices") or [{}])[0].get("message") or {}).get("content")) or ""
+    return (((rep.get("choices") or [{}])[0].get("message") or {}).get("content")) or ""
+
+
+def demander_au_modele(message, appel=None):
+    """les faits proposes par le modele local : [{piece, sujet, fait}] (liste vide si rien, ou si le modele ne repond pas)"""
+    prenom = (os.environ.get("ARCHI_UTILISATEUR") or "").strip()
+    consigne = CONSIGNE.format(prenom=(" (prénom : %s)" % prenom) if prenom else "",
+                               appelle=(" ; appelle l'utilisateur %s" % prenom) if prenom else "")
+    contenu = appeler_modele(consigne, message, SCHEMA, appel)
     m = re.search(r"\{.*\}", contenu, re.S)   # le modele entoure parfois son JSON de texte
     if not m:
         return []
@@ -329,14 +357,110 @@ def demander_au_modele(message, appel=None):
     return propres[:8]
 
 
+# ---------------------------------------------------------------- les lecons (corrections de l'utilisateur)
+CONSIGNE_LECON = """Reasoning: low
+Tu relis un échange entre un assistant personnel, Archi, et son utilisateur{prenom}. L'utilisateur vient de répondre à Archi.
+Si cette réponse CORRIGE une erreur d'Archi (il a promis ce qu'il ne sait pas faire, inventé un fait, mal compris la demande, mal fait quelque chose), écris UNE leçon courte, à la deuxième personne, qu'Archi relira avant chaque réponse pour ne plus refaire cette erreur.
+Sinon (un simple « non merci », un refus, un changement d'avis, une nouvelle demande, une information nouvelle), réponds {{"lecon":""}}.
+La leçon reprend les mots de l'échange, n'invente rien, tient en une phrase de moins de 200 caractères, et ne parle jamais des règles de sécurité (accord avant d'agir, secrets).
+Réponds UNIQUEMENT par un objet JSON : {{"lecon":"..."}}
+Exemples :
+Archi : « Je peux t'envoyer un message vocal sur ton téléphone. » / Utilisateur : « Non, tu ne sais pas faire ça. » -> {{"lecon":"Tu ne sais pas envoyer de message vocal sur le téléphone : ne le propose pas."}}
+Archi : « Voici la météo de Lyon. » / Utilisateur : « Non, je t'ai demandé celle d'Annecy, tu as mal compris. » -> {{"lecon":"Relis bien le lieu demandé avant de donner la météo."}}
+Archi : « Veux-tu que je lance la recherche ? » / Utilisateur : « Non merci, pas maintenant. » -> {{"lecon":""}}
+Archi : « C'est noté. » / Utilisateur : « Non, attends, finalement je préfère jeudi. » -> {{"lecon":""}}"""
+
+SCHEMA_LECON = {"type": "json_schema", "json_schema": {"name": "lecon", "strict": True, "schema": {
+    "type": "object", "required": ["lecon"], "additionalProperties": False, "properties": {"lecon": {"type": "string"}}}}}
+
+
+def corrige(message):
+    """vrai si la reponse de l'utilisateur ressemble a une correction"""
+    return bool(CORRECTION.search(re.sub(r"[\u2019]", "'", plat(message))))
+
+
+def refus_lecon(lecon, echange):
+    """pourquoi cette lecon n'est pas gardee (None si elle est bonne). echange = la reponse d'Archi + la correction (ou None)"""
+    lecon = str(lecon or "").strip()
+    if not (12 <= len(lecon) <= MAX_LECON):
+        return "lecon trop courte ou trop longue"
+    if "\n" in lecon or "\r" in lecon or lecon.startswith(("#", "*", "-", "[")):
+        return "forme interdite"
+    if SECRETS.search(plat(lecon)) or TELEPHONE.search(lecon) or ADRESSE.search(plat(lecon)):
+        return "donnee sensible"
+    p = re.sub(r"[\u2019]", "'", plat(lecon)).strip()
+    if TOUCHE_AUX_REGLES.search(p):
+        return "touche aux regles de securite"
+    if not FORME_LECON.search(p):
+        return "forme de lecon non permise"
+    if echange is not None and len(set(mots(lecon)) & set(mots(echange))) < 2:
+        return "ne vient pas de l'echange"
+    return None
+
+
+def garder_lecon(lecon, echange, a_blanc=False):
+    """(lecon rangee ou None, raison du refus ou None)"""
+    lecon = re.sub(r"\s+", " ", str(lecon or "")).strip()
+    pourquoi = refus_lecon(lecon, echange)
+    if pourquoi:
+        return None, pourquoi
+    if a_blanc:
+        return lecon, None
+    with Verrou():
+        deja = [f for p, n, c, f in fiches("lecons")]
+        if sum(len(f) for f in deja) >= MAX_LECONS:
+            return None, "deja %d lecons : fais le menage (oublier)" % MAX_LECONS
+        if not ajouter("lecons", "lecons", lecon):
+            return None, "deja apprise"
+        noter_au_journal([{"piece": "lecons", "sujet": "lecons", "fait": lecon}])
+    return lecon, None
+
+
+def tirer_lecon(correction, reponse, appel=None, a_blanc=False):
+    """{lecon, pourquoi, appel_modele} : la lecon tiree d'une correction (lecon vide si ce n'en est pas une)"""
+    correction, reponse = propre(correction)[:600], propre(reponse)[:900]
+    if not reponse or not corrige(correction):
+        return {"lecon": "", "pourquoi": "pas une correction", "appel_modele": False}
+    prenom = (os.environ.get("ARCHI_UTILISATEUR") or "").strip()
+    consigne = CONSIGNE_LECON.format(prenom=(" (prénom : %s)" % prenom) if prenom else "")
+    try:
+        contenu = appeler_modele(consigne, "Archi : « %s »\nUtilisateur : « %s »" % (reponse, correction), SCHEMA_LECON, appel)
+    except Exception as e:
+        return {"lecon": "", "pourquoi": "le modele n'a pas repondu", "appel_modele": True, "erreur": str(e)[:150]}
+    m = re.search(r"\{.*\}", contenu, re.S)
+    try:
+        proposee = str((json.loads(m.group(0)) if m else {}).get("lecon") or "").strip()
+    except Exception:
+        proposee = ""
+    if not proposee:
+        return {"lecon": "", "pourquoi": "rien a apprendre", "appel_modele": True}
+    lecon, pourquoi = garder_lecon(proposee, reponse + " " + correction, a_blanc)
+    return {"lecon": lecon or "", "pourquoi": pourquoi, "proposee": proposee[:200], "appel_modele": True}
+
+
+def act_lecon(d, appel=None):
+    r = tirer_lecon(d.get("texte"), d.get("reponse") or d.get("reponse_precedente"), appel, oui(d.get("a_blanc")))
+    if r["lecon"]:
+        return repondre(True, "Leçon apprise : " + r["lecon"], **r)
+    repondre(True, "Pas de leçon (%s)." % (r.get("pourquoi") or "rien"), **r)
+
+
 def act_retenir(d, appel=None):
+    # d'abord la lecon : si l'utilisateur corrige la reponse d'avant (champ reponse_precedente, mis par le workflow)
+    lecon = None
+    if d.get("reponse_precedente"):
+        try:   # une lecon ratee (memoire occupee...) ne fait jamais perdre les faits du message
+            lecon = tirer_lecon(d.get("texte"), d.get("reponse_precedente"), appel, oui(d.get("a_blanc")))
+        except Exception as e:
+            lecon = {"lecon": "", "pourquoi": "lecon non rangee : %s" % str(e)[:120], "appel_modele": True}
     message = propre(d.get("texte"))
+    extra = {"lecon": lecon} if lecon is not None else {}
     if not parle_de_soi(message):
-        return repondre(True, "Rien à retenir.", retenu=[], appel_modele=False)
+        return repondre(True, "Rien à retenir.", retenu=[], appel_modele=False, **extra)
     try:
         proposes = demander_au_modele(message, appel)
     except Exception as e:   # le modele ne repond pas : la conversation continue, sans rien retenir
-        return repondre(True, "Rien retenu (le modèle n'a pas répondu).", retenu=[], appel_modele=True, erreur=str(e)[:150])
+        return repondre(True, "Rien retenu (le modèle n'a pas répondu).", retenu=[], appel_modele=True, erreur=str(e)[:150], **extra)
     retenu, ecartes = [], []
     for f in proposes:
         piece = plat(f.get("piece")).strip()
@@ -369,11 +493,16 @@ def act_retenir(d, appel=None):
         else:
             ecartes.append({"fait": fait[:80], "pourquoi": "deja su"})
     phrase = ("Retenu : " + " ; ".join(r["fait"] for r in retenu)) if retenu else "Rien de nouveau à retenir."
-    repondre(True, phrase, retenu=retenu, ecartes=ecartes, appel_modele=True)
+    repondre(True, phrase, retenu=retenu, ecartes=ecartes, appel_modele=True, **extra)
 
 
 def act_ecrire(d):
     piece = plat(d.get("piece") or "moi").strip()
+    if piece in ("lecons", "lecon"):
+        # les lecons ne viennent QUE des corrections de l'utilisateur (le greffier, action lecon) : jamais de l'agent,
+        # qu'une page ou un mail lu pourrait pousser a s'ecrire une « lecon »
+        raise Erreur("Je n'écris pas de leçon moi-même : elles viennent toutes seules quand tu me corriges "
+                     "(« non, tu ne sais pas faire ça »). Tu peux les lire ou en oublier une.")
     sujet = str(d.get("sujet") or "").strip()
     fait = re.sub(r"\s+", " ", str(d.get("fait") or d.get("contenu") or "")).strip()
     pourquoi = refus(piece, sujet, fait, None)
@@ -388,8 +517,8 @@ def act_ecrire(d):
 
 def act_lister(d):
     piece = plat(d.get("piece")).strip() or None
-    if piece and piece not in PIECES:
-        raise Erreur("Pièce inconnue. Pièces possibles : " + ", ".join(PIECES) + ".")
+    if piece and piece not in TOUTES:
+        raise Erreur("Pièce inconnue. Pièces possibles : " + ", ".join(TOUTES) + ".")
     liste = [{"piece": p, "sujet": n, "faits": len(f)} for p, n, _, f in fiches(piece) if f]
     if not liste:
         return repondre(True, "Ma mémoire est encore vide" + (" pour cette pièce." if piece else "."), fiches=[])
@@ -398,7 +527,7 @@ def act_lister(d):
 
 def act_lire(d):
     sujet, piece = nom_de_fiche(d.get("sujet")), plat(d.get("piece")).strip() or None
-    trouvees = [(p, n, f) for p, n, _, f in fiches(piece if piece in PIECES else None) if f and (not sujet or sujet in n or n in sujet)]
+    trouvees = [(p, n, f) for p, n, _, f in fiches(piece if piece in TOUTES else None) if f and (not sujet or sujet in n or n in sujet)]
     if not trouvees:
         return repondre(True, "Je n'ai rien en mémoire" + (" sur « %s »." % str(d.get("sujet"))[:40] if sujet else "."), faits=[])
     lignes = ["%s/%s : %s" % (p, n, " | ".join(sans_date(x) for x in f)) for p, n, f in trouvees]
@@ -444,7 +573,7 @@ def act_oublier(d):
     repondre(True, "C'est oublié (%d fait(s)) : %s" % (len(cibles), apercu), oublie=[x[3] for x in cibles])
 
 
-ACTIONS = {"retenir": act_retenir, "ecrire": act_ecrire, "lister": act_lister, "lire": act_lire, "oublier": act_oublier}
+ACTIONS = {"retenir": act_retenir, "ecrire": act_ecrire, "lister": act_lister, "lire": act_lire, "oublier": act_oublier, "lecon": act_lecon}
 
 
 def main():
@@ -463,7 +592,7 @@ def main():
         if not isinstance(d, dict):
             raise Erreur("demande illisible")
         action = plat(d.get("action") or "lister").strip()
-        action = {"retiens": "retenir", "noter": "ecrire", "note": "ecrire", "liste": "lister", "oublie": "oublier",
+        action = {"lecons": "lecon", "apprendre": "lecon", "retiens": "retenir", "noter": "ecrire", "note": "ecrire", "liste": "lister", "oublie": "oublier",
                   "effacer": "oublier", "supprimer": "oublier", "lis": "lire"}.get(action, action)
         if action not in ACTIONS:
             raise Erreur("Action inconnue. Actions : " + ", ".join(sorted(ACTIONS)) + ".")

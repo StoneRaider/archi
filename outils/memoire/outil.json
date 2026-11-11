@@ -1,19 +1,27 @@
 {
  "nom": "memoire",
- "description": "MODE D EMPLOI : la memoire long terme d'Archi, en fiches dans le chateau. Elle se remplit TOUTE SEULE apres chaque message : cet outil ne sert PAS a retenir. action=lire (sujet facultatif : un prenom, un projet, un lieu) : tout ce qu'Archi sait. action=lister : les fiches. action=oublier avec texte = quelques mots du fait : ESSAI A BLANC d'abord (il montre ce qui serait efface), puis confirmer=oui quand l'utilisateur dit oui.",
+ "description": "MODE D EMPLOI : la memoire long terme d'Archi, en fiches dans le chateau. Elle se remplit TOUTE SEULE apres chaque message, et quand l'utilisateur te corrige, une LECON courte s'y range toute seule (piece lecons) : cet outil ne sert PAS a retenir. action=lire (sujet facultatif : un prenom, un projet, un lieu ; sujet=lecons : tes lecons) : tout ce qu'Archi sait. action=lister : les fiches. Les lecons viennent TOUTES SEULES des corrections de l'utilisateur : n'en ecris jamais (ecrire piece=lecons est refuse). action=oublier avec texte = quelques mots du fait ou de la lecon : ESSAI A BLANC d'abord (il montre ce qui serait efface), puis confirmer=oui quand l'utilisateur dit oui.",
  "script": "memoire.py",
  "parametres": [
   {
    "nom": "action",
-   "description": "lire, lister ou oublier"
+   "description": "lire, lister, ecrire (lecon dictee) ou oublier"
   },
   {
    "nom": "sujet",
-   "description": "lire : un prenom, un projet, un lieu (vide = tout)"
+   "description": "lire : un prenom, un projet, un lieu, ou lecons (vide = tout)"
+  },
+  {
+   "nom": "piece",
+   "description": "ecrire : lecons"
+  },
+  {
+   "nom": "fait",
+   "description": "ecrire : la lecon, en une phrase"
   },
   {
    "nom": "texte",
-   "description": "oublier : quelques mots du fait a effacer"
+   "description": "oublier : quelques mots du fait ou de la lecon a effacer"
   },
   {
    "nom": "confirmer",
