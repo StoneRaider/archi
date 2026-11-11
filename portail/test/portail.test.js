@@ -351,14 +351,23 @@ test('page du telephone : si l appli est absente, le bouton ramene a la page ave
 test('etat : la memoire compte les fiches et montre les derniers faits retenus', () => {
   const d = chateau(false);
   try {
-    assert.deepEqual(P.memoire({ base: d }), { fiches: 0, faits: 0, derniers: [] });
+    assert.deepEqual(P.memoire({ base: d }), { fiches: 0, faits: 0, derniers: [], lecons: 0, dernieres_lecons: [] });
     fs.mkdirSync(path.join(d, 'memoire', 'personnes'), { recursive: true });
     fs.mkdirSync(path.join(d, 'memoire', 'preferences'), { recursive: true });
     fs.writeFileSync(path.join(d, 'memoire', 'personnes', 'medor.md'), '# Médor\n\n**Pièce :** personnes\n**Faits :**\n- (10/11/2026) Médor est le chien de Camille.\n- (10/11/2026) Médor a huit ans.\n');
     fs.writeFileSync(path.join(d, 'memoire', 'preferences', 'archi_et_moi.md'), '## x\n**Faits :**\n- Camille aime le court.\n**Hypothèses :**\n- pas un fait\n');
     fs.writeFileSync(path.join(d, 'memoire', 'personnes', 'vide.md'), '# sans fait\n');
     fs.writeFileSync(path.join(d, 'memoire', '.retenu.jsonl'), 'ligne abimee\n' + JSON.stringify({ quand: 1700000000000, piece: 'personnes', sujet: 'Médor', fait: 'Médor a huit ans.' }) + '\n');
-    assert.deepEqual(P.memoire({ base: d }), { fiches: 2, faits: 3, derniers: [{ quand: 1700000000000, fait: 'Médor a huit ans.' }] });
+    assert.deepEqual(P.memoire({ base: d }), { fiches: 2, faits: 3, derniers: [{ quand: 1700000000000, fait: 'Médor a huit ans.', lecon: false }],
+      lecons: 0, dernieres_lecons: [] });
+    // les lecons : comptees a part (pas dans les souvenirs), les plus recentes d'abord ; marquees dans le journal
+    fs.mkdirSync(path.join(d, 'memoire', 'lecons'), { recursive: true });
+    fs.writeFileSync(path.join(d, 'memoire', 'lecons', 'lecons_archi.md'), '# Leçons apprises\n\n**Pièce :** lecons\n**Faits :**\n'
+      + '- (10/11/2026) Tu ne sais pas envoyer de vocal.\n- (11/11/2026) Relis le lieu demandé.\n');
+    fs.appendFileSync(path.join(d, 'memoire', '.retenu.jsonl'), JSON.stringify({ quand: 1700000000001, piece: 'lecons', sujet: 'lecons', fait: 'Relis le lieu demandé.' }) + '\n');
+    const m = P.memoire({ base: d });
+    assert.deepEqual([m.fiches, m.faits, m.lecons, m.dernieres_lecons], [2, 3, 2, ['Relis le lieu demandé.', 'Tu ne sais pas envoyer de vocal.']]);
+    assert.deepEqual(m.derniers[1], { quand: 1700000000001, fait: 'Relis le lieu demandé.', lecon: true });
   } finally { fs.rmSync(d, { recursive: true, force: true }); }
 });
 

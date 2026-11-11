@@ -23,23 +23,43 @@ function appelNode(script, entree) {
 CONTEXTE = APPEL_NODE + r"""
 const e = $input.first().json;
 const c = appelNode('contexte.js', { texte: e.texte || '', source: e.source || 'telegram', lat: e.lat, lon: e.lon });
-return [{ json: Object.assign({}, e, c) }];
+// la carte de la tache en cours, sur la page d'accueil : un message vient d'arriver
+let tache_id = '';
+try { tache_id = String(appelNode('tache.js', { action: 'debut', source: e.source || 'telegram', texte: e.texte || '' }).id || ''); } catch (x) { /* la carte ne bloque rien */ }
+return [{ json: Object.assign({}, e, c, { tache_id }) }];
 """
 
 # La memoire : UNE FOIS LA REPONSE PARTIE, un greffier (le modele local) releve ce que l'utilisateur vient d'apprendre de
 # durable a Archi et le range en fiche (outils/memoire/memoire.py, action retenir). Il est lance en arriere-plan, apres le
 # noeud qui repond : la reponse ne l'attend pas, et il ne dispute pas la carte graphique a l'agent.
+# Les lecons : le greffier recoit aussi la reponse d'Archi d'AVANT, sur le MEME canal (memoire\.dernier_echange_<canal>.json,
+# 30 min au plus, efface ensuite ; jamais le message de l'utilisateur). Si le
+# message la corrige (« non, tu ne sais pas faire ca »), il en tire une regle courte qu'Archi relira (action lecon).
 RETENIR = r"""
 try {
   const cp = require('child_process'), fs = require('fs'), os = require('os'), path = require('path');
   const p = $('__SOURCE__').first().json;
   const dit = p.direct ? '' : String(p.entendu || p.texte || '');
+  let reponse = '';
+  try { reponse = String($('__VERIF__').first().json.texte || ''); } catch (x) { /* reponse directe : pas d'echange a garder */ }
   if (dit && String($env.ARCHI_MEMOIRE || 'oui').toLowerCase() !== 'non') {
     const BASE = $env.ARCHI_BASE || path.join(os.homedir(), '.n8n-files');
     const script = path.join(BASE, 'outils', 'memoire', 'memoire.py');
+    const fEchange = path.join(BASE, 'memoire', '.dernier_echange___CANAL__.json');
+    let avant = '';
+    try { const x = JSON.parse(fs.readFileSync(fEchange, 'utf8')); if (Date.now() - x.quand < 30 * 60000) avant = String(x.reponse || '').slice(0, 900); } catch (x) { /* premier echange */ }
+    // seule la reponse d'Archi est gardee pour la prochaine fois (jamais le message de l'utilisateur), ecrite d'un coup ;
+    // sans reponse a garder, l'ancienne est effacee (elle ne traine pas)
+    try {
+      if (reponse) {
+        const tmp = fEchange + '.' + process.pid + '.tmp';
+        fs.writeFileSync(tmp, JSON.stringify({ quand: Date.now(), reponse: reponse.slice(0, 900) }));
+        fs.renameSync(tmp, fEchange);
+      } else if (fs.existsSync(fEchange)) fs.unlinkSync(fEchange);
+    } catch (x) { /* pas de dossier memoire */ }
     if (fs.existsSync(script)) {
       const f = path.join(os.tmpdir(), 'archi_memoire_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '.json');
-      fs.writeFileSync(f, JSON.stringify({ action: 'retenir', texte: dit }));
+      fs.writeFileSync(f, JSON.stringify({ action: 'retenir', texte: dit, reponse_precedente: avant }));
       cp.spawn($env.ARCHI_PY || 'python', [script, '--fichier', f, '--menage'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
     }
   }
@@ -212,6 +232,11 @@ VERIFIER = APPEL_NODE + r"""
 const a = $input.first().json;
 const c = $('Contexte').first().json;
 const v = appelNode('verifier_reponse.js', { reponse: a.output || '', steps: a.intermediateSteps || [], msg: c.texte, profil: c.profil });
+// la carte de la tache : la reponse est prete ; les outils branches sur l'agent (vus seulement ici) s'y ajoutent
+try {
+  const outils = (a.intermediateSteps || []).map(s => String(((s || {}).action || {}).tool || '')).filter(Boolean);
+  appelNode('tache.js', { action: 'fin', ok: true, outils, id: c.tache_id || '' });
+} catch (x) { /* la carte ne bloque rien */ }
 return [{ json: { texte: v.reponse, alertes: v.alertes || [] } }];
 """
 
@@ -325,7 +350,7 @@ nodes = [
           {"chatId": "={{ $('Message Telegram').first().json.chat_id }}", "text": "={{ $json.texte }}",
            "additionalFields": {"appendAttribution": False}},
           {"telegramApi": {"id": "ArchiTelegram001", "name": "Bot Telegram Archi"}}),
-    noeud("Retenir", "n8n-nodes-base.code", 2, 1440, 0, {"jsCode": RETENIR.replace("__SOURCE__", "Message Telegram")}),
+    noeud("Retenir", "n8n-nodes-base.code", 2, 1440, 0, {"jsCode": RETENIR.replace("__SOURCE__", "Message Telegram").replace("__VERIF__", "Verifier").replace("__CANAL__", "telegram")}),
 
     noeud("Appli telephone", "n8n-nodes-base.webhook", 2, 0, 520,
           {"httpMethod": "POST", "path": "telephone-archi", "responseMode": "responseNode", "options": {}}),
@@ -348,7 +373,7 @@ nodes = [
     noeud("Voix appli", "n8n-nodes-base.code", 2, 1640, 520, {"jsCode": VOIX}),
     noeud("Repondre appli", "n8n-nodes-base.respondToWebhook", 1.1, 1860, 520,
           {"respondWith": "json", "responseBody": "={{ JSON.stringify($json.reponse) }}", "options": {}}),
-    noeud("Retenir appli", "n8n-nodes-base.code", 2, 2080, 520, {"jsCode": RETENIR.replace("__SOURCE__", "Porte")}),
+    noeud("Retenir appli", "n8n-nodes-base.code", 2, 2080, 520, {"jsCode": RETENIR.replace("__SOURCE__", "Porte").replace("__VERIF__", "Verifier appli").replace("__CANAL__", "appli")}),
 
     noeud("Boite appli", "n8n-nodes-base.webhook", 2, 0, 900,
           {"httpMethod": "POST", "path": "telephone-boite", "responseMode": "responseNode", "options": {}}),

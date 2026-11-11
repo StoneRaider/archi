@@ -19,6 +19,7 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const voix = require('../core/voix');   // l'oreille et la parole : la page d'accueil montre le micro si elles sont installees
+const tache = require('../core/tache');  // la carte de la tache en cours (ce qu'Archi fait, etape par etape)
 
 const ICI = __dirname;
 const MAX_CORPS = 30 * 1024 * 1024;          // une photo du telephone tient largement
@@ -312,7 +313,7 @@ const SAIN_DEPUIS = new WeakMap();   // par portail : depuis quand n8n repond
 
 /** Ce qu'Archi a retenu tout seul (outils/memoire) : le nombre de fiches et de faits, et les derniers faits ranges. */
 function memoire(r) {
-  const resume = { fiches: 0, faits: 0, derniers: [] };
+  const resume = { fiches: 0, faits: 0, derniers: [], lecons: 0, dernieres_lecons: [] };
   const racine = path.join(r.base, 'memoire');
   for (const piece of ['moi', 'personnes', 'projets', 'lieux', 'preferences']) {
     let fichiers = [];
@@ -327,12 +328,21 @@ function memoire(r) {
       if (n) { resume.fiches++; resume.faits += n; }
     }
   }
+  // les lecons : ce que l'utilisateur a corrige, qu'Archi relit a chaque message
+  try {
+    const L = fs.readFileSync(path.join(racine, 'lecons', 'lecons_archi.md'), 'utf8').split(/\r?\n/).map(l => l.trim())
+      .filter(l => l.startsWith('- ')).map(l => l.slice(2).replace(/^\(\d{2}\/\d{2}\/\d{4}\)\s*/, '').trim()).filter(Boolean);
+    resume.lecons = L.length;
+    resume.dernieres_lecons = L.slice(-3).reverse().map(l => l.slice(0, 200));
+  } catch (e) { /* aucune lecon encore */ }
   try {
     const lignes = fs.readFileSync(path.join(racine, '.retenu.jsonl'), 'utf8').split(/\r?\n/).filter(Boolean).slice(-8);
     for (const l of lignes) {
       let x = null;
       try { x = JSON.parse(l); } catch (e) { continue; }   // une ligne abimee ne cache pas les autres
-      if (x && typeof x.fait === 'string' && typeof x.quand === 'number') resume.derniers.push({ quand: x.quand, fait: x.fait.slice(0, 240) });
+      if (x && typeof x.fait === 'string' && typeof x.quand === 'number') {
+        resume.derniers.push({ quand: x.quand, fait: x.fait.slice(0, 240), lecon: x.piece === 'lecons' });
+      }
     }
   } catch (e) { /* pas encore de journal : rien n'a ete retenu */ }
   return resume;
@@ -423,6 +433,8 @@ function creerServeurLocal(r, suivi) {
     if (chemin.startsWith('/api/')) {
       if (!appelDeLaPage(req, r.port)) return json(res, 403, { erreur: 'appel refuse' });
       if (methode === 'GET' && chemin === '/api/etat') return json(res, 200, await etat(r, suivi));
+      // relue chaque seconde par la page : un petit fichier local, rien d'autre
+      if (methode === 'GET' && chemin === '/api/tache') return json(res, 200, tache.creer({ etat: r.etat }).voir());
       if (methode === 'POST' && chemin === '/api/ecouter') {
         // le micro continu : une phrase a transcrire sur ce PC (whisper.cpp). Rien n'est envoye a l'agent ici :
         // la page met les phrases bout a bout et n'envoie le message qu'au mot magique.

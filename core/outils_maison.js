@@ -204,5 +204,16 @@ module.exports = { lancer, lireRegistre, lireParametres, baliserResultat };
 if (require.main === module) {
   let entree = {};
   try { entree = JSON.parse(fs.readFileSync(0, 'utf8') || '{}'); } catch (e) {}
-  process.stdout.write(JSON.stringify(lancer(entree)));
+  // la carte de la tache en cours (page d'accueil) : l'outil demarre, puis finit. Jamais ses parametres.
+  let carte = null, n = 0;
+  try {
+    carte = require('./tache').creer();
+    const p = lireParametres(entree.parametres);
+    n = carte.etapeDebut({ outil: entree.outil || 'liste', action: p.action || (entree.outil ? '' : entree.action) });
+  } catch (e) { carte = null; }
+  const r = lancer(entree);
+  try {
+    if (carte && n) carte.etapeFin({ n, ok: r.ok !== false, phrase: r.accord_requis ? 'attend ton accord' : r.phrase_pour_utilisateur });
+  } catch (e) { /* la carte ne bloque rien */ }
+  process.stdout.write(JSON.stringify(r));
 }

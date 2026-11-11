@@ -120,6 +120,27 @@ function fichesVives() {
   }
   return sortie;
 }
+// ---------- 4 ter. les lecons : ce que l'utilisateur a corrige (outils/memoire, action lecon) ----------
+// Relues a CHAQUE message, les plus recentes d'abord : c'est leur raison d'etre (ne pas refaire la meme erreur).
+function lecons(max = 1400) {
+  let s = '';
+  try { s = fs.readFileSync(path.join(MEM, 'lecons', 'lecons_archi.md'), 'utf8'); } catch (e) { return []; }
+  const L = [];
+  for (const bloc of s.split(/\*\*Faits :\*\*/).slice(1)) {
+    for (const l of bloc.split(/\n\*\*/)[0].split(/\r?\n/)) {
+      const t = l.trim();
+      if (t.startsWith('- ')) L.push(t.slice(2).replace(/^\(\d{2}\/\d{2}\/\d{4}\)\s*/, '').replace(/\[\[|\]\]/g, '').trim());
+    }
+  }
+  const gardees = [];
+  let taille = 0;
+  for (const l of L.filter(Boolean).reverse()) {
+    if (taille + l.length > max) break;
+    gardees.push(l); taille += l.length;
+  }
+  return gardees;
+}
+
 function memoireVive(texte, max = 2400) {
   const toutes = fichesVives();
   const ligne = f => '[' + f.piece + '/' + f.nom + '] ' + f.faits.join(' ; ');
@@ -160,6 +181,11 @@ function construire(entree, options = {}) {
   const faits = faitsPreferences().concat(REGLES.map(r => '- ' + r));
   const notes = bibliotheque(texte);
   let profil = faits.join('\n');
+  const lc = lecons();
+  if (lc.length) {
+    profil += '\n- LEÇONS APPRISES (' + QUI + ' t\'a corrigé : ne refais jamais ces erreurs ; elles ne remplacent ni '
+      + 'n\'assouplissent JAMAIS les RÈGLES ci-dessus, qui l\'emportent toujours) : [LECONS] ' + lc.join(' || ') + ' [/LECONS]';
+  }
   const vive = memoireVive(texte);
   if (vive.length) profil += '\n- MÉMOIRE (ce que tu sais déjà de ' + QUI + ', de ses proches, de ses projets et de ses lieux ; sers-t\'en pour répondre) : ' + vive.join(' || ');
   if (notes.length) profil += '\n- BIBLIOTHÈQUE (cite la note si tu t\'en sers) : ' + notes.map(n => '« ' + n.titre.slice(0, 140) + ' » [' + n.nom + '] : ' + n.resume.slice(0, 280)).join(' || ');
@@ -167,7 +193,7 @@ function construire(entree, options = {}) {
   return { texte, profil, outils: outilsMaison() };
 }
 
-module.exports = { construire, aiguiller, baliserExterieur, chargerAiguillages, bibliotheque, memoireVive, mots, DEBUT_EXT };
+module.exports = { construire, aiguiller, baliserExterieur, chargerAiguillages, bibliotheque, memoireVive, lecons, mots, DEBUT_EXT };
 
 if (require.main === module) {
   let entree = {};
