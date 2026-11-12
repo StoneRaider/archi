@@ -95,14 +95,16 @@ function bibliotheque(texte) {
 }
 
 // ---------- 4 bis. la memoire vive : ce qu'Archi a retenu (outils/memoire/memoire.py) ----------
-// Des fiches Markdown par piece (moi, personnes, projets, lieux), avec un bloc « **Faits :** » date.
+// Des fiches Markdown par piece, au format du chateau (en-tete, blocs « **Faits :** » dates) ; les index de piece
+// (Personnes.md...) ne sont pas des fiches. Les preferences sont lues a part (faitsPreferences).
 // Petite memoire : tout est donne au modele. Grosse memoire : la fiche de l'utilisateur, puis celles qui parlent du message.
-const PIECES_VIVES = ['moi', 'personnes', 'projets', 'lieux'];
+const PIECES_VIVES = ['moi', 'personnes', 'lieux', 'projets', 'passions', 'travail'];
+const sansEntete = s => String(s).replace(/^\ufeff?---\r?\n[\s\S]*?\r?\n---\r?\n/, '');
 function fichesVives() {
   const sortie = [];
   for (const piece of PIECES_VIVES) {
     let fichiers = [];
-    try { fichiers = fs.readdirSync(path.join(MEM, piece)).filter(f => f.endsWith('.md')).sort(); } catch (e) { continue; }
+    try { fichiers = fs.readdirSync(path.join(MEM, piece)).filter(f => f.endsWith('.md') && !/^[A-ZÀ-Ý]/.test(f)).sort(); } catch (e) { continue; }
     for (const f of fichiers) {
       let s = '';
       try { s = fs.readFileSync(path.join(MEM, piece, f), 'utf8'); } catch (e) { continue; }
@@ -110,11 +112,12 @@ function fichesVives() {
       for (const bloc of s.split(/\*\*Faits :\*\*/).slice(1)) {
         for (const l of bloc.split(/\n\*\*/)[0].split(/\r?\n/)) {
           const t = l.trim();
-          if (t.startsWith('- ')) faits.push(t.slice(2).replace(/^\(\d{2}\/\d{2}\/\d{4}\)\s*/, '').replace(/\[\[|\]\]/g, ''));
+          if (t.startsWith('- ') && !/^- Aucune/i.test(t)) faits.push(t.slice(2).replace(/^\(\d{2}\/\d{2}\/\d{4}\)\s*/, '').replace(/\[\[|\]\]/g, ''));
         }
       }
+      faits = [...new Set(faits)];   // une fiche curee a le meme fait dans sa Synthese et son historique
       // une fiche ecrite a la main, sans bloc de faits (projets/drone.md) : son debut
-      if (!faits.length) faits = [s.replace(/[#*_>`\[\]]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 320)].filter(Boolean);
+      if (!faits.length) faits = [sansEntete(s).replace(/[#*_>`\[\]]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 320)].filter(Boolean);
       if (faits.length) sortie.push({ piece, nom: f.replace(/\.md$/, ''), faits, texte: s });
     }
   }
@@ -163,6 +166,73 @@ function memoireVive(texte, max = 2400) {
   return gardees;
 }
 
+// ---------- 4 quater. le chateau : la fiche la plus probable, trouvee dans le catalogue (comme l'Archi d'origine) ----------
+// catalogue.md est refait par le greffier (outils/memoire) ; les autres noms viennent des en-tetes (alias) et de
+// methodes/carte_du_chateau.md (tableau « On dit | Fiches »).
+function norm(t) { return ' ' + String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim() + ' '; }
+function chateau(texte) {
+  texte = String(texte).replace(/^\s*(?:(?:hey|h[eé]|ok|dis|salut|bonjour|yo)\s+)?archi\b[\s,!.:;-]*/i, '').replace(/[\s,]+archi\s*[?!.]*\s*$/i, '');
+  const msg = norm(texte), cles = [...new Set(mots(texte))];
+  let cat = '', carte = '';
+  try { cat = fs.readFileSync(path.join(MEM, 'catalogue.md'), 'utf8'); } catch (e) { return ''; }
+  try { carte = fs.readFileSync(path.join(MEM, 'methodes', 'carte_du_chateau.md'), 'utf8'); } catch (e) {}
+  const bonus = {};
+  for (const l of carte.split(/\r?\n/)) {
+    const m = l.match(/^\|\s*([^|]+?)\s*\|\s*(.*\[\[.*)\|\s*$/);
+    if (!m) continue;
+    if (m[1].split(',').some(a => norm(a).trim().length >= 3 && msg.includes(norm(a))))
+      for (const n of m[2].matchAll(/\[\[([^\]|]+)\]\]/g)) bonus[n[1].toLowerCase()] = (bonus[n[1].toLowerCase()] || 0) + 6;
+  }
+  const notes = [];
+  for (const l of cat.split(/\r?\n/)) {
+    const m = l.match(/^- `([^`]+)` · ([^·]+) · ([^·]+) · (.*)$/);
+    if (!m || m[1].split('/').length !== 2) continue;
+    const [piece, nom] = m[1].split('/');
+    if (/^[A-ZÀ-Ý]/.test(nom) || piece === 'methodes') continue;   // index et methodes : pas des fiches de la memoire
+    let reste = m[4], alias = [];
+    const a = reste.match(/^alias : (.*?) · (.*)$/);
+    if (a) { alias = a[1].split(', '); reste = a[2]; }
+    let score = bonus[nom.toLowerCase()] || 0;
+    for (const x of alias) if (norm(x).trim().length >= 3 && msg.includes(norm(x))) score += 5;
+    if (msg.includes(norm(nom.replace(/_/g, ' ')))) score += 5;
+    const mn = new Set(mots(nom.replace(/_/g, ' ') + ' ' + alias.join(' '))), mr = new Set(mots(reste));
+    for (const k of cles) { if (mn.has(k)) score += 3; else if (mr.has(k)) score += 1; }
+    if (score >= 4) notes.push({ piece, nom, statut: m[2].trim(), score });
+  }
+  notes.sort((x, y) => y.score - x.score);
+  const top = notes.slice(0, 4);
+  if (!top.length) return '';
+  const nomme = n => n.piece + ' / ' + n.nom + (n.statut !== 'actif' && n.statut !== 'reference' ? ' [' + n.statut + ']' : '');
+  const syn = synthese(top[0].piece, top[0].nom);
+  const autres = top.slice(syn ? 1 : 0).map(nomme).join(' ; ');
+  let out = 'CHÂTEAU (fiches du château qui parlent sans doute de ce message).';
+  if (syn) out += ' SYNTHÈSE de ' + nomme(top[0]) + ' : « ' + syn + ' » → Si la question porte là-dessus, réponds D\'ABORD depuis cette synthèse, sans rien ajouter qui n\'y est pas écrit (pas d\'étape, de chiffre ou de date inventés). Pour « on en est où » : dis où ça en est (Faits), puis les Prochaines étapes numérotées, EXACTEMENT celles-là. Pour plus de détail : outil memoire action=lire, piece = ' + top[0].piece + ', sujet = ' + top[0].nom + '.';
+  if (autres) out += ' Autres fiches possibles (pas encore lues : ne dis rien de leur contenu sans outil memoire action=lire) : ' + autres + '.';
+  return out;
+}
+function synthese(piece, nom) {
+  let t = '';
+  try { t = fs.readFileSync(path.join(MEM, piece, nom + '.md'), 'utf8'); } catch (e) { return ''; }
+  t = sansEntete(t);
+  const m = t.match(/##\s*Synth[eè]se[^\n]*\n([\s\S]*?)(?=\r?\n---\s*\r?\n|\r?\n#\s*Historique|$)/i);
+  let s = m ? m[1] : t.split(/\r?\n#\s*Historique/i)[0];
+  const rub = {};
+  s.replace(/\*\*(Faits|Hypoth[eè]ses|Sources|Prochaines [ée]tapes|Liens)([^*]*)\*\*\s*:?\s*([\s\S]*?)(?=\*\*(?:Faits|Hypoth[eè]ses|Sources|Prochaines [ée]tapes|Liens|Titre)|\n## |$)/gi,
+    (_, k, plus, v) => {
+      const cle = k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').slice(0, 5);
+      const val = v.trim();
+      if (!/^-\s*Aucune\s*$/i.test(val)) rub[cle] = (rub[cle] ? rub[cle] + ' ' : k + plus.replace(/\s*:\s*$/, '') + ' : ') + val;
+      return '';
+    });
+  if (rub.proch) {
+    let k = 0; rub.proch = rub.proch.replace(/(^|\n|:)\s*-\s+/g, (m, p) => (p === ':' ? ': ' : ' ') + '(' + (++k) + ') ');
+  }
+  if (rub.faits) s = [rub.proch, rub.faits, rub.hypot].filter(Boolean).join('\n');
+  s = s.replace(/\*\*/g, '').replace(/\[\[([^\]|]+)(\|[^\]]*)?\]\]/g, '$1').replace(/\(\d{2}\/\d{2}\/\d{4}\)\s*/g, '').replace(/\r?\n+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  if (s.length > 1800) s = s.slice(0, 1800).replace(/\s+\S*$/, '') + ' [suite dans la fiche]';
+  return s;
+}
+
 // ---------- 5. outils maison ----------
 function outilsMaison() {
   try {
@@ -188,12 +258,14 @@ function construire(entree, options = {}) {
   }
   const vive = memoireVive(texte);
   if (vive.length) profil += '\n- MÉMOIRE (ce que tu sais déjà de ' + QUI + ', de ses proches, de ses projets et de ses lieux ; sers-t\'en pour répondre) : ' + vive.join(' || ');
+  const ch = chateau(texte);
+  if (ch) profil += '\n- ' + ch;
   if (notes.length) profil += '\n- BIBLIOTHÈQUE (cite la note si tu t\'en sers) : ' + notes.map(n => '« ' + n.titre.slice(0, 140) + ' » [' + n.nom + '] : ' + n.resume.slice(0, 280)).join(' || ');
   texte = aiguiller(baliserExterieur(texte), options.aiguillages || chargerAiguillages());
   return { texte, profil, outils: outilsMaison() };
 }
 
-module.exports = { construire, aiguiller, baliserExterieur, chargerAiguillages, bibliotheque, memoireVive, lecons, mots, DEBUT_EXT };
+module.exports = { construire, aiguiller, baliserExterieur, chargerAiguillages, bibliotheque, memoireVive, lecons, mots, chateau, synthese, DEBUT_EXT };
 
 if (require.main === module) {
   let entree = {};
