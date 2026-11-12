@@ -17,6 +17,29 @@ android {
         versionName = '5.7'
     }
 
+    // Signature de la version a distribuer (assembleRelease) : une cle STABLE, gardee hors du depot.
+    // Elle est donnee par 4 variables d'environnement (sur GitHub : les secrets du depot, voir appli/SIGNATURE.md).
+    // Sans elles (copie du depot chez quelqu'un d'autre), la version release est signee avec la cle debug
+    // de la machine : elle s'installe, mais une mise a jour signee par une autre cle sera refusee par Android.
+    def cleFichier = System.getenv('ARCHI_CLE_FICHIER')
+    def cleOk = cleFichier && file(cleFichier).isFile()
+    signingConfigs {
+        if (cleOk) {
+            stable {
+                storeFile = file(cleFichier)
+                storePassword = System.getenv('ARCHI_CLE_MDP')
+                keyAlias = System.getenv('ARCHI_CLE_ALIAS') ?: 'archi'
+                keyPassword = System.getenv('ARCHI_CLE_MDP_ALIAS') ?: System.getenv('ARCHI_CLE_MDP')
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled = false
+            signingConfig = cleOk ? signingConfigs.stable : signingConfigs.debug
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

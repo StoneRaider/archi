@@ -1,7 +1,7 @@
 """Fabrique le ZIP a telecharger : dist/Archi-<version>.zip
    = les fichiers suivis par git (au dernier commit) + l'appli Android deja compilee (appli/Archi.apk).
 
-Usage : python outils_depot/faire_le_zip.py [--apk chemin/app-debug.apk] [--version 1.0]
+Usage : python outils_depot/faire_le_zip.py [--apk chemin/app-release.apk] [--version 1.0]
 Le ZIP contient un seul dossier « Archi-<version> » : on l'extrait, on double-clique sur installation.bat.
 L'APK n'est jamais range dans le depot (regle du detecteur) : il est pris dans le dossier de fabrication
 et glisse directement dans le ZIP. Sans APK, le ZIP est fabrique quand meme et le script le dit.
@@ -14,7 +14,10 @@ import sys
 import zipfile
 
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-APK_FABRIQUE = os.path.join(RACINE, "appli", "app", "build", "outputs", "apk", "debug", "app-debug.apk")
+_APK = os.path.join(RACINE, "appli", "app", "build", "outputs", "apk")
+# la version signee par la cle stable (assembleRelease) si elle existe, sinon la version debug
+APK_FABRIQUE = next((c for c in (os.path.join(_APK, "release", "app-release.apk"), os.path.join(_APK, "debug", "app-debug.apk"))
+                     if os.path.isfile(c)), os.path.join(_APK, "release", "app-release.apk"))
 # ce qui ne sert pas a quelqu'un qui installe (le depot git, lui, garde tout)
 HORS_ZIP = (".github/", ".gitattributes", ".gitignore")
 

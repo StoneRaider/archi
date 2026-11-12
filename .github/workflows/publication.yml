@@ -27,14 +27,26 @@ jobs:
           distribution: temurin
           java-version: "21"
       - uses: android-actions/setup-android@v3
-      - name: Fabriquer l'appli Android (aucune cle dedans : elle se branche par QR code)
+      - name: Fabriquer l'appli Android, signee par la cle stable (aucune cle d'Archi dedans : elle se branche par QR code)
         working-directory: appli
-        run: chmod +x gradlew && ./gradlew --no-daemon assembleDebug
+        env:
+          CLE_B64: ${{ secrets.ARCHI_CLE_B64 }}
+          ARCHI_CLE_MDP: ${{ secrets.ARCHI_CLE_MDP }}
+        run: |
+          if [ -n "$CLE_B64" ]; then
+            echo "$CLE_B64" | base64 -d > "$RUNNER_TEMP/archi-release.jks"
+            export ARCHI_CLE_FICHIER="$RUNNER_TEMP/archi-release.jks"
+          else
+            echo "::warning::Secret ARCHI_CLE_B64 absent : APK signe avec une cle debug jetable (voir appli/SIGNATURE.md)"
+          fi
+          chmod +x gradlew && ./gradlew --no-daemon assembleRelease
+          rm -f "$RUNNER_TEMP/archi-release.jks"
+          "$(ls "$ANDROID_HOME"/build-tools/*/apksigner | tail -1)" verify --print-certs app/build/outputs/apk/release/app-release.apk | grep -E "DN|SHA-256"
       - name: Fabriquer le ZIP
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           case "$GITHUB_REF" in refs/tags/*) ;; *) VERSION="essai" ;; esac
-          python outils_depot/faire_le_zip.py --version "$VERSION"
+          python outils_depot/faire_le_zip.py --version "$VERSION" --apk appli/app/build/outputs/apk/release/app-release.apk
           ls -l dist
       - uses: actions/upload-artifact@v4
         with:
