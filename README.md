@@ -9,8 +9,11 @@ sur **mon** PC, un modèle de vision local la décrit, puis l'agent raisonne et 
 Ni la photo ni la conversation ne passent par un service d'IA en ligne.
 
 > Ce dépôt est la **version publique et nettoyée** d'Archi, préparée pour l'ASUS Agent Computer Challenge
-> (catégorie Developer). Le château d'exemple est inventé. Mon vrai château (ma mémoire personnelle),
+> (catégorie High-End). Le château d'exemple est inventé. Mon vrai château (ma mémoire personnelle),
 > mes clés et mes données ne sont pas ici et n'en sortiront jamais.
+
+> **Jury du concours** : le guide de test pas à pas est dans [docs/DEMO_JURY.md](docs/DEMO_JURY.md)
+> (téléchargement, installation en un double-clic, 8 essais en 10 minutes).
 
 ## L'essayer : 3 gestes, aucun compte à créer
 
