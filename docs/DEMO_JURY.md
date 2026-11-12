@@ -79,3 +79,5 @@ pour tout Windows (il se désinstalle depuis les Paramètres, s'il n'était pas 
 
 Ce que changerait une carte de 32 Go (deux modèles chargés à la fois, contexte de 64k) est décrit dans
 [MATERIEL.md](MATERIEL.md).
+
+Licence : PolyForm Noncommercial 1.0.0 (essai, étude et usage non commercial libres) ; détails dans [LICENCES.md](../LICENCES.md).

@@ -228,3 +228,10 @@ partager la mémoire vidéo. Ce que le matériel visé changerait est expliqué 
 ## Sécurité et vie privée
 
 Les règles sont détaillées dans [docs/SECURITE.md](docs/SECURITE.md).
+
+## Licence
+
+Le code d'Archi est sous licence **PolyForm Noncommercial 1.0.0** ([LICENSE](LICENSE)) : libre pour un usage
+personnel, un loisir, la recherche, l'enseignement ou une association ; **tout usage commercial demande mon accord**
+(me contacter par l'onglet « Issues » du projet). Les briques des autres (n8n, whisper.cpp, Pocket TTS, FFmpeg, les
+polices…) gardent leur propre licence : la liste est dans [LICENCES.md](LICENCES.md).
