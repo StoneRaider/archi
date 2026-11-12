@@ -73,14 +73,22 @@ tunnel Cloudflare nommé), mets-la dans `WEBHOOK_URL` du `.env`.
 ### La mémoire : il retient ce que tu lui apprends
 Dis-lui « mon chien s'appelle Médor » : Archi le range tout seul dans une fiche, et s'en souvient le lendemain.
 - Après chaque message, un « greffier » (le même modèle local) relève ce que tu lui apprends de durable sur toi, tes
-  proches, tes projets, tes lieux et tes goûts. Il travaille en arrière-plan : la réponse ne l'attend pas.
+  proches, tes lieux, tes projets, tes passions, ton travail et tes goûts. Il travaille en arrière-plan : la réponse ne l'attend pas.
+- La mémoire est un **château** : des pièces (moi, personnes, lieux, projets, passions, travail, préférences, leçons,
+  méthodes, bibliothèque), une fiche par chose. Chaque fiche a un en-tête (sorte, statut, date, autres noms, résumé),
+  des rubriques Faits / Hypothèses / Sources / Prochaines étapes / Liens, et des liens nommés (`famille :: [[lea]]`)
+  pris dans une liste fermée (`methodes/ontologie.md`). Le dossier s'ouvre tel quel dans Obsidian, en vue graphe.
+- **Une chose = une fiche** : « mon père s'est mis au golf » va dans la fiche de ton père s'il en a une, même sous un
+  autre nom ; s'il y a deux fiches possibles, le greffier ne range rien plutôt que de se tromper.
+- À chaque message, Archi reçoit la **Synthèse** de la fiche qui parle sans doute de ta question (trouvée dans
+  `catalogue.md`, que le greffier tient à jour) : « on en est où pour la serre ? » se répond depuis la fiche, sans invention.
 - Les fiches sont des fichiers Markdown dans `chateau\memoire` : tu peux les lire, les corriger, les supprimer.
   La page d'accueil montre ce qui vient d'être retenu.
 - « Que sais-tu sur moi ? » relit tout. « Oublie… » efface, après un essai à blanc et ton accord.
 - Les garde-fous sont dans le code, pas seulement dans la consigne : jamais de mot de passe, de code, de numéro de
   carte, d'adresse postale ni de téléphone ; un fait doit reprendre des mots de ton message ; trois faits au plus par message.
-- Mesuré le 10/11/2026 avec gpt-oss-20b : 30 phrases sur 30 bien classées (15 à retenir, 15 à laisser). Le banc se
-  rejoue avec `python outils/memoire/banc_memoire.py`.
+- Mesuré le 12/11/2026 avec gpt-oss-20b, au format du château : 30 phrases sur 30 bien classées (15 à retenir,
+  15 à laisser), sur 3 passages de suite. Le banc se rejoue avec `python outils/memoire/banc_memoire.py`.
 
 ### La voix : parle-lui, il te répond
 Archi écoute et parle, **sans quitter le PC** : whisper.cpp transcrit ta voix, Pocket TTS lit la réponse.
@@ -201,7 +209,8 @@ Le détail se trouve dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 ```bash
 node --test core/test portail/test                      # cœur (contexte, lanceur, vérificateur) et portail (liste blanche)
 cd outils/planificateur && python test_planificateur.py # 90 tests, dans un faux dossier personnel
-cd outils/memoire && python test_memoire.py             # 40 tests, avec un faux modèle local
+cd outils/memoire && python test_memoire.py             # 89 tests, avec un faux modèle local
+cd outils/memoire && python test_chateau.py             # 23 tests : format du château, une chose = une fiche, liens, oubli
 cd outils/trader && python test_trader.py               # 77 tests, faux prix et faux modèle, aucun réseau
 cd outils/curateur && python test_curateur.py           # 158 tests, faux château et faux modèle
 cd outils/mecanicien && python test_mecanicien.py       # 167 tests, faux sites et faux modèle, aucun réseau

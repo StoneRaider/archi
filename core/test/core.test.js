@@ -260,16 +260,24 @@ test('contexte : la memoire vive (ce qu Archi a retenu) est donnee au modele, av
   fs.mkdirSync(path.join(M, 'personnes'), { recursive: true });
   fs.mkdirSync(path.join(M, 'moi'), { recursive: true });
   fs.writeFileSync(path.join(M, 'personnes', 'medor.md'), '# Médor\n\n**Pièce :** personnes\n**Faits :**\n- (10/11/2026) Médor est le chien de Camille.\n- (10/11/2026) Médor a huit ans.\n');
-  fs.writeFileSync(path.join(M, 'moi', 'moi.md'), '# Moi\n\n**Pièce :** moi\n**Faits :**\n- (10/11/2026) Camille est née à Dijon.\n**Hypothèses :**\n- pas un fait\n');
+  fs.writeFileSync(path.join(M, 'moi', 'profil.md'), '# Moi\n\n**Pièce :** moi\n**Faits :**\n- (10/11/2026) Camille est née à Dijon.\n**Hypothèses :**\n- pas un fait\n');
   const r = contexte.construire({ texte: 'Comment s appelle mon chien ?' });
   assert.match(r.profil, /RÈGLE MÉMOIRE/);
   assert.match(r.profil, /MÉMOIRE \(ce que tu sais déjà de Camille/);
   assert.match(r.profil, /\[personnes\/medor\] Médor est le chien de Camille\. ; Médor a huit ans\./);
-  assert.match(r.profil, /\[moi\/moi\] Camille est née à Dijon\./);
+  assert.match(r.profil, /\[moi\/profil\] Camille est née à Dijon\./);
   assert.doesNotMatch(r.profil, /pas un fait/);
   assert.doesNotMatch(r.profil, /\(10\/11\/2026\)/, 'les dates des fiches ne chargent pas le contexte');
-  // une fiche ecrite a la main, sans bloc de faits (le projet d'exemple) : son debut est donne quand meme
-  assert.match(r.profil, /\[projets\/drone\] .*quadricoptère/);
+  // les fiches du chateau d'exemple (au format du chateau, en-tete compris) : leurs faits, sans l'en-tete
+  assert.match(r.profil, /\[projets\/drone\] Inventaire du matériel fait/);
+  assert.doesNotMatch(r.profil, /type: projet|resume:/, 'l en-tete des fiches n est pas donne au modele');
+  assert.doesNotMatch(r.profil, /\[(moi|personnes|projets)\/(Moi|Personnes|Projets)\]/, 'les index de piece ne sont pas des fiches');
+  // fiche curee : le meme fait dans la Synthese et l'historique n'est donne qu'une fois
+  assert.equal((r.profil.match(/Plan dessiné, bâche commandée/g) || []).length, 1);
+  // une fiche ecrite a la main, sans bloc de faits : son debut est donne quand meme (sans en-tete)
+  fs.writeFileSync(path.join(M, 'moi', 'notes.md'), '---\ntype: moi\npiece: moi\n---\n## Mes notes\nJe fais du kayak le dimanche.\n');
+  assert.match(contexte.construire({ texte: 'kayak' }).profil, /\[moi\/notes\] Mes notes Je fais du kayak le dimanche\./);
+  fs.unlinkSync(path.join(M, 'moi', 'notes.md'));
 });
 
 test('contexte : une grosse memoire ne noie pas le modele (la fiche de l utilisateur, puis celles qui parlent du message)', () => {
@@ -278,7 +286,7 @@ test('contexte : une grosse memoire ne noie pas le modele (la fiche de l utilisa
   fs.writeFileSync(path.join(M, 'tom.md'), '# Tom\n**Faits :**\n- Tom est le fils de Camille et adore les dinosaures.\n');
   const lignes = contexte.memoireVive('Qu est-ce qui ferait plaisir à Tom pour son anniversaire ?');
   assert.ok(lignes.join('\n').length <= 2400, 'taille : ' + lignes.join('\n').length);
-  assert.ok(lignes[0].startsWith('[moi/moi]'), lignes[0]);
+  assert.ok(lignes[0].startsWith('[moi/profil]'), lignes[0]);
   assert.ok(lignes.some(l => l.startsWith('[personnes/tom]')), 'la fiche dont on parle est gardee (prenom court)');
   assert.ok(lignes.length < 30, 'les 60 fiches ne passent pas toutes');
   for (let i = 0; i < 60; i++) fs.unlinkSync(path.join(M, 'ami' + i + '.md'));
@@ -395,4 +403,16 @@ test('tournees : creneaux, premiere fois, rattrapage apres 5 minutes, jamais deu
   assert.strictEqual(tournees.reveiller({ base: B }).raison, 'coupees');
   delete process.env.ARCHI_TOURNEES;
   fs.rmSync(B, { recursive: true, force: true });
+});
+
+test('contexte : la ligne CHATEAU donne la Synthese de la fiche la plus probable (comme l Archi d origine)', () => {
+  const p = contexte.construire({ texte: 'Archi, on en est où pour la serre ?' }).profil;
+  assert.match(p, /CHÂTEAU \(fiches du château/);
+  assert.match(p, /SYNTHÈSE de projets \/ serre : « Prochaines étapes : \(1\) Monter l'armature\. \(2\) Poser le capteur de température\./);
+  assert.match(p, /Faits : - Une petite serre/);
+  assert.doesNotMatch(p, /SYNTHÈSE[^»]*Historique/, 'l historique reste dans la fiche');
+  assert.match(p, /outil memoire action=lire, piece = projets, sujet = serre/);
+  // un autre nom (alias de l'en-tete) suffit ; un message sans rapport n'a pas de ligne CHATEAU
+  assert.match(contexte.construire({ texte: 'parle-moi du quadricoptère' }).profil, /CHÂTEAU[^\n]*projets \/ drone/);
+  assert.doesNotMatch(contexte.construire({ texte: 'Quelle heure est-il ?' }).profil, /CHÂTEAU/);
 });

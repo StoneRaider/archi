@@ -56,6 +56,13 @@ def verif(nom, cond, detail=""):
         print("ECHEC", nom, str(detail)[:400])
 
 
+def nb_faits(t):
+    n = 0
+    for bloc in t.split("**Faits :**")[1:]:
+        n += sum(1 for l in bloc.split("\n**")[0].splitlines() if l.strip().startswith("- ") and l.strip() != "- Aucune")
+    return n
+
+
 def lire(piece, nom):
     with open(os.path.join(MEM, piece, nom + ".md"), encoding="utf-8") as h:
         return h.read()
@@ -67,18 +74,23 @@ r = appel(action="retenir", texte="Si je te parle de mon chien, qui s'appelle M�
 verif("fait retenu", r["ok"] and len(r["retenu"]) == 1 and r["retenu"][0]["sujet"] == "Médor", r)
 verif("fiche creee dans personnes", os.path.exists(os.path.join(MEM, "personnes", "medor.md")), os.listdir(MEM))
 t = lire("personnes", "medor")
-verif("fiche lisible : titre, piece, fait date", t.startswith("# Médor\n") and "**Pièce :** personnes" in t and "**Faits :**\n- (" in t
-      and t.rstrip().endswith("Médor est le chien de Camille."), t)
+verif("fiche au format du chateau : en-tete, titre, rubriques, fait date", t.startswith("---\ntype: personne\npiece: personnes\nstatut: actif\nmaj: ")
+      and "\n# Médor\n" in t and "Pièce [[Personnes]] du [[Château]]" in t and "**Faits :**\n- (" in t and "Médor est le chien de Camille." in t
+      and "**Hypothèses :**\n- Aucune" in t and "**Sources :**\n- Camille, dans un message du" in t
+      and "**Liens :**\n- fait_partie_de :: [[Personnes]]" in t and 'resume: "Médor — Médor est le chien de Camille."' in t, t)
+verif("index de la piece cree, avec la fiche", "- [[medor]] : Médor est le chien de Camille." in lire("personnes", "Personnes"))
+verif("catalogue refait", "`personnes/medor` · actif · " in open(os.path.join(MEM, "catalogue.md"), encoding="utf-8").read())
 verif("le modele recoit le message et le prenom", DEMANDES[-1]["messages"][1]["content"].startswith("Si je te parle")
       and "Camille" in DEMANDES[-1]["messages"][0]["content"] and DEMANDES[-1]["temperature"] == 0, DEMANDES[-1])
 # le meme fait une seconde fois : pas de doublon
 r = appel(action="retenir", texte="Mon chien s'appelle Médor, je te l'ai déjà dit.")
 verif("pas de doublon", r["ok"] and r["retenu"] == [] and r["ecartes"][0]["pourquoi"] == "deja su", r)
-verif("une seule ligne dans la fiche", lire("personnes", "medor").count("\n- ") == 1)
+verif("un seul fait dans la fiche", nb_faits(lire("personnes", "medor")) == 1)
 # un second fait sur le meme sujet : meme fiche
 REPONSE = {"faits": [{"piece": "personnes", "sujet": "Médor", "fait": "Médor a huit ans et adore la neige."}]}
 r = appel(action="retenir", texte="Tu sais, mon Médor a huit ans et adore la neige.")
-verif("second fait, meme fiche", len(r["retenu"]) == 1 and lire("personnes", "medor").count("\n- ") == 2, r)
+verif("second fait, meme fiche, meme bloc du jour", len(r["retenu"]) == 1 and nb_faits(lire("personnes", "medor")) == 2
+      and lire("personnes", "medor").count("## Ajout du") == 1, r)
 
 # --- pas de premiere personne : le modele n'est meme pas derange
 n = len(DEMANDES)
@@ -106,13 +118,13 @@ verif("fait trop court refuse", "fait trop court ou trop long" in raisons, r)
 verif("un fait vrai est retenu, et un sujet piege ne sort pas du dossier", [x["sujet"] for x in r["retenu"]] == ["../../Léa"]
       and os.path.exists(os.path.join(MEM, "personnes", "lea.md")) and not os.path.exists(os.path.join(D, "Léa.md"))
       and not os.path.exists(os.path.join(D, "lea.md")), r)
-verif("rien d'autre n'est range", sorted(os.listdir(os.path.join(MEM, "personnes"))) == ["lea.md", "medor.md"]
+verif("rien d'autre n'est range", sorted(os.listdir(os.path.join(MEM, "personnes"))) == ["Personnes.md", "lea.md", "medor.md"]
       and not os.path.exists(os.path.join(MEM, "moi")), os.listdir(MEM))
 
 # --- au plus 3 faits par message
 REPONSE = {"faits": [{"piece": "lieux", "sujet": "lieu%d" % i, "fait": "Camille connaît bien le lieu%d et son marché." % i} for i in range(5)]}
 r = appel(action="retenir", texte="Je connais bien lieu0, lieu1, lieu2, lieu3 et lieu4, et leur marché.")
-verif("au plus 3 faits", len(r["retenu"]) == 3 and len(os.listdir(os.path.join(MEM, "lieux"))) == 3, r)
+verif("au plus 3 faits", len(r["retenu"]) == 3 and len(os.listdir(os.path.join(MEM, "lieux"))) == 4, r)
 
 # --- a blanc : rien n'est ecrit (sert au banc de mesure)
 REPONSE = {"faits": [{"piece": "projets", "sujet": "cabane", "fait": "Camille construit une cabane dans son jardin."}]}
@@ -136,7 +148,7 @@ r = appel(action="ecrire", piece="preferences", fait="Camille boit son café san
 t = lire("preferences", "mes_preferences")
 verif("ecrire dans les preferences", r["ok"] and "sans sucre" in t and "**Faits :**" in t, r)
 r = appel(action="ecrire", piece="moi", sujet="moi", fait="Camille est née à Dijon.")
-verif("ecrire sur moi", r["ok"] and os.path.exists(os.path.join(MEM, "moi", "moi.md")), r)
+verif("ecrire sur moi", r["ok"] and os.path.exists(os.path.join(MEM, "moi", "profil.md")), r)
 r = appel(action="ecrire", piece="moi", fait="Le code PIN de Camille est 4321.")
 verif("ecrire refuse un secret", r["ok"] is False and "sensible" in r["phrase_pour_utilisateur"], r)
 r = appel(action="lister")
@@ -157,7 +169,7 @@ verif("ajout avant le bloc suivant", t.index("cinq heures") < t.index("**Hypoth�
 # --- oublier : essai a blanc, puis pour de bon
 r = appel(action="oublier", texte="Médor neige")
 verif("oublier : essai a blanc", r["ok"] and "ESSAI" in r["phrase_pour_utilisateur"] and len(r["a_oublier"]) == 1
-      and lire("personnes", "medor").count("\n- ") == 2, r)
+      and nb_faits(lire("personnes", "medor")) == 2, r)
 r = appel(action="oublier", texte="Médor neige", confirmer="oui")
 t = lire("personnes", "medor")
 verif("oublier : le fait est retire, l'autre reste", r["ok"] and len(r["oublie"]) == 1 and "neige" not in t and "chien" in t, t)
@@ -205,7 +217,7 @@ verif("fiche des lecons : titre, piece, lecon datee", t.startswith("# Leçons ap
 verif("le modele recoit la reponse d'Archi ET la correction", "message vocal" in DEMANDES[n]["messages"][1]["content"]
       and "tu ne sais pas" in DEMANDES[n]["messages"][1]["content"].lower() and DEMANDES[n]["response_format"]["json_schema"]["name"] == "lecon",
       DEMANDES[n] if len(DEMANDES) > n else None)
-verif("la lecon n'est pas retenue comme un fait", not os.path.exists(os.path.join(MEM, "moi", "moi.md")) or "vocal" not in lire("moi", "moi"))
+verif("la lecon n'est pas retenue comme un fait", not os.path.exists(os.path.join(MEM, "moi", "profil.md")) or "vocal" not in lire("moi", "profil"))
 r = appel(action="lecon", texte="Non, je te répète que tu ne sais pas faire ça.", reponse=VOCAL)
 verif("la meme lecon deux fois : pas de doublon", r["lecon"] == "" and r["pourquoi"] == "deja apprise"
       and lire("lecons", "lecons_archi").count("\n- ") == 1, r)

@@ -1,7 +1,21 @@
-## Archi et moi (exemple fictif)
+---
+type: preference
+piece: preferences
+statut: reference
+maj: 2026-11-12
+alias: []
+resume: "Archi et moi — comment l'utilisateur veut qu'Archi lui parle."
+---
+
+# Archi et moi
+
+Pièce [[Préférences]] du [[Château]].
+
 **Faits :**
-- L'utilisateur s'appelle Camille, travaille en horaires décalés et préfère des réponses courtes.
-- Archi tutoie Camille et répond en français.
+- L'utilisateur préfère des réponses courtes.
+- Archi tutoie l'utilisateur et répond en français.
 - Aperçu puis accord avant tout envoi de mail, toute action sur une prise ou toute impression 3D.
 **Hypothèses :**
-- Camille aime être prévenu la veille des rendez-vous.
+- L'utilisateur aimerait être prévenu la veille des rendez-vous (à confirmer).
+**Liens :**
+- fait_partie_de :: [[Préférences]]
