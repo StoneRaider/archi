@@ -120,7 +120,7 @@ Mets l'adresse dans `WEBHOOK_URL` du `.env` (avec le `/` final), écris-la aussi
 
 ### 6. L'appli Android
 L'APK est dans le ZIP de la page Releases (`appli/Archi.apk`) et dans la page Releases elle-même.
-Pour la fabriquer : `cd appli && ./gradlew assembleDebug` (JDK 17 ou 21 et le SDK Android).
+Pour la fabriquer : `cd appli && ./gradlew assembleRelease` (JDK 17 ou 21 et le SDK Android). La signature est expliquee dans [appli/SIGNATURE.md](../appli/SIGNATURE.md).
 Sans QR code, l'appli demande au premier lancement l'adresse `https://<ton-adresse>/webhook/telephone-archi` et la
 clé `ARCHI_CLE_TELEPHONE`. Pour changer de serveur : appui long sur le titre « ARCHI ».
 
