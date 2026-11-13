@@ -21,13 +21,13 @@ jobs:
       - name: Pas de secret ni de donnee perso dans ce qui est publie
         run: python outils_depot/verifier_depot.py .
       - name: Tests du coeur et du portail
-        run: node --test core/test/ portail/test/
+        run: node --test "core/test/*.test.js" "portail/test/*.test.js"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
       - uses: android-actions/setup-android@v3
-      - name: Fabriquer l'appli Android, signee par la cle stable (aucune cle d'Archi dedans : elle se branche par QR code)
+      - name: "Fabriquer l'appli Android, signee par la cle stable (aucune cle d'Archi dedans : elle se branche par QR code)"
         working-directory: appli
         env:
           CLE_B64: ${{ secrets.ARCHI_CLE_B64 }}

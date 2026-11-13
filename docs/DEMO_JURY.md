@@ -64,7 +64,7 @@ elle est décrite par le modèle de vision **du PC**.
 - **Local** : débrancher Internet après l'installation ; Archi continue de répondre sur le PC
   (seuls le téléphone, qui passe par le tunnel, et les outils qui lisent le web en ont besoin).
 - **Reproductible** : chaque version est fabriquée par GitHub Actions ; les tests tournent à chaque envoi
-  (`node --test core/test portail/test`, et les suites Python de chaque outil, voir le README).
+  (`node --test "core/test/*.test.js" "portail/test/*.test.js"`, et les suites Python de chaque outil, voir le README).
 - **Pas de secret** : `python outils_depot/verifier_depot.py .` passe avant chaque publication.
 - **Appli signée** : l'empreinte de la clé de l'appli est donnée dans [appli/SIGNATURE.md](../appli/SIGNATURE.md)
   (`apksigner verify --print-certs Archi.apk`).

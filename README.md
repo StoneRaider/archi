@@ -207,7 +207,7 @@ Le détail se trouve dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 ## Tests
 
 ```bash
-node --test core/test portail/test                      # cœur (contexte, lanceur, vérificateur) et portail (liste blanche)
+node --test "core/test/*.test.js" "portail/test/*.test.js"                      # cœur (contexte, lanceur, vérificateur) et portail (liste blanche)
 cd outils/planificateur && python test_planificateur.py # 90 tests, dans un faux dossier personnel
 cd outils/memoire && python test_memoire.py             # 89 tests, avec un faux modèle local
 cd outils/memoire && python test_chateau.py             # 23 tests : format du château, une chose = une fiche, liens, oubli
