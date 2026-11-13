@@ -219,6 +219,15 @@ test('verificateur : un nom invente est signale, un nom sourcé passe', () => {
   assert.ok(invente.alertes.length >= 1, JSON.stringify(invente));
   const source = lancer({ reponse: "L'ambassadeur est Marie Durand.", steps: [{ observation: 'Résultat : Marie Durand, ambassadrice depuis 2025' }], msg: 'qui est l ambassadeur ?' });
   assert.equal(source.alertes.length, 0, JSON.stringify(source));
+  // a voix haute, un nom sans source n'est plus relu en « À vérifier » (doublon penible) ; une coordonnee, si
+  const dit = lancer({ reponse: 'Le porte-avions français s’appelle Charles de Gaulle.', steps: [], msg: 'comment s appelle le porte-avions francais ?' });
+  assert.doesNotMatch(dit.reponse, /À vérifier/);
+  const tel = lancer({ reponse: 'Son numéro est le 06 12 34 56 78.', steps: [], msg: 'quel est son numero ?' });
+  assert.match(tel.reponse, /À vérifier : une coordonnée sans source\./);
+  assert.doesNotMatch(tel.reponse, /À vérifier : .*06 12/);
+  // en texte ecrit ([TEXTE] : tableaux, documents), l'alerte complete reste
+  const ecrit = lancer({ reponse: '[TEXTE] L ambassadeur est Lucien Martinvalle.', steps: [], msg: 'qui est l ambassadeur ?' });
+  assert.match(ecrit.reponse, /Vérification automatique/);
 });
 
 test('verificateur : pas de « C\'est programmé » sans la reponse du planificateur', () => {

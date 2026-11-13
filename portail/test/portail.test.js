@@ -139,6 +139,34 @@ function appel(port, options, corps) {
 }
 const fermer = s => new Promise(x => { s.close(x); if (s.closeAllConnections) s.closeAllConnections(); });
 
+test('arret : la page raccroche (clic sur le coeur), le portail raccroche aussi cote n8n', async () => {
+  let raccroche = null;
+  const vu = new Promise(x => { raccroche = x; });
+  // un faux n8n qui reflechit sans fin : il ne repond jamais, il note seulement quand on lui raccroche au nez
+  const n8n = http.createServer((req, res) => { req.resume(); res.on('close', () => raccroche(true)); });
+  await new Promise(x => n8n.listen(0, '127.0.0.1', x));
+  const d = chateau(false);
+  const r = { port: 0, portPorte: 0, n8nPort: n8n.address().port, depot: d, base: d, etat: d, cle: CLE, lmUrl: 'http://127.0.0.1:1', modele: 'm', modeleVision: 'v', utilisateur: 'Camille' };
+  const local = P.creerServeurLocal(r);
+  await new Promise(x => local.listen(0, '127.0.0.1', x));
+  r.port = local.address().port;
+  try {
+    const req = http.request({ host: '127.0.0.1', port: r.port, agent: false, path: '/api/message', method: 'POST',
+      headers: { host: '127.0.0.1:' + r.port, 'x-archi-portail': '1', 'content-type': 'application/json' } });
+    req.on('error', () => {});
+    req.end('{"texte":"une longue question"}');
+    await new Promise(x => setTimeout(x, 300));
+    req.destroy();   // ce que fait AbortController dans la page
+    const ok = await Promise.race([vu, new Promise(x => setTimeout(() => x(false), 2000))]);
+    assert.equal(ok, true, 'n8n doit voir la demande annulee');
+  } finally {
+    await fermer(local); await fermer(n8n);
+    fs.rmSync(d, { recursive: true, force: true });
+  }
+  const page = fs.readFileSync(path.join(__dirname, '..', 'accueil.html'), 'utf8');
+  assert.ok(page.includes("if (arretDemande) arretDemande.abort();") && page.includes('signal: arret.signal'));
+});
+
 test('de bout en bout : la porte du telephone ne connait que la liste blanche, la page reste locale', async () => {
   const recus = [];
   const n8n = http.createServer((req, res) => {
