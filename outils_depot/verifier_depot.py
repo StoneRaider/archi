@@ -36,7 +36,7 @@ FICHIERS_INTERDITS = re.compile(r"(?i)(^\.env$|secret|^cle.*\.txt$|\.pickle$|\.p
 PERMIS = {".env.example"}  # le detecteur se controle lui-meme (sauf ses motifs)
 IGNORER_DOSSIERS = {".git", "node_modules", "__pycache__", "build", ".gradle", ".local",
                     "programmes", "telechargements", "dist"}   # poses par installation.bat / faire_le_zip.py, ignores par git
-BINAIRES = (".jar", ".png", ".jpg", ".webp", ".zip")
+BINAIRES = (".jar", ".png", ".jpg", ".webp", ".zip", ".bin")   # .bin : les formes des monuments (des octets, pas du texte)
 
 
 def main(racine):
