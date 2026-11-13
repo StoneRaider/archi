@@ -88,7 +88,7 @@ mkdir -p ~/.n8n-files/outils && cp -r outils/* ~/.n8n-files/outils/
 python -m venv venv && . venv/bin/activate
 python -m pip install -r outils/requirements.txt -r serveur/requirements.txt
 python archi_env.py --brancher              # ce Python relira le .env tout seul : n8n ne le transmet pas aux outils
-node --test core/test portail/test
+node --test "core/test/*.test.js" "portail/test/*.test.js"
 ```
 
 ### 3. Le fichier `.env`

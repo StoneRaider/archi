@@ -17,9 +17,9 @@ jobs:
       - name: Le detecteur attrape bien les fuites
         run: python outils_depot/test_verifier_depot.py
       - name: Tests du coeur
-        run: node --test core/test/
+        run: node --test "core/test/*.test.js"
       - name: Tests du portail (ce qui sort du PC est une liste blanche)
-        run: node --test portail/test/
+        run: node --test "portail/test/*.test.js"
       - name: Import des workflows (avec et sans Telegram)
         run: python n8n/test_importer.py
       - name: Tests du planificateur
