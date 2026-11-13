@@ -574,6 +574,7 @@ const IDEES = [
   'Fais-moi un PDF qui résume ce que tu sais faire',
 ];
 let occupe = false, lienActuel = null, pret = false, prenom = '';
+let arretDemande = null;   // pendant qu'Archi reflechit : un clic sur le coeur (la sphere) annule la demande
 // la voix : l'oreille (Whisper) et la parole (Pocket TTS) tournent sur ce PC ; le choix du haut-parleur est garde ici
 let voix = { oreille: false, parole: false }, son = localStorage.getItem('archi_son') !== 'non', lecteur = null;
 const vus = new Set(JSON.parse(localStorage.getItem('archi_rappels_vus') || '[]'));
@@ -1138,14 +1139,17 @@ async function envoyer(texte, fichier, dit) {
   const debut = Date.now();
   dernierEnvoi = { debut, fin: Infinity };
   majCarte();
-  const minuteur = setInterval(() => { $('p-duree').textContent = 'le modèle tourne sur ta carte graphique · ' + Math.round((Date.now() - debut) / 1000) + ' s'; }, 1000);
+  const minuteur = setInterval(() => { $('p-duree').textContent = 'le modèle tourne sur ta carte graphique · ' + Math.round((Date.now() - debut) / 1000) + ' s · clique sur le cœur pour arrêter'; }, 1000);
+  const arret = new AbortController();
+  arretDemande = arret;
+  $('sphere').title = 'Clique pour arrêter la réflexion';
   try {
     const corps = new FormData();
     // « … et donne-le-moi » : la page s'en charge (l'orbite des documents) ; le modele recoit seulement la demande
     corps.append('texte', veutDocs ? sansDonne(texte) : (texte || ''));
     if (fichier) { corps.append('nom_fichier', fichier.name); corps.append('photo', fichier, 'photo' + (fichier.name.match(/\.\w{2,5}$/) || ['.jpg'])[0]); }
     corps.append('voix', son && voix.parole ? 'oui' : 'non');   // haut-parleur coupe : le PC ne fabrique pas de son pour rien
-    const rep = await api('/api/message', { method: 'POST', body: corps });
+    const rep = await api('/api/message', { method: 'POST', body: corps, signal: arret.signal });
     let j = {};
     try { j = await rep.json(); } catch (x) { j = {}; }
     let t = lisible(j.texte);
@@ -1161,9 +1165,19 @@ async function envoyer(texte, fichier, dit) {
     if (rep.ok) parler(j.audio_ogg_base64, t);
   } catch (x) {
     occupe = false;
-    montrer(undefined, 'Le PC n\'a pas répondu. Vérifie que la fenêtre « Archi » est toujours ouverte.', 'souci');
-    $('p-duree').textContent = '';
+    if (arret.signal.aborted) {
+      // arrete par un clic sur le coeur : la reponse, si elle arrive quand meme, est jetee
+      montrer(undefined, 'D\'accord, j\'arrête.', '');
+      dernier.archi = 'D\'accord, j\'arrête.';
+      planifierEffacement('');
+      $('p-duree').textContent = 'arrêté au bout de ' + Math.round((Date.now() - debut) / 1000) + ' s';
+    } else {
+      montrer(undefined, 'Le PC n\'a pas répondu. Vérifie que la fenêtre « Archi » est toujours ouverte.', 'souci');
+      $('p-duree').textContent = '';
+    }
   } finally {
+    if (arretDemande === arret) arretDemande = null;
+    $('sphere').title = 'La sphère d\'Archi : elle respire, écoute, réfléchit et parle';
     clearInterval(minuteur); occupe = false; $('b-envoi').disabled = false;
     if (dernierEnvoi) dernierEnvoi.fin = Date.now();
     majCarte();
@@ -1521,7 +1535,7 @@ $('b-coulisses').onclick = () => { menu(false); volet('volet-outils'); };
 $('b-chantier').onclick = () => { menu(false); volet('volet-chantier'); };
 $('b-tel-menu').onclick = () => { menu(false); volet('volet-tel'); };
 $('b-atelier').onclick = () => { menu(false); volet('volet-atelier'); };
-$('sphere').onclick = () => { if (lecteur) taire(); else if (!$('b-micro').hidden) ouvrirMicro(); };
+$('sphere').onclick = () => { if (arretDemande) arretDemande.abort(); else if (lecteur) taire(); else if (!$('b-micro').hidden) ouvrirMicro(); };
 $('photo').onchange = () => { const f = $('photo').files[0]; if (f) note('info', 'Photo jointe : ' + f.name + ' (elle reste sur ce PC).'); };
 $('saisie').onsubmit = ev => {
   ev.preventDefault();

@@ -176,9 +176,11 @@ function main() {
     if (/^\s*\[TEXTE\]/i.test(reponse)) {
       sortie += '\n\n⚠️ Vérification automatique : je n\'ai trouvé ni dans mes outils ni dans ton message : ' + liste.join(' ; ') + reste + '. À vérifier avant usage, c\'est peut-être inventé.';
     } else {
-      const dits = liste.filter(a => !/@|\d{4}/.test(a)); // en vocal, pas de mail ni de numero recites
-      const n = alertes.length;
-      sortie += '\n\nÀ vérifier : ' + (dits.length ? dits.slice(0, 3).join(', ') + (dits.length > 1 ? ', je n\'en ai pas la source.' : ', je n\'en ai pas la source.') : (n > 1 ? n + ' coordonnées sans source.' : 'une coordonnée sans source.'));
+      // Reponse dite a voix haute : un nom seul (« Charles de Gaulle ») n'est plus relu en « À vérifier » : c'etait un
+      // doublon penible a ecouter (retour de J, 13/11). Il reste dans « alertes » (journal). Seules les coordonnees
+      // (mail, numero) sans source sont signalees, sans etre recitees.
+      const coords = alertes.filter(a => /@/.test(a) || digits(a).length >= 9).length;   // un numero ecrit par paires espacees n'a pas 4 chiffres colles
+      if (coords) sortie += '\n\nÀ vérifier : ' + (coords > 1 ? coords + ' coordonnées sans source.' : 'une coordonnée sans source.');
     }
   }
   process.stdout.write(JSON.stringify({ reponse: sortie, alertes }));

@@ -197,7 +197,9 @@ function relayer(req, res, r, chemin, corps, entetesEnPlus) {
       rep.pipe(res);
     });
   amont.on('timeout', () => amont.destroy(new Error('delai depasse')));
-  amont.on('error', () => { if (!res.headersSent) json(res, 502, { texte: "Archi ne repond pas : n8n est-il lance ? (fenetre « Archi » sur le PC)" }); else res.end(); });
+  amont.on('error', () => { if (res.destroyed) return; if (!res.headersSent) json(res, 502, { texte: "Archi ne repond pas : n8n est-il lance ? (fenetre « Archi » sur le PC)" }); else res.end(); });
+  // la page a annule (clic sur le coeur pendant la reflexion) : on raccroche aussi cote n8n
+  res.on('close', () => { if (!res.writableFinished) amont.destroy(); });
   amont.end(corps);
 }
 
