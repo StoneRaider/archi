@@ -456,12 +456,14 @@ const FICHIERS_PAGE = {
   '/qrcode.js': ['qrcode.js', 'text/javascript; charset=utf-8'],
   '/sphere.js': ['sphere.js', 'text/javascript; charset=utf-8'],     // la sphere d'Archi, comme sur le telephone
   '/orbe.js': ['orbe.js', 'text/javascript; charset=utf-8'],         // la meme sphere en 3D, sur tout l'ecran (WebGL 2)
+  '/monuments.js': ['monuments.js', 'text/javascript; charset=utf-8'], // les briques de l'allee et les monuments qu'elles forment
   '/ecoute.js': ['ecoute.js', 'text/javascript; charset=utf-8'],     // le micro continu et son mot magique
   '/logo.js': ['logo.js', 'text/javascript; charset=utf-8'],         // le mot Archi s'ecrit avec son logo
   '/curseur.js': ['curseur.js', 'text/javascript; charset=utf-8'],   // la souris d'Archi : une etincelle ou un mini-Archi
   '/decor/lac_base.webp': ['decor/lac_base.webp', 'image/webp'],     // le decor « b » de l'orbe (rendu dans Blender)
   '/decor/lac_lumiere.webp': ['decor/lac_lumiere.webp', 'image/webp'],
   '/decor/lac_profondeur.webp': ['decor/lac_profondeur.webp', 'image/webp'],
+  '/decor/monuments.bin': ['decor/monuments.bin', 'application/octet-stream'],   // les monuments modelises dans Blender, en pierres
   '/polices/fraunces.woff2': ['polices/fraunces.woff2', 'font/woff2'],
   '/polices/fraunces-italique.woff2': ['polices/fraunces-italique.woff2', 'font/woff2'],
   '/polices/nunito.woff2': ['polices/nunito.woff2', 'font/woff2'],

@@ -558,6 +558,7 @@
 
 <script src="/qrcode.js"></script>
 <script src="/sphere.js"></script>
+<script src="/monuments.js"></script>
 <script src="/orbe.js"></script>
 <script src="/ecoute.js"></script>
 <script src="/logo.js"></script>
@@ -633,6 +634,7 @@ const curseur = (() => {
 // ---- la sphere suit ce qui se passe : elle parle, reflechit, ecoute ou respire
 // les couleurs : repos et parle verts, ecoute cyan, reflechit orange, agit violet (un outil travaille), muet rouge (voix coupee)
 let tacheVue = null;   // la derniere carte lue (/api/tache)
+const filSujets = window.ArchiMonuments ? ArchiMonuments.creerFil() : null;   // le sujet en cours (un monument par sujet)
 function humeur() {
   const t = tacheVue && tacheVue.tache, enCours = !!(t && t.en_cours);
   const outil = enCours && t.etapes.some(s => !s.fin && !s.apres);
@@ -1128,6 +1130,8 @@ async function envoyer(texte, fichier, dit) {
   if (!pret) { note('souci', 'Archi finit de démarrer : encore quelques secondes, puis renvoie ton message.'); return; }
   taire();
   occupe = true; $('b-envoi').disabled = true;
+  // un nouveau sujet : l'allee (ou le monument d'avant) se defait en briques et forme un autre monument ; meme sujet : il reste
+  if (filSujets && filSujets.nouveau(texte || '(photo)') && sphere && sphere.nouveauSujet) sphere.nouveauSujet();
   montrer((dit ? '🎙 ' : '') + (texte || '(photo)'), 'Archi réfléchit…', 'attente');
   dernier = { toi: (dit ? '🎙 ' : '') + (texte || '(photo)'), archi: '' };
   humeur();
