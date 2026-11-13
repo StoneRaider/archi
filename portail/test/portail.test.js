@@ -771,8 +771,10 @@ test('orbe 3D : l allee de monolithes vit (glisse, monte, linteau) et ses signes
   const src = fs.readFileSync(path.join(__dirname, '..', 'orbe.js'), 'utf8');
   const page = fs.readFileSync(path.join(__dirname, '..', 'accueil.html'), 'utf8');
   // le shader recoit l'allee, et seulement si elle n'est plus cuite dans l'image
-  for (const u of ['uMono', 'uMonoT', 'uNbMono', 'uPense', 'uCamR', 'uCamP', 'uTan', 'uVersLune', 'uOrbeM']) assert.ok(src.includes('u.' + u + ','), u);
+  for (const u of ['uBriquesOn', 'uEchA', 'uPense', 'uCamR', 'uCamP', 'uTan', 'uVersLune', 'uOrbeM']) assert.ok(src.includes('u.' + u + ','), u);
   assert.ok(src.includes('!sc0.monolithes_dans_image') && src.includes("['uGlyphes', decor.signes || vide]"));
+  // ses briques sont dessinees a part (monuments.js), avec leur reflet, puis posees sur le decor
+  assert.ok(src.includes('ArchiMonuments.creerChantier(decor.allee)') && src.includes("['uBriques', briquesOn ? cibles.briques.tx : vide]"));
   // la page donne la scene de Blender : la camera, la lune, et les 10 monolithes de l'allee
   const i = page.indexOf('scene: {'), sc = page.slice(i, page.indexOf('] } },', i));
   assert.ok(i > 0 && sc.includes('monolithes_dans_image: false') && sc.includes('tan_h: 0.514286'));
@@ -925,3 +927,118 @@ test('atelier : la page montre les propositions du curateur (jamais leur action)
   fs.rmSync(B, { recursive: true, force: true });
 });
 
+
+test('monuments : a chaque nouveau sujet, les briques de l allee forment un monument, puis reviennent', () => {
+  const vm = require('vm'), bac = {};
+  const src = fs.readFileSync(path.join(__dirname, '..', 'orbe.js'), 'utf8');
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'monuments.js'), 'utf8'), bac);
+  vm.runInNewContext(src.slice(src.indexOf('  function creerAllee(liste, alea) {'), src.indexOf('  // ------------------------------------------------------------------ l\'orbe')) + '\nthis.creerAllee = creerAllee;', bac);
+  const A = bac.ArchiMonuments;
+  // dix monuments, chacun tient dans le stock de briques, devant la camera et au-dessus du lac
+  assert.equal(A.NOMS.length, 10);
+  for (const n of A.NOMS) {
+    const l = A.monument(n);
+    assert.ok(l.length > 80 && l.length <= 1800, n + ' : ' + l.length);
+    for (const b of l) assert.ok([b.x, b.y, b.z, b.sx, b.sy, b.sz].every(Number.isFinite) && b.y > 12 && b.z + b.sz / 2 > 0 && b.sx > 0, n);
+  }
+  const liste = [];
+  for (let r = 0; r < 5; r++) for (const c of [-1, 1]) liste.push({ rang: r, cote: c, x: c * 3.7, y: 15 + r * 6, haut: 2 + r * 1.5, l: 0.6, p: 0.45, rot: 0 });
+  let g = 7; const alea = () => { g = (g * 16807) % 2147483647; return g / 2147483647; };
+  const allee = bac.creerAllee(liste, alea), C = A.creerChantier(allee, { alea, total: 1800 });
+  const vivre = (sec, pense) => { for (let k = 0; k < sec * 30; k++) C.avancer(1 / 30, pense || 0); };
+  vivre(2);
+  // au repos, les briques recomposent exactement les monolithes : la plus haute brique touche le sommet du pilier
+  const m0 = allee.M[0], hautes = C.briques.filter(b => b.m === 0).map(b => b.p[2] + b.s[2] / 2);
+  assert.ok(Math.abs(Math.max(...hautes) - m0.h) < 1e-6);
+  // un nouveau sujet : elles se soulevent, tournoient, puis le monument est en place, chaque brique a sa place
+  const nom = C.nouveauSujet();
+  assert.ok(A.NOMS.includes(nom) && C.etat() === 'vol');
+  vivre(1.5);
+  assert.ok(C.briques.some(b => b.m >= 0 && b.vol && b.p[2] > b.vol.S.p[2] + 0.5), 'elles s elevent');
+  vivre(14);
+  assert.equal(C.etat(), 'monument');
+  const cibles = A.monument(nom), poses = C.briques.filter(b => b.place && b.place.p[2] > -1);
+  assert.equal(poses.length, cibles.length);
+  for (const b of poses) assert.ok(Math.hypot(b.p[0] - b.place.p[0], b.p[1] - b.place.p[1], b.p[2] - b.place.p[2]) < 1e-6);
+  // tant que le sujet reste, le monument reste ; il pense : ses signes s'allument ; un autre sujet : un autre monument
+  vivre(20, 1);
+  assert.equal(C.etat(), 'monument');
+  assert.ok(C.briques.some(b => b.lueur > 0.9));
+  const autre = C.nouveauSujet();
+  assert.notEqual(autre, nom);
+  vivre(16);
+  assert.equal(C.etat(), 'monument');
+  // les donnees du shader : 28 nombres par brique, tous finis
+  const { n, donnees } = C.ecrire();
+  assert.ok(n >= 1800 && donnees.subarray(0, n * 28).every(Number.isFinite));
+  // retour a l'allee : chaque brique de monolithe retrouve sa place
+  C.retour(); vivre(16);
+  assert.equal(C.etat(), 'allee');
+  assert.ok(Math.abs(Math.max(...C.briques.filter(b => b.m === 0).map(b => b.p[2] + b.s[2] / 2)) - allee.M[0].h) < 1e-6);
+  // le fil des sujets : une relance reste dans le sujet, un autre sujet en ouvre un nouveau, un long silence aussi
+  const fil = A.creerFil(); let t = 0;
+  assert.equal(fil.nouveau('Que sais-tu sur moi ?', t), true);
+  assert.equal(fil.nouveau('Rappelle-moi dans 2 minutes de boire un verre d eau', t += 60e3), true);
+  assert.equal(fil.nouveau('oui', t += 60e3), false);
+  assert.equal(fil.nouveau('Fais-moi un PDF qui résume la serre', t += 60e3), true);
+  assert.equal(fil.nouveau('Ajoute la température de la serre', t += 60e3), false);
+  assert.equal(fil.nouveau('Et pour demain ?', t += 60e3), false);
+  assert.equal(fil.nouveau('Quel temps fera-t-il à Lyon samedi ?', t += 60e3), true);
+  assert.equal(fil.nouveau('Et à Lyon dimanche ?', t += 20 * 60e3), true);
+  // la page : le script est servi, et chaque message passe par le fil des sujets
+  const page = fs.readFileSync(path.join(__dirname, '..', 'accueil.html'), 'utf8'), portail = fs.readFileSync(path.join(__dirname, '..', 'portail.js'), 'utf8');
+  assert.ok(page.includes('<script src="/monuments.js"></script>\n<script src="/orbe.js"></script>'));
+  assert.ok(portail.includes("'/monuments.js': ['monuments.js', 'text/javascript; charset=utf-8']"));
+  assert.ok(page.includes("if (filSujets && filSujets.nouveau(texte || '(photo)') && sphere && sphere.nouveauSujet) sphere.nouveauSujet();"));
+});
+
+test('monuments modelises dans Blender : chaque brique prend la forme de sa pierre a l arrivee, puis la rend', () => {
+  const vm = require('vm'), bac = {};
+  const src = fs.readFileSync(path.join(__dirname, '..', 'orbe.js'), 'utf8');
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'monuments.js'), 'utf8'), bac);
+  const debutOrbe = src.indexOf("  // ------------------------------------------------------------------ l'orbe");
+  vm.runInNewContext(src.slice(src.indexOf('  function creerAllee(liste, alea) {'), debutOrbe) + ';this.creerAllee = creerAllee;', bac);
+  const A = bac.ArchiMonuments;
+  // le fichier des formes : les dix monuments, des pierres finies, devant la camera, et leurs rayons
+  const bin = fs.readFileSync(path.join(__dirname, '..', 'decor', 'monuments.bin'));
+  assert.equal(A.lireFormes(bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.length)), 10);
+  for (const nom of A.NOMS) {
+    const l = A.monument(nom), f = l.formes;
+    assert.ok(f && f.ng === 6 && f.K === 6 * 49 && f.N === l.length && f.r.length === f.N * f.K, nom);
+    assert.ok(l.length >= 40 && l.length <= 1800, nom + ' : ' + l.length);
+    for (const b of l) assert.ok([b.x, b.y, b.z, b.sx, b.sy, b.sz, b.rot].every(Number.isFinite) && b.y > 12 && b.sx > 0 && b.sz > 0, nom);
+  }
+  const liste = [];
+  for (let r = 0; r < 5; r++) for (const c of [-1, 1]) liste.push({ rang: r, cote: c, x: c * 3.7, y: 15 + r * 6, haut: 2 + r * 1.5, l: 0.6, p: 0.45, rot: 0 });
+  let g = 11; const alea = () => { g = (g * 16807) % 2147483647; return g / 2147483647; };
+  const C = A.creerChantier(bac.creerAllee(liste, alea), { alea, total: 1800, formes: false });
+  const vivre = s => { for (let k = 0; k < s * 30; k++) C.avancer(1 / 30, 0); };
+  vivre(1);
+  assert.equal(C.ecrire().grille, 0, 'l allee : de simples cubes');
+  C.former('sacsayhuaman');
+  const f1 = C.prendreForme();
+  assert.ok(f1 && f1.K === 294 && f1.N === A.monument('sacsayhuaman').length && C.prendreForme() === null, 'la forme part une seule fois');
+  vivre(3);
+  assert.ok(C.briques.every(b => b.g === 0), 'en vol, ce sont encore des cubes');
+  vivre(16);
+  assert.equal(C.etat(), 'monument');
+  const poses = C.briques.filter(b => b.place && b.place.morph);
+  assert.equal(poses.length, f1.N);
+  assert.ok(poses.every(b => b.g === 1 && b.rang_f >= f1.couche * C.N && b.rang_f < f1.couche * C.N + f1.N));
+  const e = C.ecrire();
+  assert.equal(e.grille, 6);
+  assert.ok(e.donnees.subarray(0, e.n * 28).every(Number.isFinite));
+  // le suivant s ecrit dans l autre etage : celui qui se defait garde sa forme pendant qu il decolle
+  C.former('pyramide');
+  const f2 = C.prendreForme();
+  assert.equal(f2.couche, 1 - f1.couche);
+  vivre(0.3);
+  assert.ok(poses.some(b => b.g > 0.5 && b.rang_f < f1.couche * C.N + f1.N && b.rang_f >= f1.couche * C.N));
+  vivre(19);
+  C.retour(); vivre(18);
+  assert.equal(C.etat(), 'allee');
+  assert.ok(C.briques.every(b => b.g === 0) && C.ecrire().grille === 0);
+  // le portail sert le fichier, au PC seulement (comme le decor)
+  assert.ok(fs.readFileSync(path.join(__dirname, '..', 'portail.js'), 'utf8').includes("'/decor/monuments.bin': ['decor/monuments.bin', 'application/octet-stream']"));
+  assert.ok(src.includes('texelFetch(uForme') && src.includes('gl.R8'));
+});

@@ -39,7 +39,7 @@ uniform float uDecor, uLumOrbe, uExpoBase; uniform sampler2D uBase, uLum, uProf;
 uniform sampler2D uHist; uniform float uMemo, uEcart, uTour, uRotC;
 uniform vec4 uDoigt, uSourisP, uSourisV; uniform vec2 uRegard;
 uniform sampler2D uGlyphes; uniform vec3 uCamP, uVersLune, uOrbeM; uniform mat3 uCamR; uniform vec2 uTan;
-uniform vec4 uMono[16]; uniform vec4 uMonoT[16]; uniform int uNbMono; uniform float uPense;
+uniform sampler2D uBriques, uReflet; uniform float uBriquesOn, uEchA, uPense;
 const float CAM = ${CAM.toFixed(2)};
 float n3(vec3 p){ return texture(uBruit, p).r; }
 float fbm(vec3 p){ return 0.5*n3(p) + 0.25*n3(p*2.03+vec3(0.31,0.17,0.53)) + 0.125*n3(p*4.07+vec3(0.67,0.41,0.13)); }
@@ -82,85 +82,24 @@ vec3 image(vec2 px){
   float bande = exp(-pow((uv.y - 0.40)/0.12, 2.0));
   float brume = smoothstep(0.3, 0.9, z) * smoothstep(0.38, 0.8, f) * bande;
   c += mix(vec3(0.030, 0.036, 0.040), uTeinteLum*0.04, 0.35) * brume;
-  return uNbMono > 0 ? allee(uv0, c) : c;
+  return uBriquesOn > 0.5 ? allee(uv0, c) : c;
 }
 
-// ---- l'allee de monolithes (decor B) : dessinee ici et non plus dans l'image, pour qu'elle vive (orbe.js la fait bouger).
-// Meme monde et meme camera que le rendu Blender (z en haut, l'allee file vers +y) ; chaque monolithe est une boite tournee
-// autour de z, son pied sous l'eau. Le lac les reflete ; la brume de l'image les avale au loin.
-float boite(vec3 ro, vec3 rd, vec4 c, vec3 s, out vec3 n, out vec3 lp){
-  float cr = cos(c.w), sr = sin(c.w);
-  vec3 o = ro - c.xyz;
-  o.xy = vec2(cr*o.x + sr*o.y, -sr*o.x + cr*o.y);
-  vec3 d = vec3(cr*rd.x + sr*rd.y, -sr*rd.x + cr*rd.y, rd.z);
-  d += vec3(equal(d, vec3(0.0)))*1e-6;
-  vec3 h = s*0.5, t1 = (-h - o)/d, t2 = (h - o)/d, tn = min(t1, t2), tf = max(t1, t2);
-  float a = max(max(tn.x, tn.y), tn.z), b = min(min(tf.x, tf.y), tf.z);
-  if (a < 0.0 || b < a) return -1.0;
-  vec3 nl = -sign(d)*step(vec3(a), tn);
-  n = vec3(cr*nl.x - sr*nl.y, sr*nl.x + cr*nl.y, nl.z);
-  lp = o + d*a;
-  return a;
-}
-float toucherAllee(vec3 ro, vec3 rd, out vec3 n, out vec3 lp, out int id){
-  float best = 1e9; id = -1;
-  for (int i = 0; i < 16; i++) {
-    if (i >= uNbMono) break;
-    vec3 nn, ll; float t = boite(ro, rd, uMono[i], uMonoT[i].xyz, nn, ll);
-    if (t > 0.0 && t < best) { best = t; n = nn; lp = ll; id = i; }
-  }
-  return id < 0 ? -1.0 : best;
-}
-// les ecritures : une colonne de signes graves sur les deux grandes faces ; ils s'allument, en vague qui monte, quand il reflechit
-float signes(vec3 lp, int i, out float vague){
-  vague = 0.0;
-  vec4 c = uMono[i], s = uMonoT[i];
-  if (s.w < 0.0 || abs(abs(lp.y) - s.y*0.5) > 0.02) return 0.0;
-  float larg = s.x*0.62, pas = larg*1.08, u = lp.x/larg + 0.5, zw = lp.z + c.z, haut = c.z + s.z*0.5;
-  float r = (zw - 0.55)/pas;
-  if (u < 0.0 || u > 1.0 || r < 0.0 || zw > haut - 0.3) return 0.0;
-  float rang = floor(r), fi = float(i);
-  if (h12(vec2(rang*1.37 + 0.5, fi*3.1 + 0.7)) < 0.16) return 0.0;          // un blanc de temps en temps : le texte respire
-  float k = floor(h12(vec2(fi*7.13 + 1.0, rang*3.71 + 2.0))*64.0);
-  vec2 g = vec2(u, 1.0 - fract(r))*0.86 + 0.07;
-  float m = textureLod(uGlyphes, (vec2(mod(k, 8.0), floor(k/8.0)) + g)/8.0, clamp(log2(0.02*max(1.0, abs(lp.y))), 0.0, 3.0)).r;
-  float onde = 0.5 + 0.5*sin(uT*(1.2 + 1.2*uPense) - rang*0.62 + fi*2.3);
-  vague = s.w*smoothstep(0.25, 0.95, onde)*(0.75 + 0.25*sin(uT*7.0 + rang*5.1 + fi));
-  return m;
-}
-vec3 pierre(vec3 p, vec3 n, vec3 lp, int i){
-  vec3 base = vec3(0.035, 0.038, 0.042);
-  float lune = max(dot(n, uVersLune), 0.0);
-  vec3 col = base*vec3(0.72, 0.82, 1.0)*(0.05 + 0.75*lune);
-  // les aretes verticales attrapent un fil de lune (le biseau des monolithes)
-  vec3 s = uMonoT[i].xyz;
-  float arete = smoothstep(s.x*0.5 - 0.035, s.x*0.5, abs(lp.x))*(1.0 - abs(n.z));
-  col += vec3(0.55, 0.64, 0.78)*0.035*arete*(0.3 + lune);
-  col *= uExpoBase;                                                     // la meme exposition que l'image
-  // la lumiere de l'orbe, a la couleur d'Archi
-  vec3 L = uOrbeM - p; float d2 = dot(L, L);
-  col += base*uTeinteLum*uLumOrbe*max(dot(n, L*inversesqrt(d2)), 0.0)*20.0/d2;
-  float v, m = signes(lp, i, v);
-  col *= 1.0 - 0.2*m;                                                   // graves : un peu plus sombres, eteints
-  col += mix(uMenthe, uTeinte, 0.4)*m*v*2.6;
-  return col;
-}
+// ---- l'allee (decor B) : ses briques sont dessinees a part (monuments.js les fait vivre, passes « briques » et « reflet »
+// plus bas) ; ici on les pose sur le decor, avalees par la brume au loin, et leur reflet tremble dans le lac.
+float brumeA(float a){ return 1.0 - exp(-max(a - 6.0, 0.0)*0.024); }
 vec3 allee(vec2 uv, vec3 fondc){
-  // un soupcon de tremblement d'une image a l'autre : l'historique lisse les bords
-  uv += (vec2(h12(vec2(uFrame, 1.3)), h12(vec2(uFrame, 7.1))) - 0.5)*uPlaque.zw;
-  vec3 ro = uCamP + vec3(uSouris.x, 0.0, uSouris.y)*0.16;              // la meme parallaxe que l'image
+  vec2 st = gl_FragCoord.xy/uRes;
+  vec4 b = texture(uBriques, st);
+  if (b.a > 0.0) return mix(b.rgb, fondc, brumeA(b.a/uEchA));
+  vec3 ro = uCamP + vec3(uSouris.x, 0.0, uSouris.y)*0.16;
   vec3 rd = normalize(uCamR*vec3((uv.x*2.0 - 1.0)*uTan.x, (uv.y*2.0 - 1.0)*uTan.y, -1.0));
-  vec3 n, lp; int id;
-  float t = toucherAllee(ro, rd, n, lp, id), tw = rd.z < 0.0 ? -ro.z/rd.z : 1e9;
-  if (t > 0.0 && t < tw) return mix(pierre(ro + rd*t, n, lp, id), fondc, 1.0 - exp(-max(t - 6.0, 0.0)*0.024));
-  if (tw < 1e8) {
-    // le reflet dans le lac, un peu trouble
-    vec3 pw = ro + rd*tw, rr = vec3(rd.xy, -rd.z);
+  if (rd.z < 0.0) {
+    vec3 pw = ro + rd*(-ro.z/rd.z);
     vec2 q = pw.xy*vec2(0.55, 0.16);
-    rr.xy += (vec2(n3(vec3(q, uT*0.04)), n3(vec3(q + 7.3, uT*0.04))) - 0.5)*0.03;
-    rr = normalize(rr);
-    float t2 = toucherAllee(pw, rr, n, lp, id);
-    if (t2 > 0.0) return mix(fondc, mix(pierre(pw + rr*t2, n, lp, id), fondc, 1.0 - exp(-max(tw + t2 - 6.0, 0.0)*0.024)), 0.6);
+    vec2 ond = (vec2(n3(vec3(q, uT*0.04)), n3(vec3(q + 7.3, uT*0.04))) - 0.5)*vec2(0.028, 0.012);
+    vec4 r = texture(uReflet, st + ond);
+    if (r.a > 0.0) return mix(fondc, mix(r.rgb, fondc, brumeA(r.a/uEchA)), 0.6);
   }
   return fondc;
 }
@@ -446,6 +385,122 @@ void main(){
   o = vec4(c*uFondu, 1.0);
 }`;
 
+  // ---- les briques de l'allee et des monuments : un cube par brique ; la meme camera que Blender (et que le decor),
+  // le meme tremblement d'une image a l'autre. Sortie : la couleur de la pierre, et sa distance (pour la brume).
+  // uMiroir = 1 : la passe du reflet (tout est retourne sous le lac).
+  const COMMUN_BRIQUES = `
+float h12(vec2 p){ vec3 q = fract(vec3(p.xyx)*0.1031); q += dot(q, q.yzx+33.33); return fract((q.x+q.y)*q.z); }
+vec3 qrot(vec4 q, vec3 v){ return v + 2.0*cross(q.xyz, cross(q.xyz, v) + q.w*v); }`;
+  const VS_BRIQUES = `#version 300 es
+layout(location=0) in vec4 aPos; layout(location=1) in vec4 aQuat; layout(location=2) in vec4 aTaille;
+layout(location=3) in vec4 aGly; layout(location=4) in vec4 aGly2; layout(location=5) in vec4 aNorm; layout(location=6) in vec4 aForme;
+uniform vec3 uCamP; uniform mat3 uCamR; uniform vec2 uTan, uRes, uSouris; uniform vec4 uPlaque; uniform float uMiroir, uFrame;
+uniform int uN; uniform sampler2D uForme;
+out vec3 vMonde, vLocal, vNl; flat out vec4 vPos, vQuat, vTaille, vGly, vGly2, vNorm, vForme; flat out int vFace;
+const vec3 C[8] = vec3[8](vec3(-0.5,-0.5,-0.5), vec3(0.5,-0.5,-0.5), vec3(0.5,0.5,-0.5), vec3(-0.5,0.5,-0.5),
+                          vec3(-0.5,-0.5,0.5), vec3(0.5,-0.5,0.5), vec3(0.5,0.5,0.5), vec3(-0.5,0.5,0.5));
+const int I[36] = int[36](0,1,5, 0,5,4, 1,2,6, 1,6,5, 2,3,7, 2,7,6, 3,0,4, 3,4,7, 4,5,6, 4,6,7, 3,2,1, 3,1,0);
+const vec3 FN[6] = vec3[6](vec3(0.0,-1.0,0.0), vec3(1.0,0.0,0.0), vec3(0.0,1.0,0.0), vec3(-1.0,0.0,0.0), vec3(0.0,0.0,1.0), vec3(0.0,0.0,-1.0));
+const vec3 FU[6] = vec3[6](vec3(1.0,0.0,0.0), vec3(0.0,1.0,0.0), vec3(-1.0,0.0,0.0), vec3(0.0,-1.0,0.0), vec3(1.0,0.0,0.0), vec3(1.0,0.0,0.0));
+const vec3 FV[6] = vec3[6](vec3(0.0,0.0,1.0), vec3(0.0,0.0,1.0), vec3(0.0,0.0,1.0), vec3(0.0,0.0,1.0), vec3(0.0,1.0,0.0), vec3(0.0,-1.0,0.0));
+${COMMUN_BRIQUES}
+// la grille posee sur le cube (uN x uN carreaux par face) et la forme de la pierre : un rayon par point (texture, une ligne par pierre)
+vec3 pt(int f, int i, int j){ float n = float(uN); return 0.5*FN[f] + (float(i)/n - 0.5)*FU[f] + (float(j)/n - 0.5)*FV[f]; }
+vec3 surf(int f, int i, int j, int ligne, float g){
+  float r = texelFetch(uForme, ivec2(f*(uN + 1)*(uN + 1) + j*(uN + 1) + i, ligne), 0).r;
+  return pt(f, i, j)*aTaille.xyz*mix(1.0, r, g);
+}
+void main(){
+  vec3 cub, loc, nl; int face;
+  float g = aForme.y; int ligne = int(aForme.x + 0.5);
+  if (uN == 0) { cub = C[I[gl_VertexID]]; face = gl_VertexID/6; loc = cub*aTaille.xyz; nl = FN[face]; }
+  else {
+    int per = uN*uN*6, k = gl_VertexID - (gl_VertexID/per)*per, q = k/6, c = k - q*6;
+    face = gl_VertexID/per;
+    int i = q - (q/uN)*uN + ((c == 1 || c == 2 || c == 4) ? 1 : 0), j = q/uN + ((c == 2 || c == 4 || c == 5) ? 1 : 0);
+    cub = pt(face, i, j); loc = cub*aTaille.xyz; nl = FN[face];
+    if (g > 0.001) {
+      loc = surf(face, i, j, ligne, g);
+      vec3 du = surf(face, min(i + 1, uN), j, ligne, g) - surf(face, max(i - 1, 0), j, ligne, g);
+      vec3 dv = surf(face, i, min(j + 1, uN), ligne, g) - surf(face, i, max(j - 1, 0), ligne, g);
+      vec3 cr = cross(du, dv);
+      if (dot(cr, cr) > 1e-14) nl = normalize(cr);
+    }
+  }
+  vec3 w = aPos.xyz + qrot(aQuat, loc);
+  if (uMiroir > 0.5) w.z = -w.z;
+  vMonde = w; vLocal = cub*aTaille.xyz; vNl = nl; vPos = aPos; vQuat = aQuat; vTaille = aTaille; vGly = aGly; vGly2 = aGly2; vNorm = aNorm;
+  vForme = aForme; vFace = face;
+  vec3 ro = uCamP + vec3(uSouris.x, 0.0, uSouris.y)*0.16;
+  vec3 d = transpose(uCamR)*(w - ro);
+  float zc = -d.z;
+  vec2 jit = (vec2(h12(vec2(uFrame, 1.3)), h12(vec2(uFrame, 7.1))) - 0.5)*uPlaque.zw;
+  vec2 pz = ((0.5 - jit)*zc + 0.5*d.xy/uTan)/uPlaque.zw + uPlaque.xy*zc;      // (pixel du tampon) x zc
+  const float N = 0.1, F = 3000.0;
+  gl_Position = vec4(pz/uRes*2.0 - zc, (zc*(F + N) - 2.0*F*N)/(F - N), zc);
+}`;
+  const FS_BRIQUES = `#version 300 es
+precision highp float;
+in vec3 vMonde, vLocal, vNl; flat in vec4 vPos, vQuat, vTaille, vGly, vGly2, vNorm, vForme; flat in int vFace;
+uniform vec3 uCamP, uVersLune, uOrbeM, uTeinteLum, uMenthe, uTeinte; uniform vec2 uSouris;
+uniform float uMiroir, uExpoBase, uLumOrbe, uT, uPense, uEchA;
+uniform sampler2D uGlyphes;
+out vec4 sortie;
+${COMMUN_BRIQUES}
+void main(){
+  vec3 p = vMonde; if (uMiroir > 0.5) p.z = -p.z;          // la vraie place (le reflet est dessine retourne)
+  if (p.z < 0.0) discard;                                    // sous l'eau : le lac la cache
+  vec3 n = normalize(qrot(vQuat, vNl));
+  n = normalize(mix(n, vNorm.xyz, 0.8*vNorm.w));                // une statue : la lumiere suit sa forme
+  float mon = clamp((1.0 - vTaille.w)*1.8, 0.0, 1.0);          // une brique de monument (moins de brume) : un peu plus claire
+  vec3 base = vec3(0.035, 0.038, 0.042)*(1.0 + 1.8*mon);
+  base *= mix(1.0, 0.6 + 0.8*vForme.z, vForme.y);      // chaque pierre taillee a son ton (une statue d'un bloc : un seul)
+  float lune = max(dot(n, uVersLune), 0.0);
+  vec3 col = base*vec3(0.72, 0.82, 1.0)*(0.05 + 0.75*lune);
+  // les aretes du monolithe d'origine attrapent un fil de lune ; une brique detachee montre aussi les siennes
+  vec3 u3 = clamp(vLocal/vTaille.xyz + 0.5, 0.0, 1.0);
+  float U = mix(vGly.x, vGly.y, u3.x), eU = 0.035*max(vGly.y - vGly.x, 0.05)/vTaille.x;
+  float arete = max(smoothstep(1.0 - eU, 1.0, U), smoothstep(eU, 0.0, U))*(1.0 - abs(n.z));
+  vec3 ab = abs(vLocal)/(vTaille.xyz*0.5);
+  float mx = max(ab.x, max(ab.y, ab.z)), mn = min(ab.x, min(ab.y, ab.z)), mid = ab.x + ab.y + ab.z - mx - mn;
+  float bord = smoothstep(0.9, 1.0, mid)*vGly2.w*(1.0 - vForme.y);
+  col += vec3(0.55, 0.64, 0.78)*0.035*max(arete, bord)*(0.3 + lune);
+  col *= (1.0 - 0.35*bord*(1.0 - lune))*uExpoBase;
+  vec3 L = uOrbeM - p; float d2 = dot(L, L);
+  col += base*uTeinteLum*uLumOrbe*max(dot(n, L*inversesqrt(d2)), 0.0)*20.0/d2;
+  // la lune est derriere : un monument est eclaire de face par l'orbe (a sa couleur), assez pour lire sa forme
+  col += base*uTeinteLum*uLumOrbe*mon*(0.1 + 0.5*max(dot(n, L*inversesqrt(d2)), 0.0))*0.9;
+  // et une lumiere rasante, d'en haut a gauche : elle donne le relief (epaules, tete, pattes, degres)
+  col += base*mon*vec3(0.85, 0.95, 1.1)*1.5*pow(max(dot(n, normalize(vec3(-0.55, -0.45, 0.7))), 0.0), 1.5);
+  vec3 ton = mix(uMenthe, uTeinte, 0.4);
+  // les signes graves : chaque brique garde son morceau d'inscription, meme en vol
+  float m = 0.0, v = 0.0;
+  vec2 gx = dFdx(u3.xz), gy = dFdy(u3.xz);   // hors du si : les derivees doivent etre calculees partout
+  if ((vFace == 0 || vFace == 2) && vGly2.z > 0.5 && vGly2.z < 1.5) {
+    float R = mix(vGly.z, vGly.w, u3.z);
+    if (U > 0.19 && U < 0.81 && R >= 0.0 && R < vGly2.y) {
+      float rang = floor(R), fi = vGly2.x;
+      if (h12(vec2(rang*1.37 + 0.5, fi*3.1 + 0.7)) >= 0.16) {
+        float k = floor(h12(vec2(fi*7.13 + 1.0, rang*3.71 + 2.0))*64.0);
+        vec2 g = vec2((U - 0.19)/0.62, 1.0 - fract(R))*0.86 + 0.07;
+        vec2 cu = vec2((vGly.y - vGly.x)/0.62, -(vGly.w - vGly.z))*0.86/8.0;
+        m = textureGrad(uGlyphes, (vec2(mod(k, 8.0), floor(k/8.0)) + g)/8.0, gx*cu, gy*cu).r;
+        float onde = 0.5 + 0.5*sin(uT*(1.2 + 1.2*uPense) - rang*0.62 + fi*2.3);
+        v = vPos.w*smoothstep(0.25, 0.95, onde)*(0.75 + 0.25*sin(uT*7.0 + rang*5.1 + fi));
+      }
+    }
+  }
+  col *= 1.0 - 0.2*m;
+  col += ton*m*max(v, 0.015*mon)*2.6;                         // un monument garde ses signes a peine allumes
+  if (vGly2.z > 1.5) col += ton*0.22*(0.75 + 0.25*sin(uT*2.0));          // la pierre qui brille (le pyramidion...)
+  // le champ qui les porte : un liseré de lumiere sur les briques qui volent
+  vec3 ro = uCamP + vec3(uSouris.x, 0.0, uSouris.y)*0.16, vd = normalize(vMonde - ro);
+  vec3 nr = uMiroir > 0.5 ? vec3(n.xy, -n.z) : n;
+  col += ton*0.06*vGly2.w*pow(1.0 - abs(dot(nr, vd)), 3.0)*(0.4 + vPos.w);
+  float t = length(vMonde - ro);
+  sortie = vec4(col, (6.0 + max(t - 6.0, 0.0)*vTaille.w)*uEchA);
+}`;
+
   // ------------------------------------------------------------------ outils WebGL
   function programme(gl, vs, fs) {
     const p = gl.createProgram();
@@ -570,7 +625,7 @@ void main(){
   // tout s'accelere et les signes s'allument ; au repos, un monolithe s'eclaire parfois tout seul, a peine.
   function creerAllee(liste, alea) {
     const M = liste.slice(0, 14).map(m => ({ rang: m.rang, cote: m.cote, x0: m.x, h0: m.haut, y: m.y, l: m.l, p: m.p, rot: m.rot,
-      x: m.x, h: m.haut, vx: 0, vh: 0, cx: m.x, ch: m.haut, lueur: 0, allume: false, retard: 0, porte: false }));
+      x: m.x, h: m.haut, h0: m.haut, vx: 0, vh: 0, cx: m.x, ch: m.haut, lueur: 0, allume: false, retard: 0, porte: false }));
     const lin = { actif: false, a: null, b: null, z: 0, vz: 0, cz: 0, etape: '', jusqua: 0 };
     let prochain = 5 + alea() * 5, souffle = 25 + alea() * 20, t = 0, pensait = false, depuis = 0;
     const libres = () => M.filter(m => !m.porte);
@@ -598,12 +653,13 @@ void main(){
       }
     }
     const ressort = (m, k, v, c, dt) => { const a = (c - m[k]) * 1.1 - m[v] * 2.1; m[v] += a * dt; m[k] += m[v] * dt; };
-    function avancer(dt, pense) {
+    // suspendu : les briques de l'allee sont parties former un monument ; plus d'evenement tant qu'elles n'y sont pas
+    function avancer(dt, pense, suspendu) {
       t += dt;
-      prochain -= dt * (1 + 2.2 * pense);
+      if (!suspendu) prochain -= dt * (1 + 2.2 * pense);
       if (prochain <= 0) { evenement(pense > 0.5); prochain = 7 + alea() * 8; }
       // le souffle : au repos, de loin en loin, un monolithe s'eclaire tout seul quelques secondes
-      souffle -= dt;
+      if (!suspendu) souffle -= dt;
       if (souffle <= 0) { const m = M[Math.floor(alea() * M.length)]; if (m && !pensait) m.lueur = Math.max(m.lueur, 0.45); souffle = 30 + alea() * 30; }
       // quand il se met a reflechir : une partie des monolithes s'allume, en vague, du plus proche au plus loin ;
       // quand il a fini, ils s'eteignent doucement
@@ -638,7 +694,9 @@ void main(){
       }
       return { n, pos, tai };
     }
-    return { avancer, boites, lin, M, evenement };
+    // le linteau s'en va (ses piliers partent en briques)
+    function congedier() { if (lin.actif && lin.etape !== 'part') { lin.etape = 'part'; lin.cz = lin.z + 11; lin.jusqua = t + 6; } }
+    return { avancer, boites, lin, M, evenement, congedier };
   }
 
   // ------------------------------------------------------------------ l'orbe
@@ -653,7 +711,7 @@ void main(){
     let P;
     try {
       P = { scene: programme(gl, VS_ECRAN, FS_SCENE), points: programme(gl, VS_POINTS, FS_POINTS), clair: programme(gl, VS_ECRAN, FS_CLAIR),
-        flou: programme(gl, VS_ECRAN, FS_FLOU), final: programme(gl, VS_ECRAN, FS_FINAL) };
+        flou: programme(gl, VS_ECRAN, FS_FLOU), final: programme(gl, VS_ECRAN, FS_FINAL), briques: programme(gl, VS_BRIQUES, FS_BRIQUES) };
     } catch (e) {
       if (racine.console) console.warn('orbe : WebGL 2 present mais les programmes ne compilent pas', e);
       return null;
@@ -724,10 +782,20 @@ void main(){
     if (racine.document) racine.document.documentElement.addEventListener('mouseleave', () => { sourisLa = false; });
 
     // --- le decor image (variante B)
-    const decor = { pret: false, base: vide, lum: vide, prof: vide, meta: null, scene: null, allee: null, signes: null };
+    const decor = { pret: false, base: vide, lum: vide, prof: vide, meta: null, scene: null, allee: null, signes: null, chantier: null };
     const sc0 = o.decor && o.decor.scene;
     if (sc0 && !sc0.monolithes_dans_image && Array.isArray(sc0.monolithes) && sc0.monolithes.length) {
       try { decor.allee = creerAllee(sc0.monolithes, Math.random); decor.signes = texSignes(gl) || vide; decor.scene = sc0; } catch (e) { decor.allee = null; }
+      // les briques (monuments.js) : l'allee se defait en briques qui forment un monument a chaque nouveau sujet
+      try { if (decor.allee && racine.ArchiMonuments) decor.chantier = racine.ArchiMonuments.creerChantier(decor.allee); } catch (e) { decor.chantier = null; }
+    }
+    let vaoB = null, tamponB = null, texForme = null, texFormeK = 0;
+    if (decor.chantier) {
+      vaoB = gl.createVertexArray(); tamponB = gl.createBuffer();
+      gl.bindVertexArray(vaoB); gl.bindBuffer(gl.ARRAY_BUFFER, tamponB);
+      gl.bufferData(gl.ARRAY_BUFFER, (decor.chantier.N + 1) * 112, gl.DYNAMIC_DRAW);
+      for (let i = 0; i < 7; i++) { gl.enableVertexAttribArray(i); gl.vertexAttribPointer(i, 4, gl.FLOAT, false, 112, i * 16); gl.vertexAttribDivisor(i, 1); }
+      gl.bindVertexArray(null);
     }
     if (o.decor) {
       const charger = src => new Promise((ok, ko) => { const im = new Image(); im.onload = () => ok(im); im.onerror = ko; im.src = src; });
@@ -755,9 +823,17 @@ void main(){
       const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       if (!ok && flottant) { gl.deleteTexture(tx); gl.deleteFramebuffer(f); return cibleRendu(w, h, false); }
-      return { tx, f, w, h };
+      return { tx, f, w, h, fl: !!flottant };
     }
-    function liberer() { if (!cibles) return; for (const c of Object.values(cibles)) { gl.deleteTexture(c.tx); gl.deleteFramebuffer(c.f); } cibles = null; }
+    // une cible avec sa profondeur (les briques se cachent les unes les autres)
+    function cibleProf(w, h) {
+      const c = cibleRendu(w, h, hdr), rb = gl.createRenderbuffer();
+      gl.bindRenderbuffer(gl.RENDERBUFFER, rb); gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, w, h);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, c.f); gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      c.rb = rb; return c;
+    }
+    function liberer() { if (!cibles) return; for (const c of Object.values(cibles)) { gl.deleteTexture(c.tx); gl.deleteFramebuffer(c.f); if (c.rb) gl.deleteRenderbuffer(c.rb); } cibles = null; }
     function mesurer() {
       const d = Math.min(1.5, racine.devicePixelRatio || 1) * qualite;
       const w = Math.max(16, Math.round(racine.innerWidth * d)), h = Math.max(16, Math.round(racine.innerHeight * d));
@@ -766,6 +842,7 @@ void main(){
       liberer(); histoire = false;
       const q = (k) => [Math.max(1, Math.round(W / k)), Math.max(1, Math.round(H / k))];
       cibles = { h0: cibleRendu(W, H, hdr), h1: cibleRendu(W, H, hdr), scene: cibleRendu(W, H, hdr), a1: cibleRendu(...q(4), hdr), b1: cibleRendu(...q(4), hdr), a2: cibleRendu(...q(16), hdr), b2: cibleRendu(...q(16), hdr) };
+      if (decor.chantier) { cibles.briques = cibleProf(W, H); cibles.reflet = cibleProf(...q(2)); }   // le reflet, flou dans l'eau : demi-definition
     }
 
     function passe(prog, cibleR, textures, uniformes) {
@@ -998,6 +1075,45 @@ void main(){
       regard[1] += ((sourisLa ? sourisL[1] * 0.4 : 0) - regard[1]) * k * 0.5;
     }
 
+    // les briques : la passe de face, puis la passe du reflet (retournee sous le lac), avec leur profondeur
+    function dessinerBriques(plaque, sim, lumOrbe, teinteLum, echA) {
+      const ch = decor.chantier, { n, donnees, grille } = ch.ecrire(), sc = decor.scene, pr = P.briques, u = pr.u;
+      gl.bindBuffer(gl.ARRAY_BUFFER, tamponB); gl.bufferSubData(gl.ARRAY_BUFFER, 0, donnees, 0, n * 28);
+      // la forme des pierres du monument qui arrive : une ligne de texture par pierre, dans l'etage libre
+      const nf = ch.prendreForme ? ch.prendreForme() : null;
+      if (nf) {
+        if (!texForme || texFormeK !== nf.K) {
+          if (!texForme) texForme = gl.createTexture();
+          gl.bindTexture(gl.TEXTURE_2D, texForme);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, nf.K, 2 * ch.N, 0, gl.RED, gl.UNSIGNED_BYTE, null);
+          for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+          texFormeK = nf.K;
+        }
+        gl.bindTexture(gl.TEXTURE_2D, texForme); gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, nf.couche * ch.N, nf.K, nf.N, gl.RED, gl.UNSIGNED_BYTE, nf.r.subarray(0, nf.N * nf.K));
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+      }
+      const ng = texForme ? grille : 0;
+      gl.useProgram(pr.p);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, decor.signes || vide); gl.uniform1i(u.uGlyphes, 0);
+      gl.uniform3fv(u.uCamP, sc.camera); gl.uniformMatrix3fv(u.uCamR, false, sc.axes); gl.uniform2f(u.uTan, sc.tan_h, sc.tan_v);
+      gl.uniform2f(u.uRes, W, H); gl.uniform2f(u.uSouris, sourisL[0], sourisL[1]); gl.uniform4fv(u.uPlaque, plaque); gl.uniform1f(u.uFrame, frame);
+      gl.uniform3fv(u.uVersLune, sc.lune); gl.uniform3fv(u.uOrbeM, sc.orbe); gl.uniform3fv(u.uTeinteLum, teinteLum);
+      gl.uniform3fv(u.uMenthe, lin(MENTHE)); gl.uniform3fv(u.uTeinte, sim.lt);
+      gl.uniform1f(u.uExpoBase, (decor.meta && decor.meta.base_force) || 1); gl.uniform1f(u.uLumOrbe, lumOrbe);
+      gl.uniform1f(u.uT, t); gl.uniform1f(u.uPense, tourne); gl.uniform1f(u.uEchA, echA);
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texForme || vide); gl.uniform1i(u.uForme, 1); gl.uniform1i(u.uN, ng);
+      gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.disable(gl.CULL_FACE);
+      gl.bindVertexArray(vaoB);
+      for (const [c, miroir] of [[cibles.briques, 0], [cibles.reflet, 1]]) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, c.f); gl.viewport(0, 0, c.w, c.h);
+        gl.clearColor(0, 0, 0, 0); gl.clearDepth(1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        gl.uniform1f(u.uMiroir, miroir);
+        gl.drawArraysInstanced(gl.TRIANGLES, 0, ng ? 36 * ng * ng : 36, n);
+      }
+      gl.disable(gl.DEPTH_TEST); gl.bindVertexArray(null); gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.activeTexture(gl.TEXTURE0);
+    }
+
     function dessiner(maintenant, manuel) {
       if (arret) return;
       if (!manuel) image = racine.requestAnimationFrame(dessiner);
@@ -1009,7 +1125,9 @@ void main(){
       t += dt; frame++;
       // la definition s'adapte a la machine (toutes les 2 s au plus)
       moyenne += (ecoule - moyenne) * 0.05;
-      if (t - dernierAjustement > 2 && frame > 90) {
+      // pendant un vol de briques, on ne change pas la definition (changer de tampons fait un a-coup), sauf si c'est vraiment trop lourd
+      const enVol = decor.chantier && decor.chantier.etat() === 'vol';
+      if (t - dernierAjustement > 2 && frame > 90 && (!enVol || moyenne > 45)) {
         if (moyenne > 24 && qualite > 0.5) { qualite = Math.max(0.5, qualite * 0.85); dernierAjustement = t; }
         else if (moyenne < 13 && qualite < Math.min(1, o.qualite)) { qualite = Math.min(1, o.qualite, qualite * 1.08); dernierAjustement = t; }
       }
@@ -1027,12 +1145,18 @@ void main(){
       const bouge = Math.hypot(centre[0] - centrePrec[0], centre[1] - centrePrec[1]);
       const memo = !histoire || calme ? 0 : 0.6 * Math.max(0, 1 - bouge / 1.5);
       centrePrec = centre.slice();
-      if (decor.allee) decor.allee.avancer(dt, tourne);
-      passe(P.scene, hNeuf, [['uBruit', bruit, gl.TEXTURE_3D], ['uBase', decor.base], ['uLum', decor.lum], ['uProf', decor.prof], ['uHist', hVieux.tx], ['uGlyphes', decor.signes || vide]], u => {
-        const al = decor.pret && decor.allee ? decor.allee.boites() : null, sc = decor.scene;
-        gl.uniform1i(u.uNbMono, al ? al.n : 0);
-        if (al) {
-          gl.uniform4fv(u.uMono, al.pos); gl.uniform4fv(u.uMonoT, al.tai); gl.uniform1f(u.uPense, tourne);
+      if (decor.chantier) decor.chantier.avancer(dt, tourne); else if (decor.allee) decor.allee.avancer(dt, tourne);
+      const lumOrbe = (decor.meta && decor.meta.lumiere_force || 1) * (0.85 + 0.25 * Math.sin(t * 1.6) + 0.6 * amp + 0.4 * pouls);
+      const teinteLum = melange([1, 1, 1], sim.lt.map(v => v / Math.max(sim.lt[0], sim.lt[1], sim.lt[2], 0.001)), 0.65);
+      const briquesOn = !!(decor.pret && decor.chantier && plaque && cibles.briques);
+      const echA = briquesOn && cibles.briques.fl ? 1 : 0.002;
+      if (briquesOn) dessinerBriques(plaque, sim, lumOrbe, teinteLum, echA);
+      passe(P.scene, hNeuf, [['uBruit', bruit, gl.TEXTURE_3D], ['uBase', decor.base], ['uLum', decor.lum], ['uProf', decor.prof], ['uHist', hVieux.tx], ['uGlyphes', decor.signes || vide],
+        ['uBriques', briquesOn ? cibles.briques.tx : vide], ['uReflet', briquesOn ? cibles.reflet.tx : vide]], u => {
+        const sc = decor.scene;
+        gl.uniform1f(u.uBriquesOn, briquesOn ? 1 : 0); gl.uniform1f(u.uEchA, echA);
+        if (briquesOn) {
+          gl.uniform1f(u.uPense, tourne);
           gl.uniform3fv(u.uCamP, sc.camera); gl.uniformMatrix3fv(u.uCamR, false, sc.axes); gl.uniform2f(u.uTan, sc.tan_h, sc.tan_v);
           gl.uniform3fv(u.uVersLune, sc.lune); gl.uniform3fv(u.uOrbeM, sc.orbe);
         }
@@ -1049,9 +1173,8 @@ void main(){
         gl.uniform4fv(u.uCom, sim.com); gl.uniform4fv(u.uComV, sim.comV);
         gl.uniform1f(u.uDecor, decor.pret ? 1 : 0);
         if (plaque) gl.uniform4fv(u.uPlaque, plaque);
-        const lumOrbe = (decor.meta && decor.meta.lumiere_force || 1) * (0.85 + 0.25 * Math.sin(t * 1.6) + 0.6 * amp + 0.4 * pouls);
         gl.uniform1f(u.uLumOrbe, lumOrbe); gl.uniform1f(u.uExpoBase, (decor.meta && decor.meta.base_force) || 1);
-        gl.uniform3fv(u.uTeinteLum, melange([1, 1, 1], sim.lt.map(v => v / Math.max(sim.lt[0], sim.lt[1], sim.lt[2], 0.001)), 0.65));
+        gl.uniform3fv(u.uTeinteLum, teinteLum);
       });
       gl.bindFramebuffer(gl.READ_FRAMEBUFFER, hNeuf.f); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, cibles.scene.f);
       gl.blitFramebuffer(0, 0, W, H, 0, 0, W, H, gl.COLOR_BUFFER_BIT, gl.NEAREST);
@@ -1095,6 +1218,9 @@ void main(){
       // pour les captures (onglet en arriere-plan, ou les images sont ralenties) : n images d'affilee, 1/60 s chacune
       avancer(n) { for (let i = 0; i < (n || 1); i++) { debutMs = debutMs || 1; dessiner(debutMs + 1e6, true); } return this; },
       allee() { return decor.allee; },
+      // un nouveau sujet : l'allee (ou le monument d'avant) se defait et forme un autre monument ; former('zeus') pour en choisir un
+      nouveauSujet() { return decor.chantier ? decor.chantier.nouveauSujet() : null; },
+      chantier() { return decor.chantier; },
       qualite() { return { qualite, largeur: W, hauteur: H, image_ms: Math.round(moyenne * 10) / 10, hdr }; },
       stop() { arret = true; racine.cancelAnimationFrame(image); for (const m of mots) m.el.remove(); liberer(); },
     };
