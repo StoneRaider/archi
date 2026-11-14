@@ -25,6 +25,7 @@ import os
 import re
 import shutil
 import subprocess
+SANS_FENETRE = getattr(subprocess, "CREATE_NO_WINDOW", 0)  # pas de fenetre noire devant l utilisateur (13/11)
 import sys
 import tempfile
 import threading
@@ -38,7 +39,7 @@ try:
     from PIL import Image
 except ImportError:
     if os.path.exists(VENV_PY) and os.path.abspath(sys.executable).lower() != os.path.abspath(VENV_PY).lower():
-        sys.exit(subprocess.call([VENV_PY] + sys.argv))
+        sys.exit(subprocess.call([VENV_PY] + sys.argv))   # sans option « sans fenetre » : ce relais ne capture pas la sortie, elle se perdrait
     Image = None
 
 ICI = os.path.dirname(os.path.abspath(__file__))

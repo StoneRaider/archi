@@ -259,7 +259,7 @@ def polymarket():
         outil = os.path.join(BASE, "outils", "indicateur_polymarket", "indicateur_polymarket.py")
         if not os.path.isfile(outil):
             return None
-        r = subprocess.run([sys.executable, outil, "--brief"], capture_output=True, timeout=20, encoding="utf-8", errors="replace")
+        r = subprocess.run([sys.executable, outil, "--brief"], capture_output=True, timeout=20, encoding="utf-8", errors="replace", creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         return json.loads(r.stdout.strip().splitlines()[-1]).get("lignes") or None
     except Exception:
         return None

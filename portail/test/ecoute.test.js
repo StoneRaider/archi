@@ -41,6 +41,10 @@ test('ecoute : « Archi, annule » jette tout ce qui attendait', () => {
   assert.deepEqual(E.entendre('Rappelle-moi de', 'non, Archi, annule.'), { texte: '', envoyer: false, annuler: true });
   assert.deepEqual(E.entendre('Bla bla', 'Archi annule'), { texte: '', envoyer: false, annuler: true });
   assert.deepEqual(E.entendre('Bla bla', 'Archi, efface ça'), { texte: '', envoyer: false, annuler: true });
+  // Whisper l'ecrit souvent « Archie » ou « Archy »
+  assert.equal(E.entendre('Bla bla', 'Archie, annule.').annuler, true);
+  assert.equal(E.entendre('Bla bla', 'Archy annule').annuler, true);
+  assert.equal(E.entendre('Bla bla', 'Archives, annule').annuler, false);
   // on se reprend dans la meme phrase : seule la suite est envoyee
   assert.deepEqual(E.entendre('Appelle Tom', 'Archi, annule. Appelle plutôt Léa. Fin de transmission.'), { texte: 'Appelle plutôt Léa.', envoyer: true, annuler: false });
   // le mot magique d'abord, l'annulation ensuite : trop tard pour envoyer, on jette

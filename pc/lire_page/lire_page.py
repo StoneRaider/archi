@@ -173,7 +173,7 @@ def main():
     except ImportError:
         if os.path.exists(VENV_PY) and os.path.abspath(sys.executable).lower() != os.path.abspath(VENV_PY).lower():
             import subprocess
-            r = subprocess.run([VENV_PY, os.path.abspath(__file__)] + args, capture_output=True, text=True, encoding="utf-8")
+            r = subprocess.run([VENV_PY, os.path.abspath(__file__)] + args, capture_output=True, text=True, encoding="utf-8", creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             sys.stdout.write(r.stdout or json.dumps({"ok": False, "phrase_pour_utilisateur": "Le lecteur de pages n'a pas répondu.", "erreur": (r.stderr or "")[-300:]}, ensure_ascii=False))
             return
     essais = []

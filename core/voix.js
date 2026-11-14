@@ -54,6 +54,8 @@ function reglages(env) {
     langue: /^[a-z]{2}$/.test(String(env.ARCHI_LANGUE || '')) ? env.ARCHI_LANGUE : 'fr',
     fils: Math.max(2, Math.min(8, coeurs - 2)),
     portVoix: parseInt(env.ARCHI_VOIX_PORT || '5683', 10),
+    // l'adresse du serveur de voix : 127.0.0.1 (lancer_archi.ps1 l'y lance). « ::1 » pour un Pocket lance avec --host localhost
+    hoteVoix: /^[0-9a-f.:]+$/i.test(String(env.ARCHI_VOIX_HOTE || '').trim()) ? String(env.ARCHI_VOIX_HOTE).trim() : '127.0.0.1',
     nettoyeur: path.join(depot, 'pc', 'voix', 'nettoyer_voix.js'),
   };
 }
@@ -150,11 +152,11 @@ function corpsMultipart(texte, limite) {
 }
 
 /** Demande le son au serveur de voix local : un WAV. */
-function synthese(port, texte, ms) {
+function synthese(port, texte, ms, hote) {
   return new Promise((ok, non) => {
     const limite = '----archi' + crypto.randomBytes(12).toString('hex');
     const corps = corpsMultipart(texte, limite);
-    const req = http.request({ host: '127.0.0.1', port, path: '/tts', method: 'POST', timeout: ms,
+    const req = http.request({ host: hote || '127.0.0.1', port, path: '/tts', method: 'POST', timeout: ms,
       headers: { 'Content-Type': 'multipart/form-data; boundary=' + limite, 'Content-Length': corps.length } }, rep => {
       const m = [];
       rep.on('data', x => m.push(x));
@@ -180,7 +182,7 @@ async function dire(texte, r, deps) {
   const base = path.join(os.tmpdir(), 'archi_voix_' + crypto.randomBytes(6).toString('hex'));
   try {
     let wav;
-    try { wav = await S(r.portVoix, dit, DELAI_VOIX_MS); }
+    try { wav = await S(r.portVoix, dit, DELAI_VOIX_MS, r.hoteVoix); }
     catch (e) { return { ok: false, raison: 'voix_muette', detail: String((e && e.message) || e).slice(0, 200) }; }
     fs.writeFileSync(base + '.wav', wav);
     // Pocket diffuse en continu : l'en-tete de son WAV annonce une taille fictive, ffmpeg lit jusqu'au bout
@@ -194,9 +196,9 @@ async function dire(texte, r, deps) {
 }
 
 /** Le serveur de voix repond-il ? (un simple GET sur sa page) */
-function paroleVivante(port, ms) {
+function paroleVivante(port, ms, hote) {
   return new Promise(ok => {
-    const req = http.request({ host: '127.0.0.1', port, path: '/', method: 'GET', timeout: ms || 1500 }, rep => { rep.resume(); ok(rep.statusCode < 500); });
+    const req = http.request({ host: hote || '127.0.0.1', port, path: '/', method: 'GET', timeout: ms || 1500 }, rep => { rep.resume(); ok(rep.statusCode < 500); });
     req.on('timeout', () => { req.destroy(); ok(false); });
     req.on('error', () => ok(false));
     req.end();
@@ -206,7 +208,7 @@ function paroleVivante(port, ms) {
 async function etat(r) {
   r = r || reglages();
   const oreille = !!(r.active && r.whisper && r.modele && fs.existsSync(r.whisper) && fs.existsSync(r.modele));
-  return { active: r.active, oreille, parole: r.active ? await paroleVivante(r.portVoix) : false };
+  return { active: r.active, oreille, parole: r.active ? await paroleVivante(r.portVoix, 1500, r.hoteVoix) : false };
 }
 
 const TEMOINS = { fr: ['Bonjour, quels outils as-tu ?', 'bonjour', 'outil'], en: ['Hello, which tools do you have?', 'hello', 'tool'] };

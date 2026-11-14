@@ -15,6 +15,7 @@ import math
 import os
 import re
 import subprocess
+SANS_FENETRE = getattr(subprocess, "CREATE_NO_WINDOW", 0)  # pas de fenetre noire devant l utilisateur (13/11)
 import sys
 import time
 import urllib.parse
@@ -43,7 +44,7 @@ try:
     from PIL import Image, ImageDraw, ImageFont
 except ImportError:
     if os.path.isfile(VENV) and os.path.abspath(sys.executable).lower() != os.path.abspath(VENV).lower():
-        r = subprocess.run([VENV, os.path.abspath(__file__)] + sys.argv[1:], capture_output=True, timeout=280)
+        r = subprocess.run([VENV, os.path.abspath(__file__)] + sys.argv[1:], capture_output=True, timeout=280, creationflags=SANS_FENETRE)
         sys.stdout.buffer.write(r.stdout)
         sys.exit(r.returncode)
     repondre(False, "Il manque les bibliothèques pour fabriquer un PDF (reportlab et Pillow).")

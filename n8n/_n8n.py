@@ -3,6 +3,7 @@
 import glob
 import os
 import subprocess
+SANS_FENETRE = getattr(subprocess, "CREATE_NO_WINDOW", 0)  # pas de fenetre noire devant l utilisateur (13/11)
 
 DEPOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -23,11 +24,11 @@ def lancer(arguments, delai=600):
     try:
         if prive:
             r = subprocess.run([prive[0], prive[1]] + list(arguments), capture_output=True, text=True, timeout=delai,
-                               encoding="utf-8", errors="replace")
+                               encoding="utf-8", errors="replace", creationflags=SANS_FENETRE)
         else:
             version = os.environ.get("ARCHI_N8N_VERSION") or "1"
             ligne = 'npx --yes "n8n@%s" %s' % (version, " ".join('"%s"' % a if " " in a else a for a in arguments))
-            r = subprocess.run(ligne, shell=True, capture_output=True, text=True, timeout=delai, encoding="utf-8", errors="replace")
+            r = subprocess.run(ligne, shell=True, capture_output=True, text=True, timeout=delai, encoding="utf-8", errors="replace", creationflags=SANS_FENETRE)
         return r.returncode, (r.stdout or "") + (r.stderr or "")
     except Exception as e:  # commande introuvable, delai depasse...
         return 1, type(e).__name__

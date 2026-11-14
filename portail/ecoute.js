@@ -9,7 +9,8 @@
 (function (racine) {
   // Whisper ecrit parfois « faim de transmission », « fin de la transmission », « fin de transmissions »
   const FIN = /\b(?:fin|fins|faim)\s+de\s+(?:la\s+)?transmi(?:ss|t)ions?\b[\s.!?…,;:]*/i;
-  const ANNULE = /\barchi[\s,.!;:]*(?:annule|annuler|efface)\b[^.!?…]*[.!?…]*/i;
+  // Whisper ecrit souvent « Archie » ou « Archy » (essai du 13/11 avec le modele medium) : les trois comptent
+  const ANNULE = /\barch(?:ie?|y)[\s,.!;:]*(?:annule|annuler|efface)\b[^.!?…]*[.!?…]*/i;
 
   // (en francais, l'espace avant « ? ! ; : » est voulue : on ne retire que celle qui precede un point ou une virgule)
   const ranger = t => String(t || '').replace(/\s+/g, ' ').replace(/\s+([.,…])/g, '$1').trim();

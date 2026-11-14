@@ -27,6 +27,7 @@ import re
 import shutil
 import socket
 import subprocess
+SANS_FENETRE = getattr(subprocess, "CREATE_NO_WINDOW", 0)  # pas de fenetre noire devant l utilisateur (13/11)
 import sys
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -293,7 +294,7 @@ def flux(nom, ip, port, chemin):
 def lancer(commande, a_masquer, delai):
     """Lance ffmpeg/ffprobe ; traduit les erreurs courantes ; ne laisse jamais filer le code."""
     try:
-        r = subprocess.run(commande, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=delai)
+        r = subprocess.run(commande, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=delai, creationflags=SANS_FENETRE)
     except subprocess.TimeoutExpired:
         raise Erreur("La camera a mis trop de temps a envoyer l'image.")
     if r.returncode != 0:

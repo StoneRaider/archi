@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 import subprocess
+SANS_FENETRE = getattr(subprocess, "CREATE_NO_WINDOW", 0)  # pas de fenetre noire devant l utilisateur (13/11)
 import sys
 import tempfile
 import urllib.request
@@ -31,7 +32,7 @@ def ytdlp(args, timeout=120):
     node = shutil.which("node") or ""
     for extra in (["--js-runtimes", "node:" + node], []):
         r = subprocess.run(base + extra + args, capture_output=True, text=True, encoding="utf-8",
-                           errors="ignore", timeout=timeout)
+                           errors="ignore", timeout=timeout, creationflags=SANS_FENETRE)
         if r.returncode == 0 or "js-runtimes" not in (r.stderr or ""):
             return r
     return r
@@ -122,9 +123,9 @@ def par_le_son(v, dossier):
         return None
     propre = os.path.join(dossier, v["id"] + "_16k.wav")
     subprocess.run([os.path.join(FFMPEG_DIR, "ffmpeg.exe"), "-y", "-i", brut, "-ar", "16000", "-ac", "1", propre],
-                   capture_output=True, timeout=120)
+                   capture_output=True, timeout=120, creationflags=SANS_FENETRE)
     r = subprocess.run([WHISPER, "-m", WHISPER_MODELE, "-l", "auto", "-f", propre, "-nt"],
-                       capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=900)
+                       capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=900, creationflags=SANS_FENETRE)
     return re.sub(r"\s+", " ", r.stdout or "").strip() or None
 
 

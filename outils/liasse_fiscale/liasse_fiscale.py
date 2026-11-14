@@ -39,7 +39,7 @@ try:  # le PDF "comme le comptable" a besoin de reportlab, present dans le Pytho
 except ImportError:
     if os.path.isfile(VENV) and os.path.abspath(sys.executable).lower() != os.path.abspath(VENV).lower():
         import subprocess
-        _r = subprocess.run([VENV, os.path.abspath(__file__)] + sys.argv[1:], capture_output=True, timeout=110)
+        _r = subprocess.run([VENV, os.path.abspath(__file__)] + sys.argv[1:], capture_output=True, timeout=110, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         sys.stdout.buffer.write(_r.stdout)
         sys.exit(_r.returncode)
 

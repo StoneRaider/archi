@@ -47,6 +47,25 @@ for nom_script, env_plus, attendu in [("outil.py", {}, "oui garde"), ("test_outi
     if r.stdout.strip() != attendu:
         ok = False
         b.write("brancher %s %s : %r (attendu %r) %s" % (nom_script, env_plus, r.stdout.strip(), attendu, r.stderr[-300:]))
+# le filet « pas de fenetre noire » (13/11) : actif seulement sous Windows, pour un Python SANS console ; ARCHI_FENETRES=1 le coupe
+voir_filet = ("import sys, os\nif sys.platform != 'win32': print('non-windows')\nelse:\n"
+              "    import ctypes, _winapi\n"
+              "    l = (ctypes.c_uint * 4)()\n"
+              "    print(bool(getattr(_winapi.CreateProcess, '_archi_sans_fenetre', False)), not ctypes.windll.kernel32.GetConsoleProcessList(l, 4))\n")
+s = os.path.join(depot_faux, "outil_filet.py")
+open(s, "w", encoding="utf-8").write(voir_filet)
+for env_plus, drapeau in (({}, "DETACHED_PROCESS"), ({"ARCHI_FENETRES": "1"}, "DETACHED_PROCESS"), ({}, "CREATE_NO_WINDOW")):
+    env = {k: v for k, v in os.environ.items() if k != "ARCHI_FENETRES"}
+    env.update(PYTHONPATH=site, **env_plus)
+    r = subprocess.run([sys.executable, s], capture_output=True, text=True, env=env, creationflags=getattr(subprocess, drapeau, 0))
+    sortie = r.stdout.strip()
+    if sortie != "non-windows":
+        actif, sans_console = sortie.split()
+        # detache : aucune console, le filet s'active (sauf ARCHI_FENETRES=1) ; « sans fenetre » : console invisible, il ne bouge pas
+        attendu = "True" if (drapeau == "DETACHED_PROCESS" and not env_plus) else "False"
+        if actif != attendu or sans_console != ("True" if drapeau == "DETACHED_PROCESS" else "False"):
+            ok = False
+            b.write("filet %s %s : %r %s" % (env_plus, drapeau, sortie, r.stderr[-300:]))
 A.debrancher(site)
 ok = ok and not os.path.exists(os.path.join(site, A.NOM_AUTO + ".pth")) and not os.path.exists(os.path.join(site, A.NOM_AUTO + ".py"))
 print("archi_env OK" if ok else "archi_env ECHEC " + b.getvalue())
