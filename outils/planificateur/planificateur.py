@@ -17,6 +17,7 @@
 # Regles dures (dans le code) : pas plus de 50 taches en attente ; action differee seulement pour ACTIONS_PERMISES ;
 # une tache a heure fixe ratee de plus d'1 h (PC eteint) n'est PAS executee : J est prevenu.
 import argparse, json, math, os, re, subprocess, sys, unicodedata, urllib.parse, urllib.request
+SANS_FENETRE = getattr(subprocess, "CREATE_NO_WINDOW", 0)  # pas de fenetre noire devant l utilisateur (13/11)
 from datetime import datetime, timedelta
 
 HOME = os.path.expanduser("~")
@@ -449,7 +450,7 @@ def lancer_action(a):
     try:
         py = PY if os.path.isfile(PY) else sys.executable
         r = subprocess.run([py, os.path.join(dos, o["script"]), "--fichier", f], cwd=dos, capture_output=True,
-                           timeout=min(int(o.get("timeout_s", 30)), 45), env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+                           timeout=min(int(o.get("timeout_s", 30)), 45), env=dict(os.environ, PYTHONIOENCODING="utf-8"), creationflags=SANS_FENETRE)
         d = json.loads(r.stdout.decode("utf-8", "replace").strip().splitlines()[-1])
         return bool(d.get("ok")), str(d.get("phrase_pour_utilisateur", ""))[:300]
     except Exception as e:
@@ -467,7 +468,7 @@ def faire_voix(texte):
         return ""
     try:
         py = PY if os.path.isfile(PY) else sys.executable
-        r = subprocess.run([py, VOIX, "voix"], input=texte.encode("utf-8"), capture_output=True, timeout=30)
+        r = subprocess.run([py, VOIX, "voix"], input=texte.encode("utf-8"), capture_output=True, timeout=30, creationflags=SANS_FENETRE)
         f = r.stdout.decode("utf-8", "replace").strip().splitlines()[-1]
         if os.path.isfile(f):
             dest = os.path.join(DOS, "voix", f"annonce_{datetime.now():%Y%m%d_%H%M%S_%f}.ogg")

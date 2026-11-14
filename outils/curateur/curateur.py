@@ -25,6 +25,7 @@ import json
 import os
 import re
 import subprocess
+SANS_FENETRE = getattr(subprocess, "CREATE_NO_WINDOW", 0)  # pas de fenetre noire devant l utilisateur (13/11)
 import sys
 import time
 import unicodedata
@@ -917,7 +918,7 @@ def annoncer(texte):
     ecrire_json(f, {"texte": texte, "de": "curateur"})
     try:
         r = subprocess.run([sys.executable, script, "--annoncer", "--fichier", f], capture_output=True, timeout=40,
-                           env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+                           env=dict(os.environ, PYTHONIOENCODING="utf-8"), creationflags=SANS_FENETRE)
         return r.returncode == 0 and '"ok": true' in r.stdout.decode("utf-8", "replace")
     except (OSError, subprocess.SubprocessError):
         return False

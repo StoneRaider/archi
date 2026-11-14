@@ -52,10 +52,56 @@ MODELE_AUTO = '''# Pose par « python archi_env.py --brancher » (installation.b
 # Pourquoi : n8n lance le code des workflows dans un processus a part, qui ne transmet pas les reglages d'Archi
 # aux outils qu'il demarre. Sans ce fichier, un outil retomberait en silence sur les dossiers par defaut.
 # Rien n'est charge pour un test (script test*.py) ni avec ARCHI_SANS_ENV=1 : un test ne travaille jamais dans le vrai chateau.
+# Il cache aussi les fenetres noires des programmes lances par un Python sans fenetre (voir _sans_fenetre).
 import os
 import sys
 
 DEPOT = %r
+
+
+def _sans_fenetre():
+    # Pas de fenetre noire devant l'utilisateur (13/11/2026). n8n lance ce Python SANS fenetre ; chaque programme qu'il
+    # lance ensuite (ffmpeg, whisper, un autre Python...) recevait alors une console visible, qui passait devant la page.
+    # Dans ce cas-la seulement (aucune console du tout), ils sont lances sans fenetre. Lance depuis un terminal, rien ne change. Un programme qui
+    # demande expres sa console (CREATE_NEW_CONSOLE) ou se detache (DETACHED_PROCESS) est laisse tel quel.
+    # Pour le couper le temps d'un essai : ARCHI_FENETRES=1.
+    if sys.platform != "win32" or os.environ.get("ARCHI_FENETRES") == "1":
+        return
+    import ctypes
+    k = ctypes.windll.kernel32
+    fen = k.GetConsoleWindow()
+    liste = (ctypes.c_uint * 4)()
+    n = k.GetConsoleProcessList(liste, 4)
+    if fen:
+        # un venv lance en arriere-plan : son lanceur a pu creer une console visible rien que pour ce Python
+        # (personne d'autre dessus, pas de terminal) : on la cache. Ses programmes partagent cette console cachee.
+        if sys.prefix != sys.base_prefix and n == 1:
+            ctypes.windll.user32.ShowWindow(fen, 0)
+        return
+    if n:
+        # une console invisible (lance « sans fenetre ») : ses programmes en heritent, aucune fenetre. On n'y touche
+        # pas : l'option « sans fenetre » ferait perdre la sortie d'un programme qui ecrit directement dessus.
+        return
+    import _winapi
+    sans = getattr(_winapi, "CREATE_NO_WINDOW", 0x08000000)
+    laisser = getattr(_winapi, "CREATE_NEW_CONSOLE", 0x10) | getattr(_winapi, "DETACHED_PROCESS", 0x08)
+    creer = _winapi.CreateProcess
+    if getattr(creer, "_archi_sans_fenetre", False):
+        return
+
+    def creer_sans_fenetre(app, ligne, attr_p, attr_t, heriter, drapeaux, env, dossier, demarrage):
+        if not drapeaux & laisser:
+            drapeaux |= sans
+        return creer(app, ligne, attr_p, attr_t, heriter, drapeaux, env, dossier, demarrage)
+
+    creer_sans_fenetre._archi_sans_fenetre = True
+    _winapi.CreateProcess = creer_sans_fenetre
+
+
+try:
+    _sans_fenetre()
+except Exception:   # jamais une raison d'empecher Python de demarrer
+    pass
 
 
 def _charger():

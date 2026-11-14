@@ -32,6 +32,9 @@ test('reglages : programmes trouves dans le dossier d Archi, langue sure, voix c
     assert.ok(r.modele.endsWith('ggml-small.bin'));
     assert.equal(r.langue, 'fr');
     assert.equal(r.portVoix, 5683);
+    assert.equal(r.hoteVoix, '127.0.0.1');
+    assert.equal(V.reglages({ ARCHI_DEPOT: d, ARCHI_VOIX_HOTE: '::1' }).hoteVoix, '::1');
+    assert.equal(V.reglages({ ARCHI_DEPOT: d, ARCHI_VOIX_HOTE: 'exemple.com' }).hoteVoix, '127.0.0.1');   // jamais une adresse au loin
     assert.ok(r.fils >= 2 && r.fils <= 8);
     assert.equal(V.reglages({ ARCHI_DEPOT: d, ARCHI_VOIX: 'Non' }).active, false);
     assert.equal(V.reglages({ ARCHI_DEPOT: d, ARCHI_LANGUE: 'en' }).langue, 'en');
@@ -157,6 +160,18 @@ test('synthese : un POST multipart « text » vers 127.0.0.1, et un WAV en retou
   } finally { serveur.close(); }
   assert.equal(await V.paroleVivante(1, 500), false);
   await assert.rejects(V.synthese(1, 'x', 1000));
+});
+
+test('voix sur [::1] (ARCHI_VOIX_HOTE) : la page PC parle avec le Pocket perso, lance en « localhost »', async () => {
+  const serveur = http.createServer((req, res) => { req.resume(); req.on('end', () => { res.writeHead(200); res.end('RIFFv6'); }); });
+  try { await new Promise((x, k) => { serveur.once('error', k); serveur.listen(0, '::1', x); }); }
+  catch (e) { return; }   // machine sans IPv6 : rien a verifier
+  try {
+    const port = serveur.address().port;
+    assert.equal((await V.synthese(port, 'Salut.', 5000, '::1')).toString(), 'RIFFv6');
+    assert.equal(await V.paroleVivante(port, 2000, '::1'), true);
+    assert.equal(await V.paroleVivante(port, 500), false);   // par defaut, 127.0.0.1 : pas ce serveur-la
+  } finally { serveur.close(); }
 });
 
 test('boucle : la voix dit la phrase temoin, l oreille la reecoute, et on compare', async () => {
