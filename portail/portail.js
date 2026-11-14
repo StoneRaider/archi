@@ -389,8 +389,16 @@ function memoire(r) {
   }
   // les lecons : ce que l'utilisateur a corrige, qu'Archi relit a chaque message
   try {
-    const L = fs.readFileSync(path.join(racine, 'lecons', 'lecons_archi.md'), 'utf8').split(/\r?\n/).map(l => l.trim())
-      .filter(l => l.startsWith('- ')).map(l => l.slice(2).replace(/^\(\d{2}\/\d{2}\/\d{4}\)\s*/, '').trim()).filter(Boolean);
+    // seulement les lignes des blocs « Faits » (comme core/contexte.js) : ni les sources, ni les liens, ni les consignes
+    const L = [];
+    for (const bloc of fs.readFileSync(path.join(racine, 'lecons', 'lecons_archi.md'), 'utf8').split(/\*\*Faits :\*\*/).slice(1)) {
+      for (const l of bloc.split(/\n\*\*/)[0].split(/\r?\n/)) {
+        const t = l.trim();
+        if (!t.startsWith('- ')) continue;
+        const f = t.slice(2).replace(/^\(\d{2}\/\d{2}\/\d{4}\)\s*/, '').replace(/\[\[|\]\]/g, '').trim();
+        if (f && !/^aucune?\.?$/i.test(f)) L.push(f);
+      }
+    }
     resume.lecons = L.length;
     resume.dernieres_lecons = L.slice(-3).reverse().map(l => l.slice(0, 200));
   } catch (e) { /* aucune lecon encore */ }
