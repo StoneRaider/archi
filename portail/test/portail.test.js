@@ -396,6 +396,12 @@ test('etat : la memoire compte les fiches et montre les derniers faits retenus',
     const m = P.memoire({ base: d });
     assert.deepEqual([m.fiches, m.faits, m.lecons, m.dernieres_lecons], [2, 3, 2, ['Relis le lieu demandé.', 'Tu ne sais pas envoyer de vocal.']]);
     assert.deepEqual(m.derniers[1], { quand: 1700000000001, fait: 'Relis le lieu demandé.', lecon: true });
+    // une fiche curee (en-tete, sources, prochaines etapes, liens) : seules les lignes des blocs « Faits » sont des lecons
+    fs.writeFileSync(path.join(d, 'memoire', 'lecons', 'lecons_archi.md'), '---\ntype: lecon\n---\n## Ajout du 29/10/2026\r\n**Titre :** Leçons\r\n**Faits :**\r\n'
+      + '- Lis la méthode avant l\'outil.\r\n**Hypothèses :**\r\n- Aucune\r\n## Ajout du 12/11/2026\r\n**Faits :**\r\n- Aucune\r\n- (12/11/2026) Ne dis pas « fait » sans retour.\r\n'
+      + '**Sources :**\r\n- Carnet du 12/11.\r\n**Prochaines étapes :**\r\n- Ajouter chaque nouvelle erreur ici.\r\n**Liens :**\r\n- lecon_de :: [[point_archie]]\r\n- fait_partie_de :: [[Leçons]]\r\n');
+    const c = P.memoire({ base: d });
+    assert.deepEqual([c.lecons, c.dernieres_lecons], [2, ['Ne dis pas « fait » sans retour.', 'Lis la méthode avant l\'outil.']]);
   } finally { fs.rmSync(d, { recursive: true, force: true }); }
 });
 
