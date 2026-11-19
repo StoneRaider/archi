@@ -31,6 +31,12 @@ ETAT = os.path.join(DONNEES, "recolte_etat.json")
 RETOUR = os.environ.get("ARCHI_WEBHOOK_ALERTE", "")
 
 
+def _qui():
+    """« , Camille » : le prenom du profil (ARCHI_UTILISATEUR, regle a l'installation) ; rien s'il manque."""
+    p = " ".join((os.environ.get("ARCHI_UTILISATEUR") or "").split())[:30]
+    return (", " + p) if p else ""
+
+
 def slug(t, n=50):
     t = unicodedata.normalize("NFD", str(t).lower())
     t = "".join(c for c in t if unicodedata.category(c) != "Mn")
@@ -306,13 +312,13 @@ def main_videos(demande):
         bilan.append("▶️ Récolte suivante de la file lancée : " + ", ".join(
             c.get("nom", "?") if isinstance(c, dict) else str(c) for c in prochaine.get("chaines", [])) + (" (vidéos à l'unité)" if prochaine.get("videos") else ""))
     if arretee:
-        titre, vocal = "⏹ RÉCOLTE ARRÊTÉE (à ta demande)", f"J'ai arrêté BOSS : {total} vidéo{'s' if total > 1 else ''} rangée{'s' if total > 1 else ''} avant l'arrêt."
+        titre, vocal = "⏹ RÉCOLTE ARRÊTÉE (à ta demande)", f"J'ai arrêté{_qui()} : {total} vidéo{'s' if total > 1 else ''} rangée{'s' if total > 1 else ''} avant l'arrêt."
     elif total:
-        titre, vocal = "📺 VIDÉO(S) RANGÉE(S) DANS LA BIBLIOTHÈQUE", f"C'est rangé BOSS : {total} fiche{'s' if total > 1 else ''} de vidéo dans ta bibliothèque."
+        titre, vocal = "📺 VIDÉO(S) RANGÉE(S) DANS LA BIBLIOTHÈQUE", f"C'est rangé{_qui()} : {total} fiche{'s' if total > 1 else ''} de vidéo dans ta bibliothèque."
     elif deja:
-        titre, vocal = "☑️ DÉJÀ DANS LA BIBLIOTHÈQUE", "Elle est déjà dans ta bibliothèque BOSS, je n'ai rien refait."
+        titre, vocal = "☑️ DÉJÀ DANS LA BIBLIOTHÈQUE", "Elle est déjà dans ta bibliothèque" + _qui() + ", je n'ai rien refait."
     else:
-        titre, vocal = "❌ VIDÉO NON RANGÉE", "Je n'ai pas pu ranger la vidéo BOSS, regarde le message."
+        titre, vocal = "❌ VIDÉO NON RANGÉE", "Je n'ai pas pu ranger la vidéo" + _qui() + ", regarde le message."
     renvoyer({"type": "REPONSE", "canal": "recolte", "texte": titre + "\n\n" + "\n".join(bilan), "vocal": vocal})
 
 
@@ -422,18 +428,18 @@ def main():
     if arretee:
         texte = "⏹ RÉCOLTE YOUTUBE ARRÊTÉE (à ta demande)\n\n" + "\n".join(bilan) + "\n\nCe qui a été rangé reste dans la pièce Bibliothèque."
         renvoyer({"type": "REPONSE", "canal": "recolte", "texte": texte,
-                  "vocal": f"J'ai arrêté la récolte BOSS : {total} vidéo{'s' if total > 1 else ''} rangée{'s' if total > 1 else ''} avant l'arrêt."})
+                  "vocal": f"J'ai arrêté la récolte{_qui()} : {total} vidéo{'s' if total > 1 else ''} rangée{'s' if total > 1 else ''} avant l'arrêt."})
         return
     if veille:
         if total == 0:
             return   # rien de neuf : on ne derange pas l'utilisateur
         texte = "📺 VEILLE YOUTUBE : nouvelles vidéos rangées\n\n" + "\n".join(bilan) + "\n\nLes fiches sont dans la pièce Bibliothèque du château."
         renvoyer({"type": "REPONSE", "canal": "recolte", "texte": texte,
-                  "vocal": f"Veille YouTube BOSS : {total} nouvelle{'s' if total > 1 else ''} vidéo{'s' if total > 1 else ''} résumée{'s' if total > 1 else ''} dans ta bibliothèque."})
+                  "vocal": f"Veille YouTube{_qui()} : {total} nouvelle{'s' if total > 1 else ''} vidéo{'s' if total > 1 else ''} résumée{'s' if total > 1 else ''} dans ta bibliothèque."})
         return
     texte = "📺 RÉCOLTE YOUTUBE TERMINÉE\n\n" + "\n".join(bilan) + "\n\nTout est dans la pièce Bibliothèque du château (une fiche par vidéo et un index par chaîne).\nCes chaînes sont maintenant suivies : chaque matin, la veille récolte leurs nouvelles vidéos."
     renvoyer({"type": "REPONSE", "canal": "recolte", "texte": texte,
-              "vocal": f"La récolte YouTube est terminée BOSS : {total} vidéos résumées et rangées dans ta bibliothèque."})
+              "vocal": f"La récolte YouTube est terminée{_qui()} : {total} vidéos résumées et rangées dans ta bibliothèque."})
 
 
 if __name__ == "__main__":
@@ -442,4 +448,4 @@ if __name__ == "__main__":
     except Exception as err:
         ecrire_etat(en_cours=False, erreur=str(err)[:200])
         if "--veille" not in sys.argv:   # la veille plante en silence : elle repassera demain
-            renvoyer({"type": "ERREUR", "canal": "recolte", "vocal": "La récolte YouTube a planté BOSS.", "detail": str(err)[:300]})
+            renvoyer({"type": "ERREUR", "canal": "recolte", "vocal": "La récolte YouTube a planté" + _qui() + ".", "detail": str(err)[:300]})

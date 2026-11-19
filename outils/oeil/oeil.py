@@ -44,6 +44,12 @@ PORTE_ABSENTE = []          # rempli si la porte n'est pas configuree (pas d'url
 GARDER_JETONS_S = 2 * 86400
 
 
+def _qui():
+    """« , Camille » : le prenom du profil (ARCHI_UTILISATEUR, regle a l'installation) ; rien s'il manque."""
+    p = " ".join((os.environ.get("ARCHI_UTILISATEUR") or "").split())[:30]
+    return (", " + p) if p else ""
+
+
 def sortir(d):
     print(json.dumps(d, ensure_ascii=False))
     sys.exit(0)
@@ -389,7 +395,7 @@ def montrer(demande):
         ref = reference(lieu)
     except Exception as e:
         if "position" in str(e):
-            sortir({"ok": False, "phrase_pour_utilisateur": "Je ne connais pas ta position en ce moment BOSS : dis-moi autour de quel lieu regarder, ou renvoie-moi un message depuis l'appli pour qu'elle me donne ta position."})
+            sortir({"ok": False, "phrase_pour_utilisateur": "Je ne connais pas ta position en ce moment" + _qui() + " : dis-moi autour de quel lieu regarder, ou renvoie-moi un message depuis l'appli pour qu'elle me donne ta position."})
         sortir({"ok": False, "phrase_pour_utilisateur": f"Je ne trouve pas ce lieu sur la carte : {lieu}.", "erreur": str(e)[:120]})
     lat, lon, nom = ref["lat"], ref["lon"], ref["nom"]
     d_ou = "de toi" if ref.get("position") else f"de {nom}"
@@ -546,7 +552,7 @@ def main():
         rayon = 50
     rayon = max(1, min(300, rayon))
     if not lieu:
-        sortir({"ok": False, "phrase_pour_utilisateur": "Dis-moi autour de quel lieu regarder BOSS : une ville, un aéroport, un site."})
+        sortir({"ok": False, "phrase_pour_utilisateur": "Dis-moi autour de quel lieu regarder" + _qui() + " : une ville, un aéroport, un site."})
     try:
         lat, lon, nom = geocoder(lieu)
     except Exception as e:

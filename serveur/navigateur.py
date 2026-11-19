@@ -36,6 +36,12 @@ EDGE = ([os.environ["ARCHI_NAVIGATEUR"]] if os.environ.get("ARCHI_NAVIGATEUR") e
         r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"]
 
 
+def _qui():
+    """« , Camille » : le prenom du profil (ARCHI_UTILISATEUR, regle a l'installation) ; rien s'il manque."""
+    p = " ".join((os.environ.get("ARCHI_UTILISATEUR") or "").split())[:30]
+    return (", " + p) if p else ""
+
+
 def _port():
     """Le port local d'Edge. Une seconde installation d'Archi sur le meme PC (autre port n8n) prend le sien :
     sans cela, elle piloterait le navigateur de la premiere, avec ses connexions."""
@@ -355,7 +361,7 @@ def surveiller_tout(nav):
     ecrire_surv(L)
     if alertes:
         renvoyer("👁️ SURVEILLANCE DE PAGES\n\n" + "\n\n".join(alertes),
-                 f"BOSS, {len(alertes)} page{'s' if len(alertes) > 1 else ''} surveillée{'s' if len(alertes) > 1 else ''} a changé. Je t'ai écrit le détail.")
+                 f"{len(alertes)} page{'s' if len(alertes) > 1 else ''} surveillée{'s' if len(alertes) > 1 else ''} a changé{_qui()}. Je t'ai écrit le détail.")
     return {"ok": True, "verifiees": len(L), "changements": len(alertes)}
 
 
@@ -395,7 +401,7 @@ def agir(action, cible, valeur):
             if action == "connexion":
                 fenetre(page, True)
                 d = etat(page, avec_capture=True, nom="connexion")
-                d["phrase_pour_utilisateur"] = ("J'ai ouvert la page dans ma fenêtre Edge, sur ton écran BOSS. Connecte-toi toi-même "
+                d["phrase_pour_utilisateur"] = ("J'ai ouvert la page dans ma fenêtre Edge, sur ton écran" + _qui() + ". Connecte-toi toi-même "
                                            "(je ne tape jamais tes mots de passe ni tes codes), puis dis-moi « c'est bon » et je continue.")
                 return dict(d, ok=True)
             return dict(etat(page, avec_elements=True, avec_capture=valeur == "capture", nom="ouvrir"), ok=True)
@@ -435,7 +441,7 @@ def agir(action, cible, valeur):
             return {"ok": True, "url": page.url, "titre": page.title(), "capture": capture(page, "capture")}
         if action in ("montrer", "cacher"):
             fenetre(page, action == "montrer")
-            return {"ok": True, "phrase_pour_utilisateur": "Ma fenêtre Edge est ouverte sur ton écran BOSS." if action == "montrer" else "Ma fenêtre est repassée en arrière-plan."}
+            return {"ok": True, "phrase_pour_utilisateur": "Ma fenêtre Edge est ouverte sur ton écran" + _qui() + "." if action == "montrer" else "Ma fenêtre est repassée en arrière-plan."}
 
         if action == "cliquer":
             el = element(page, cible)
@@ -446,7 +452,7 @@ def agir(action, cible, valeur):
             if BOUTON_FINAL.search(desc) or soumet:
                 fenetre(page, True)
                 return {"ok": False, "bouton_final": True, "capture": capture(page, "bouton_final"),
-                        "phrase_pour_utilisateur": f"Je m'arrête avant le bouton final « {desc[:60]} » : c'est toi qui cliques BOSS. "
+                        "phrase_pour_utilisateur": f"Je m'arrête avant le bouton final « {desc[:60]} » : c'est toi qui cliques{_qui()}. "
                                               "J'ai ouvert ma fenêtre sur ton écran, vérifie le récapitulatif et clique toi-même."}
             el.click()
             attendre(page)
@@ -512,7 +518,7 @@ def agir(action, cible, valeur):
             L.append({"nom": (titre or cible)[:70], "url": cible, "filtre": valeur or "", "lignes": lignes,
                       "ajoute": datetime.now().isoformat(timespec="minutes"), "verifie": datetime.now().isoformat(timespec="minutes")})
             ecrire_surv(L)
-            return {"ok": True, "phrase_pour_utilisateur": f"C'est noté BOSS, je surveille « {(titre or cible)[:60]} »"
+            return {"ok": True, "phrase_pour_utilisateur": f"C'est noté{_qui()}, je surveille « {(titre or cible)[:60]} »"
                                                       + (f" (ce qui parle de : {valeur})" if valeur else "") + ". Je vérifie deux fois par jour et je te préviens seulement si ça change."}
 
         if action == "fermer":
@@ -544,4 +550,4 @@ if __name__ == "__main__":
         main()
     except Exception as err:
         print(json.dumps({"ok": False, "erreur": str(err)[:300],
-                          "phrase_pour_utilisateur": "Mon navigateur a coincé BOSS : " + str(err)[:150]}, ensure_ascii=False))
+                          "phrase_pour_utilisateur": "Mon navigateur a coincé" + _qui() + " : " + str(err)[:150]}, ensure_ascii=False))

@@ -33,6 +33,12 @@ TONS = {"pro": "professional", "professionnel": "professional", "professionnelle
         "commercial": "sales_pitch", "pitch": "sales_pitch", "normal": "default"}
 
 
+def _qui():
+    """« , Camille » : le prenom du profil (ARCHI_UTILISATEUR, regle a l'installation) ; rien s'il manque."""
+    p = " ".join((os.environ.get("ARCHI_UTILISATEUR") or "").split())[:30]
+    return (", " + p) if p else ""
+
+
 def sortir(d):
     print(json.dumps(d, ensure_ascii=False))
     sys.exit(0)
@@ -150,7 +156,7 @@ def main():
     sujet = str(d.get("sujet") or d.get("titre") or d.get("theme_sujet") or "").strip()
     contenu = str(d.get("contenu") or d.get("notes") or d.get("plan") or d.get("texte") or "").strip()
     if not sujet and not contenu:
-        sortir({"ok": False, "phrase_pour_utilisateur": "Sur quel sujet veux-tu la présentation, BOSS ?"})
+        sortir({"ok": False, "phrase_pour_utilisateur": "Sur quel sujet veux-tu la présentation" + _qui() + " ?"})
     try:
         n = int(str(d.get("diapos") or d.get("n_slides") or d.get("pages") or 8))
     except Exception:

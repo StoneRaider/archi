@@ -42,6 +42,12 @@ URGENCES = {"112": "le 112 (urgences européennes)", "15": "le 15 (SAMU)", "17":
             "114": "le 114 (urgences par SMS)"}
 
 
+def _qui():
+    """« , Camille » : le prenom du profil (ARCHI_UTILISATEUR, regle a l'installation) ; rien s'il manque."""
+    p = " ".join((os.environ.get("ARCHI_UTILISATEUR") or "").split())[:30]
+    return (", " + p) if p else ""
+
+
 def sortir(d):
     print(json.dumps(d, ensure_ascii=False))
     sys.exit(0)
@@ -158,7 +164,7 @@ def main():
     if action == "youtube":
         q = texte(demande, "recherche", "requete", "video", "titre", "q")
         if not q:
-            refuser("Quelle vidéo veux-tu voir sur YouTube, BOSS ?")
+            refuser("Quelle vidéo veux-tu voir sur YouTube" + _qui() + " ?")
         v = chercher_video(q)
         if v and v.get("id"):
             repondre({"action": "youtube", "recherche": q, "video_id": v["id"], "titre": v.get("titre")},

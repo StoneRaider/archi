@@ -21,6 +21,12 @@ JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"
 MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
 
 
+def _qui():
+    """« , Camille » : le prenom du profil (ARCHI_UTILISATEUR, regle a l'installation) ; rien s'il manque."""
+    p = " ".join((os.environ.get("ARCHI_UTILISATEUR") or "").split())[:30]
+    return (", " + p) if p else ""
+
+
 def _rfc3339(dt):
     """heure locale (fuseau ARCHI_FUSEAU) -> RFC 3339 avec le bon decalage (et non UTC)"""
     if dt.tzinfo is None:
@@ -71,7 +77,7 @@ def evenements(service, debut, fin, texte=""):
 def ajouter(d):
     titre = str(d.get("titre") or "").strip()
     if not titre:
-        return {"ok": False, "phrase_pour_utilisateur": "Il me manque le titre de l'événement BOSS."}
+        return {"ok": False, "phrase_pour_utilisateur": "Il me manque le titre de l'événement" + _qui() + "."}
     service = get_calendar_service()
     corps = {"summary": titre[:200]}
     if d.get("lieu"):
@@ -82,7 +88,7 @@ def ajouter(d):
         a = lire_date(d["debut"])
         b = lire_date(d["fin"]) if d.get("fin") else a + timedelta(hours=1)
         if b <= a:
-            return {"ok": False, "phrase_pour_utilisateur": "La fin est avant le début, je n'ai rien ajouté BOSS. Tu me redonnes les heures ?"}
+            return {"ok": False, "phrase_pour_utilisateur": "La fin est avant le début, je n'ai rien ajouté" + _qui() + ". Tu me redonnes les heures ?"}
         if a < datetime.now() - timedelta(hours=1):
             return {"ok": False, "phrase_pour_utilisateur": f"Le {lisible(a)} est déjà passé, je n'ai rien ajouté. Tu voulais quelle année ?"}
         corps["start"] = {"dateTime": a.strftime("%Y-%m-%dT%H:%M:%S"), "timeZone": TZ}
@@ -98,14 +104,14 @@ def ajouter(d):
         quand = f"le {lisible(a)}, toute la journée"
         conflits = []
     else:
-        return {"ok": False, "phrase_pour_utilisateur": "Il me manque la date (et les heures) de l'événement BOSS."}
+        return {"ok": False, "phrase_pour_utilisateur": "Il me manque la date (et les heures) de l'événement" + _qui() + "."}
     rappel = d.get("rappel_min")
     if rappel not in (None, ""):
         corps["reminders"] = {"useDefault": False, "overrides": [{"method": "popup", "minutes": int(float(rappel))}]}
     e = service.events().insert(calendarId="primary", body=corps).execute()
     # verification : on relit l'evenement dans l'agenda
     verif = service.events().get(calendarId="primary", eventId=e["id"]).execute()
-    phrase = f"C'est dans ton agenda BOSS : « {verif.get('summary')} » {quand}."
+    phrase = f"C'est dans ton agenda{_qui()} : « {verif.get('summary')} » {quand}."
     if conflits:
         phrase += " Attention, ça tombe en même temps que : " + " ; ".join(decrire(c) for c in conflits[:3]) + "."
     return {"ok": True, "verifie": True, "id": e["id"], "lien": e.get("htmlLink"), "phrase_pour_utilisateur": phrase}
@@ -146,4 +152,4 @@ if __name__ == "__main__":
         main()
     except Exception as err:
         print(json.dumps({"ok": False, "erreur": str(err)[:300],
-                          "phrase_pour_utilisateur": "Je n'ai PAS pu toucher à ton agenda BOSS : " + str(err)[:150]}, ensure_ascii=False))
+                          "phrase_pour_utilisateur": "Je n'ai PAS pu toucher à ton agenda" + _qui() + " : " + str(err)[:150]}, ensure_ascii=False))

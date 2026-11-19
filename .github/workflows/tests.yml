@@ -50,6 +50,8 @@ jobs:
         run: cd serveur && python test_serveur.py
       - name: Chargeur du fichier .env
         run: python outils_depot/test_archi_env.py
+      - name: Le prenom du profil, jamais un surnom en dur
+        run: python outils_depot/test_prenom.py
       - name: Tests de la recolte YouTube (hors ligne)
         run: cd outils/recolte_youtube && python test_recolte.py
       - name: Tests de l'imprimante 3D (imprimante simulee)

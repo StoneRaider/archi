@@ -1,4 +1,5 @@
 # archi_server.py - serveur local (127.0.0.1) qui expose les mails a n8n : chercher, lire, contacts, preparer puis envoyer, tri
+import os
 import threading
 import traceback
 from datetime import datetime
@@ -14,6 +15,12 @@ from pydantic import BaseModel
 app = FastAPI(title="Archi - serveur local")
 
 HOTES_PERMIS = {"127.0.0.1", "localhost", "[::1]"}
+
+
+def _qui():
+    """« , Camille » : le prenom du profil (ARCHI_UTILISATEUR, regle a l'installation) ; rien s'il manque."""
+    p = " ".join((os.environ.get("ARCHI_UTILISATEUR") or "").split())[:30]
+    return (", " + p) if p else ""
 
 
 @app.middleware("http")
@@ -108,7 +115,7 @@ def mails_preparer(m: MailAPreparer):
     try:
         return mail_commande.preparer(m.a, m.sujet, m.corps, m.boite)
     except Exception as e:
-        return {"ok": False, "statut": "ERREUR", "phrase_pour_utilisateur": f"Je n'ai pas pu préparer le mail BOSS : {e}"}
+        return {"ok": False, "statut": "ERREUR", "phrase_pour_utilisateur": f"Je n'ai pas pu préparer le mail{_qui()} : {e}"}
 
 
 @app.post("/mails/envoyer")
@@ -116,7 +123,7 @@ def mails_envoyer():
     try:
         return mail_commande.envoyer()
     except Exception as e:
-        return {"ok": False, "statut": "ERREUR", "phrase_pour_utilisateur": f"Le mail n'est PAS parti BOSS : {e}"}
+        return {"ok": False, "statut": "ERREUR", "phrase_pour_utilisateur": f"Le mail n'est PAS parti{_qui()} : {e}"}
 
 
 if __name__ == "__main__":

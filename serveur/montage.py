@@ -53,6 +53,12 @@ for d in (A_MONTER, MONTAGES, BASE, os.path.join(MUSIQUE, "epique"), os.path.joi
 
 
 # ---------- outils ----------
+def _qui():
+    """« , Camille » : le prenom du profil (ARCHI_UTILISATEUR, regle a l'installation) ; rien s'il manque."""
+    p = " ".join((os.environ.get("ARCHI_UTILISATEUR") or "").split())[:30]
+    return (", " + p) if p else ""
+
+
 def ffprobe_exe():
     c = sorted(glob.glob(os.path.join(_WH, "ffmpeg-*", "bin", "ffprobe.exe")))
     return c[-1] if c else "ffprobe"
@@ -898,7 +904,7 @@ def monter(d):
                   + (f", dont {len(marqueurs)} marqués par toi" if mode == "event" else "") + ".",
                   f"Musique : {res['musique']}" if musique else "⚠️ Pas de musique : le dossier Vidéos\\Musique libre est vide.",
                   f"Dossier : Vidéos\\Montages (vidéo, projet DaVinci .fcpxml, liste des moments)."]
-        renvoyer("\n".join(lignes), f"BOSS, ton montage est prêt : {res['duree']}, {res['moments']} moments. Il t'attend dans Vidéos, Montages.")
+        renvoyer("\n".join(lignes), f"Ton montage est prêt{_qui()} : {res['duree']}, {res['moments']} moments. Il t'attend dans Vidéos, Montages.")
         return res
     finally:
         shutil.rmtree(travail, ignore_errors=True)
@@ -926,14 +932,14 @@ def main():
             print(json.dumps(monter(d), ensure_ascii=False))
         except InterruptedError:
             etat(en_cours=False, etape="arrêté par l'utilisateur")
-            renvoyer("🎬 Montage arrêté.", "C'est arrêté BOSS, j'ai abandonné le montage.")
+            renvoyer("🎬 Montage arrêté.", "C'est arrêté" + _qui() + ", j'ai abandonné le montage.")
         except Exception as e:
             etat(en_cours=False, etape="échec", erreur=str(e)[:300])
-            renvoyer(f"🎬 Montage impossible : {str(e)[:300]}", "Désolé BOSS, le montage a échoué : " + str(e)[:150])
+            renvoyer(f"🎬 Montage impossible : {str(e)[:300]}", "Désolé" + _qui() + ", le montage a échoué : " + str(e)[:150])
     elif a == "etat":
         e = lire_etat()
         if e.get("en_cours"):
-            ph = f"Je suis en plein montage BOSS : {e.get('etape')}."
+            ph = f"Je suis en plein montage{_qui()} : {e.get('etape')}."
         elif e.get("resultat"):
             ph = f"Dernier montage terminé : {os.path.basename(e['resultat'].get('video', ''))}, {e['resultat'].get('duree')}."
         else:
