@@ -183,6 +183,13 @@ function main() {
       if (coords) sortie += '\n\nÀ vérifier : ' + (coords > 1 ? coords + ' coordonnées sans source.' : 'une coordonnée sans source.');
     }
   }
+  // Palier « journal seulement » (core/promesses.js) : ce que la piece AURAIT signale (« j'ai eteint la prise » sans outil
+  // reussi, outil en attente d'accord, outil en echec) part dans « alertes », lues dans les executions de n8n. Rien n'est
+  // dit a l'utilisateur : la reponse ne change pas d'un caractere. Pose APRES le bloc « if (alertes.length) », qui recopie
+  // les alertes sous une reponse [TEXTE].
+  try {
+    for (const m of require('./promesses').promessesEnLAir(reponse, steps)) alertes.push('[journal] promesse en l air : ' + m.famille + ' (' + m.raison + ')');
+  } catch (e) { /* la piece ne doit jamais empecher la reponse de partir */ }
   process.stdout.write(JSON.stringify({ reponse: sortie, alertes }));
 }
 try { main(); } catch (e) { try { process.stdout.write(JSON.stringify({ reponse: String((ENTREE || {}).reponse || ''), alertes: [], erreur: String(e.message || e) })); } catch (e2) { process.stdout.write(JSON.stringify({ reponse: '', alertes: [] })); } }

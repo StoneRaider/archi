@@ -131,7 +131,23 @@ function noterRate(base, type, outil, erreur) {
   } catch (e) { /* le journal ne doit jamais faire echouer un outil */ }
 }
 
-/** demande = {action, outil, parametres, accord} ; options = {base, python, executer} (executer : pour les tests). */
+/** Palier « journal seulement » : une ligne par accord donne par le modele (ce que core/accord.js en AURAIT decide).
+ *  Jamais le message, ni les parametres. Pas dans rates.jsonl : le mecanicien y compte chaque ligne comme une panne. */
+const JOURNAL_MAX = 1024 * 1024;      // au-dela d'un Mo le journal ne grossit plus (environ 9 000 lignes)
+function observer(base, fichier, ligne) {
+  try {
+    const f = path.join(base, 'atelier', fichier);
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    try { if (fs.statSync(f).size > JOURNAL_MAX) return; } catch (e) { /* pas encore de journal */ }
+    fs.appendFileSync(f, JSON.stringify(Object.assign({ quand: Date.now() }, ligne)) + '\n');
+  } catch (e) { /* un journal ne doit jamais faire echouer un outil */ }
+}
+/** Un mot d'action pour le journal (« eteindre », « ranger »), jamais un texte libre : le modele ecrit parfois une phrase
+ *  entiere dans « action », avec une adresse ou un nom dedans. */
+const motDAction = a => (typeof a === 'string' && /^[a-z0-9_]{1,24}$/i.test(a.trim()) ? a.trim().toLowerCase() : (a ? '(autre)' : ''));
+
+/** demande = {action, outil, parametres, accord} ; options = {base, python, executer, dernierMessage} (executer : pour les
+ *  tests ; dernierMessage : le dernier message de l'utilisateur, pour le journal des accords). */
 function lancer(demande, options = {}) {
   const base = options.base || BASE_DEFAUT;
   const python = options.python || PY_DEFAUT;
@@ -198,6 +214,14 @@ function lancer(demande, options = {}) {
     || (Array.isArray(si) && si.some(present))
     || surveilles.some(k => present(k) && [].concat(si[k] || []).map(nu).includes(nu(params[k])));
   const accord = /^\s*oui\s*$/i.test(String(d.accord || ''));
+  // Palier « journal seulement » (core/accord.js) : le modele vient d'ecrire accord=oui ; on note si le dernier message de
+  // l'utilisateur le donnait vraiment. Rien n'est bloque : l'outil part comme avant, quoi que dise la piece.
+  if (sensible && accord && typeof options.dernierMessage === 'string') {
+    try {
+      const v = require('./accord').accordDansMessage(options.dernierMessage, { outil: nom, action: params.action, parametres: params, tronque: options.dernierMessage.length >= 140 });
+      observer(base, 'accords_observes.jsonl', { outil: nom, action: motDAction(params.action), aurait: v.accorde ? 'accorde' : 'refuse', raison: v.raison });
+    } catch (e) { /* l'observation ne bloque jamais */ }
+  }
   if (sensible && !accord) {
     // un « accord » glisse DANS parametres ne compte pas (banc du 19/11 : le modele croyait l'avoir donne) : on lui dit ou il va
     if (/^\s*oui\s*$/i.test(String(params.accord || ''))) {
@@ -267,7 +291,9 @@ if (require.main === module) {
     const p = lireParametres(entree.parametres);
     n = carte.etapeDebut({ outil: entree.outil || 'liste', action: p.action || (entree.outil ? '' : entree.action) });
   } catch (e) { carte = null; }
-  const r = lancer(entree);
+  let dernierMessage;      // le dernier message de l'utilisateur, tel que la carte de tache le garde (140 caracteres)
+  try { const t = carte && carte.voir().tache; if (t && t.en_cours) dernierMessage = String(t.demande || ''); } catch (e) { /* pas de carte : pas d'observation */ }
+  const r = lancer(entree, { dernierMessage });
   try {
     if (carte && n) carte.etapeFin({ n, ok: r.ok !== false, phrase: r.accord_requis ? 'attend ton accord' : r.phrase_pour_utilisateur });
   } catch (e) { /* la carte ne bloque rien */ }
