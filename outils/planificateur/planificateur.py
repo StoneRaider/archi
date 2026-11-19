@@ -57,6 +57,23 @@ def repondre(ok, phrase, **extra):
     print(json.dumps(dict(ok=ok, phrase_pour_utilisateur=phrase, **extra), ensure_ascii=False))
 
 
+def prenom():
+    """Le prenom du profil (ARCHI_UTILISATEUR, regle a l'installation). Vide : les phrases s'en passent."""
+    return re.sub(r"\s+", " ", os.environ.get("ARCHI_UTILISATEUR") or "").strip()[:30]
+
+
+def interpeller(phrase):
+    """« Camille, rappel : ... » ; sans prenom connu : « Rappel : ... »."""
+    p = prenom()
+    return f"{p}, {phrase}" if p else phrase[:1].upper() + phrase[1:]
+
+
+def virgule_prenom():
+    """« C'est noté, Camille : ... » ; sans prenom connu : « C'est noté : ... »."""
+    p = prenom()
+    return f", {p}" if p else ""
+
+
 def sans_accent(s):
     return "".join(c for c in unicodedata.normalize("NFD", str(s or "").lower()) if unicodedata.category(c) != "Mn")
 
@@ -296,7 +313,7 @@ def retenir_lieu(p):
     ecrire(LIEUX, lieux)
     noter(f"lieu {k} : {lat:.5f}, {lon:.5f} r={rayon} ({src})")
     return {"lieu": k, "lat": lieux[k]["lat"], "lon": lieux[k]["lon"], "rayon": rayon,
-            "phrase": f"C'est noté BOSS : « {lieux[k]['nom']} » est retenu ({src}), avec un rayon de {rayon} mètres."}
+            "phrase": f"C'est noté{virgule_prenom()} : « {lieux[k]['nom']} » est retenu ({src}), avec un rayon de {rayon} mètres."}
 
 
 # ---------------------------------------------------------------- les taches
@@ -401,13 +418,13 @@ def ajouter(p):
     taches.append(t)
     ecrire(TACHES, taches)
     noter("ajout " + decrire(t))
-    return True, "C'est programmé BOSS : " + decrire(t) + ".", {"tache": t["id"]}
+    return True, "C'est programmé" + virgule_prenom() + " : " + decrire(t) + ".", {"tache": t["id"]}
 
 
 def lister(_p=None):
     ts = [t for t in lire(TACHES, [], True) if t["statut"] == "attente"]
     if not ts:
-        return True, "Aucune tâche programmée, BOSS.", {"taches": []}
+        return True, "Aucune tâche programmée" + virgule_prenom() + ".", {"taches": []}
     return True, f"{len(ts)} tâche(s) programmée(s) : " + " ; ".join(decrire(t) for t in ts), {"taches": [decrire(t) for t in ts]}
 
 
@@ -537,18 +554,18 @@ def a_l_heure(t, taches, annonces, now):
         q["prochaine"] = prochaine_boucle(q, now).isoformat(timespec="minutes")
     ecrire(TACHES, taches)                      # d'abord noter, ensuite agir
     if retard > RETARD_MAX:
-        texte = f"BOSS, je n'ai pas pu le faire à l'heure (le PC était éteint, {int(retard.total_seconds() // 60)} min de retard) : {t['texte']}."
+        texte = interpeller(f"je n'ai pas pu le faire à l'heure (le PC était éteint, {int(retard.total_seconds() // 60)} min de retard) : {t['texte']}.")
         if t.get("action"):
             texte += " Je ne lance pas l'action en retard : dis-moi si tu veux toujours."
     elif t.get("action"):
         ok, phrase = lancer_action(t["action"])
-        texte = f"BOSS, comme prévu : {phrase}" if ok else f"BOSS, la tâche « {t['texte']} » a raté : {phrase}"
+        texte = interpeller(f"comme prévu : {phrase}" if ok else f"la tâche « {t['texte']} » a raté : {phrase}")
         t["resultat"] = phrase
         if q["type"] == "heure":
             t["statut"] = "fait" if ok else "rate"
         ecrire(TACHES, taches)
     else:
-        texte = f"BOSS, rappel : {t['texte']}"
+        texte = interpeller(f"rappel : {t['texte']}")
     nouvelle_annonce(t, texte, annonces)
 
 
@@ -569,7 +586,7 @@ def au_lieu(t, lieux, position, annonces, now):
         if not q.get("chaque_fois"):
             t["statut"] = "fait"
             t["fin"] = now.isoformat(timespec="minutes")
-        nouvelle_annonce(t, f"BOSS, rappel ({q.get('lieu_nom', q['lieu'])}) : {t['texte']}", annonces)
+        nouvelle_annonce(t, interpeller(f"rappel ({q.get('lieu_nom', q['lieu'])}) : {t['texte']}"), annonces)
         change = True
     if dedans != bool(q.get("dedans")) and (dedans or dist > rayon * 1.5):
         q["dedans"] = dedans
@@ -602,7 +619,7 @@ def tick(position=None, envoyer_telegram=True):
                 if now - datetime.fromisoformat(t.get("fin", "")) > timedelta(minutes=10):
                     t["statut"] = "incertain"
                     change = True
-                    nouvelle_annonce(t, f"BOSS, je ne sais pas si « {t['texte']} » a été fait (coupure pendant l'action) : vérifie le radiateur.", annonces)
+                    nouvelle_annonce(t, interpeller(f"je ne sais pas si « {t['texte']} » a été fait (coupure pendant l'action) : vérifie le radiateur."), annonces)
             except ValueError:
                 pass
             continue
@@ -743,7 +760,7 @@ def main():
                 textes = []
                 if not os.path.exists(alerte):    # une seule alerte, pas une par minute
                     open(alerte, "w").close()
-                    textes = ["BOSS, " + str(e)]
+                    textes = [interpeller(str(e))]
             print(json.dumps({"ok": True, "telegram": textes}, ensure_ascii=False))
             return
         if a.position:                            # position partagee sur Telegram (trombone > Position)
