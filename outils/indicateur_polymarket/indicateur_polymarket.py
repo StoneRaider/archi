@@ -106,6 +106,12 @@ TEXTE_CONSEIL = re.compile(r"\b(achetez|vendez|pariez|misez|investissez|tu devra
 AVERTISSEMENT = "Ce sont des probabilités estimées par les parieurs du marché, pas des certitudes."
 
 
+def _qui():
+    """« , Camille » : le prenom du profil (ARCHI_UTILISATEUR, regle a l'installation) ; rien s'il manque."""
+    p = " ".join((os.environ.get("ARCHI_UTILISATEUR") or "").split())[:30]
+    return (", " + p) if p else ""
+
+
 class Erreur(Exception):
     pass
 
@@ -710,7 +716,7 @@ def passe():
             continue
         texte = ("🔮 Polymarket : mouvement fort cette nuit\n" + ligne_signal(s, tr, pqs.get(s["id"])) +
                  ("\n(activité inhabituelle sur ce marché)" if s.get("volume_anormal") else "") + "\n" + AVERTISSEMENT)
-        vocal = f"BOSS, mouvement fort sur Polymarket : {nom(s, tr)}, le marché estime maintenant {pct(s['prix'])}."
+        vocal = f"Mouvement fort sur Polymarket{_qui()} : {nom(s, tr)}, le marché estime maintenant {pct(s['prix'])}."
         if prevenir(nettoyer(texte), vocal):
             envoyees.append({"id": s["id"], "quand": now.isoformat(timespec="seconds")})
             noter(f"alerte {s['slug']} {s['d24']:+.2f}")

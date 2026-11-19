@@ -21,6 +21,12 @@ DUREE_VALIDITE = timedelta(hours=2)
 
 
 # ---------- outils ----------
+def _qui():
+    """« , Camille » : le prenom du profil (ARCHI_UTILISATEUR, regle a l'installation) ; rien s'il manque."""
+    p = " ".join((os.environ.get("ARCHI_UTILISATEUR") or "").split())[:30]
+    return (", " + p) if p else ""
+
+
 def _norm(t):
     t = unicodedata.normalize("NFD", str(t or "").lower())
     return "".join(c for c in t if unicodedata.category(c) != "Mn")
@@ -279,7 +285,7 @@ def preparer(a, sujet, corps, boite="gmail"):
         alerte = (" ATTENTION : je n'ai jamais vu " + ("ces adresses" if len(inconnues) > 1 else "cette adresse")
                   + " dans tes mails, vérifie l'orthographe : "
                   + " ; ".join(_epeler(x) for x in inconnues) + ".")
-    phrase = (f"Voici le mail prêt BOSS, depuis ta boîte {nom_boite}, pour {', '.join(dest)}.{alerte} "
+    phrase = (f"Voici le mail prêt{_qui()}, depuis ta boîte {nom_boite}, pour {', '.join(dest)}.{alerte} "
               f"Objet : {sujet}. Texte : {corps} Je l'envoie ?")
     return {"ok": True, "statut": "APERCU", "boite": b, "a": dest, "sujet": sujet,
             "adresses_inconnues": inconnues, "phrase_pour_utilisateur": phrase}
@@ -302,4 +308,4 @@ def envoyer():
     os.remove(EN_ATTENTE)
     nom_boite = "Gmail" if att["boite"] == "gmail" else "Outlook"
     return {"ok": True, "statut": "ENVOYE", "boite": att["boite"], "a": att["a"], "sujet": att["sujet"],
-            "phrase_pour_utilisateur": f"C'est envoyé BOSS, depuis ta boîte {nom_boite}, à {', '.join(att['a'])}."}
+            "phrase_pour_utilisateur": f"C'est envoyé{_qui()}, depuis ta boîte {nom_boite}, à {', '.join(att['a'])}."}

@@ -71,6 +71,12 @@ SANS_FENETRE = 0x08000000 if os.name == "nt" else 0
 
 
 # ---------------------------------------------------------------- petits outils
+def _qui():
+    """« , Camille » : le prenom du profil (ARCHI_UTILISATEUR, regle a l'installation) ; rien s'il manque."""
+    p = " ".join((os.environ.get("ARCHI_UTILISATEUR") or "").split())[:30]
+    return (", " + p) if p else ""
+
+
 def log(t):
     try:
         with open(JOURNAL, "a", encoding="utf-8") as f:
@@ -679,7 +685,7 @@ def travailler(dossier):
     texte = (f"🎬 VIDÉO ANALYSÉE (images + son) : {v['titre']}\n\n{resume}\n\n"
              f"{len(imgs)} images regardées, paroles : {source_son}, {len(captures)} captures gardées.\n"
              f"Fiche rangée dans la Bibliothèque du château : {nom}")
-    prevenir(texte, f"J'ai fini de regarder la vidéo BOSS, la fiche est dans ta bibliothèque.")
+    prevenir(texte, f"J'ai fini de regarder la vidéo{_qui()}, la fiche est dans ta bibliothèque.")
     return {"ok": True, "fiche": chemin, "nom_fiche": nom, "images": len(imgs), "son": source_son,
             "captures": [c["garde"] for c in captures], "affiche_dans_panneau": montre, "minutes": minutes,
             "resume": resume,
@@ -696,7 +702,7 @@ def travail_en_fond(dossier):
         detail = getattr(e, "detail", "") or str(e)
         log(f"ERREUR {phrase} {detail[:300]}")
         ecrire_etat(en_cours=False, etape="erreur", erreur=phrase, detail=detail[:300])
-        prevenir(f"🎬 Analyse vidéo ratée : {phrase}", f"L'analyse de la vidéo a raté BOSS : {phrase}")
+        prevenir(f"🎬 Analyse vidéo ratée : {phrase}", f"L'analyse de la vidéo a raté{_qui()} : {phrase}")
         return {"ok": False, "phrase_pour_utilisateur": phrase, "detail": detail[:300]}
     finally:
         if not os.environ.get("VISION_VIDEO_GARDER_TEMP"):

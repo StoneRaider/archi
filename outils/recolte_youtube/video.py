@@ -27,6 +27,12 @@ DUREE_MAX = 40 * 60            # on ignore les videos de plus de 40 min dans une
 DUREE_MAX_WHISPER = 15 * 60    # au-dela, pas de transcription par le son (trop long)
 
 
+def _qui():
+    """« , Camille » : le prenom du profil (ARCHI_UTILISATEUR, regle a l'installation) ; rien s'il manque."""
+    p = " ".join((os.environ.get("ARCHI_UTILISATEUR") or "").split())[:30]
+    return (", " + p) if p else ""
+
+
 def ytdlp(args, timeout=120):
     base = [PY, "-m", "yt_dlp", "--no-warnings", "--quiet", "--extractor-args", "youtube:lang=fr"]
     node = shutil.which("node") or ""
@@ -175,7 +181,7 @@ def main():
     try:
         vids = [infos(cible)] if action == "lien" else chercher(cible)
         if not vids:
-            print(json.dumps({"ok": True, "videos": [], "phrase_pour_utilisateur": "Je n'ai trouvé aucune vidéo exploitable sur ce sujet BOSS."}, ensure_ascii=False))
+            print(json.dumps({"ok": True, "videos": [], "phrase_pour_utilisateur": "Je n'ai trouvé aucune vidéo exploitable sur ce sujet" + _qui() + "."}, ensure_ascii=False))
             return
         res = [traiter(v, question or (cible if action != "lien" else ""), dossier) for v in vids]
         print(json.dumps({"ok": True, "videos": res}, ensure_ascii=False))
@@ -188,4 +194,4 @@ if __name__ == "__main__":
         main()
     except Exception as err:
         print(json.dumps({"ok": False, "erreur": str(err)[:300],
-                          "phrase_pour_utilisateur": "Je n'ai pas réussi à lire YouTube BOSS : " + str(err)[:120]}, ensure_ascii=False))
+                          "phrase_pour_utilisateur": "Je n'ai pas réussi à lire YouTube" + _qui() + " : " + str(err)[:120]}, ensure_ascii=False))

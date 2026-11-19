@@ -27,6 +27,12 @@ MAX_MOIS_VIDEOS = 300    # en mode "N mois", la date arrete avant
 MIN_PAR_VIDEO = 1.0      # estimation : ~1 min par video (sous-titres + fiche par le modele local)
 
 
+def _qui():
+    """« , Camille » : le prenom du profil (ARCHI_UTILISATEUR, regle a l'installation) ; rien s'il manque."""
+    p = " ".join((os.environ.get("ARCHI_UTILISATEUR") or "").split())[:30]
+    return (", " + p) if p else ""
+
+
 def sortir(ok, resultat, phrase):
     print(json.dumps({"ok": ok, "resultat": resultat, "phrase_pour_utilisateur": phrase}, ensure_ascii=False))
     sys.exit(0)
@@ -119,7 +125,7 @@ def etat():
         oral.append(f"{len(f)} récolte{'s' if len(f) > 1 else ''} en attente dans la file.")
     else:
         lignes.append("File d'attente vide.")
-    sortir(True, "\n".join(lignes), " ".join(oral) + " BOSS.")
+    sortir(True, "\n".join(lignes), " ".join(oral) + _qui() + ".")
 
 
 def arreter():
@@ -130,19 +136,19 @@ def arreter():
     vidée = f" J'ai aussi vidé la file d'attente ({len(f)} demande{'s' if len(f) > 1 else ''} : {'; '.join(', '.join(noms_de(d.get('chaines', []))) for d in f)})." if f else ""
     if not e.get("en_cours"):
         sortir(True, "Aucune récolte en cours : rien à arrêter." + vidée,
-               "Il n'y a aucune récolte en cours BOSS." + (" J'ai vidé la file d'attente." if f else ""))
+               "Il n'y a aucune récolte en cours" + _qui() + "." + (" J'ai vidé la file d'attente." if f else ""))
     open(R.STOP, "w").write(datetime.now().isoformat(timespec="seconds"))
     sortir(True, f"ARRÊT DEMANDÉ : la récolte de {', '.join(e.get('chaines') or [])} s'arrête après la vidéo en cours "
                  f"(1 à 2 min). {e.get('faites', 0)} vidéos déjà rangées restent dans la Bibliothèque. Un message confirmera l'arrêt." + vidée,
-           "Je demande l'arrêt de la récolte BOSS : elle s'arrête après la vidéo en cours, je te préviens quand c'est fait.")
+           "Je demande l'arrêt de la récolte" + _qui() + " : elle s'arrête après la vidéo en cours, je te préviens quand c'est fait.")
 
 
 def suivies():
     s = R.lire_suivies()
     if not s:
-        sortir(True, "Aucune chaîne suivie.", "Je ne suis aucune chaîne pour l'instant BOSS.")
+        sortir(True, "Aucune chaîne suivie.", "Je ne suis aucune chaîne pour l'instant" + _qui() + ".")
     sortir(True, "Chaînes suivies par la veille (chaque matin à 7 h 20) :\n" + "\n".join(f"- {c['nom']} (depuis le {c.get('depuis', '?')})" for c in s),
-           f"Je suis {len(s)} chaînes BOSS : " + ", ".join(c["nom"] for c in s) + ".")
+           f"Je suis {len(s)} chaînes{_qui()} : " + ", ".join(c["nom"] for c in s) + ".")
 
 
 def retirer(texte):
@@ -162,7 +168,7 @@ def retirer(texte):
     res = (f"Ne sont plus suivies : {', '.join(retirees)}." if retirees else "") + \
           (f" Introuvables dans la liste : {', '.join(introuvables)}." if introuvables else "")
     sortir(bool(retirees), res.strip() + " Les fiches déjà rangées restent dans la Bibliothèque.",
-           (f"C'est fait BOSS, je ne suis plus {', '.join(retirees)}." if retirees else "Je n'ai trouvé aucune de ces chaînes dans ma liste BOSS.")
+           (f"C'est fait{_qui()}, je ne suis plus {', '.join(retirees)}." if retirees else "Je n'ai trouvé aucune de ces chaînes dans ma liste" + _qui() + ".")
            + (f" Pas trouvé : {', '.join(introuvables)}." if retirees and introuvables else ""))
 
 
@@ -189,7 +195,7 @@ def ranger_videos(liens, reste):
     note = (f" (Les noms {', '.join(reste)} n'ont pas été traités : relance-les à part si l'utilisateur veut leurs chaînes.)" if reste else "")
     if not nouveaux:
         sortir(True, "Cette vidéo est déjà en cours de récolte ou dans la file : rien de plus à faire." + note,
-               "Cette vidéo est déjà en route BOSS, je te préviens quand elle est rangée.")
+               "Cette vidéo est déjà en route" + _qui() + ", je te préviens quand elle est rangée.")
     demande = {"videos": nouveaux, "mois": 0, "demande_le": datetime.now().isoformat(timespec="seconds")}
     n = len(nouveaux)
     quoi = f"{n} vidéo{'s' if n > 1 else ''} à l'unité"
@@ -199,11 +205,11 @@ def ranger_videos(liens, reste):
         R.ecrire_file(f)
         sortir(True, f"MISE EN FILE (position {len(f)}) : {quoi} ({', '.join(nouveaux)}). Fiche dans la Bibliothèque quand la récolte en cours "
                      f"({', '.join(e.get('chaines') or [])}) sera finie." + note,
-               f"Une récolte tourne déjà BOSS : je mets ta vidéo dans la file, je la range dans la bibliothèque juste après.")
+               f"Une récolte tourne déjà{_qui()} : je mets ta vidéo dans la file, je la range dans la bibliothèque juste après.")
     R.demarrer(demande)
     sortir(True, f"RÉCOLTE LANCÉE : {quoi} ({', '.join(nouveaux)}) -> une fiche par vidéo dans la Bibliothèque "
                  f"(sous-titres, sinon le son). Seulement cette vidéo : la chaîne n'est PAS récoltée ni suivie. l'utilisateur sera prévenu à la fin." + note,
-           f"C'est parti BOSS : je range {'ces vidéos' if n > 1 else 'cette vidéo'} dans ta bibliothèque, une à deux minutes par vidéo. Je te préviens à la fin.")
+           f"C'est parti{_qui()} : je range {'ces vidéos' if n > 1 else 'cette vidéo'} dans ta bibliothèque, une à deux minutes par vidéo. Je te préviens à la fin.")
 
 
 def recolter(cible, question):
@@ -219,7 +225,7 @@ def recolter(cible, question):
         mois, tout = 0, True
     noms = [n.strip() for n in re.split(r"[,;\n]| et ", cible) if n.strip()]
     if not noms:
-        sortir(False, "ERREUR : donne le nom des chaînes dans cible, séparés par des virgules.", "Il me faut le nom exact de la chaîne BOSS.")
+        sortir(False, "ERREUR : donne le nom des chaînes dans cible, séparés par des virgules.", "Il me faut le nom exact de la chaîne" + _qui() + ".")
     trop = noms[MAX_CHAINES:]
     noms = noms[:MAX_CHAINES]
 
@@ -236,7 +242,7 @@ def recolter(cible, question):
         sortir(False, "RIEN N'EST LANCÉ. Nom de chaîne pas sûr :\n- " + "\n- ".join(douteux) + ok_txt +
                "\nDemande à l'utilisateur le nom exact (ou un lien de la chaîne), puis relance.",
                "Je ne trouve pas exactement " + ", ".join(n.split(" : ")[0] for n in douteux) +
-               " BOSS. Tu peux me redire le nom exact, ou m'envoyer un lien de la chaîne ?")
+               "" + _qui() + ". Tu peux me redire le nom exact, ou m'envoyer un lien de la chaîne ?")
 
     # 2) TOUTE LA CHAINE : compter les vraies videos a faire (point 2 : ne plus mentir sur la duree)
     detail, prevu = [], None
@@ -267,7 +273,7 @@ def recolter(cible, question):
     trouvees = [c for c in trouvees if R.slug(c["nom"]) not in deja_noms]
     if not trouvees:
         sortir(True, f"DÉJÀ EN ROUTE : {', '.join(doublons)} est déjà en cours de récolte ou dans la file. Rien de plus à faire.",
-               f"{', '.join(doublons)}, c'est déjà en route BOSS, je te préviens à la fin.")
+               f"{', '.join(doublons)}, c'est déjà en route{_qui()}, je te préviens à la fin.")
     if doublons:
         info += f" ({', '.join(doublons)} : déjà en route, pas relancée.)"
         demande["chaines"] = trouvees
@@ -279,18 +285,18 @@ def recolter(cible, question):
         R.ecrire_file(f)
         sortir(True, f"MISE EN FILE (position {len(f)}) : {noms_ok}, {periode}{info}. Elle démarrera toute seule après la récolte en cours "
                      f"({', '.join(e.get('chaines') or [])}, {e.get('faites', 0)} vidéos faites).",
-               f"Une récolte tourne déjà BOSS : je mets {noms_ok} dans la file, en position {len(f)}. Elle démarrera toute seule après."
+               f"Une récolte tourne déjà{_qui()} : je mets {noms_ok} dans la file, en position {len(f)}. Elle démarrera toute seule après."
                + (f" Il y a {prevu} vidéos à faire, {duree}." if tout else ""))
     R.demarrer(demande)
     sortir(True, f"RÉCOLTE LANCÉE en arrière-plan : {noms_ok}, {periode}{info}. l'utilisateur sera prévenu à la fin.",
-           f"C'est parti BOSS : je récolte {noms_ok}, {periode}, en arrière-plan."
+           f"C'est parti{_qui()} : je récolte {noms_ok}, {periode}, en arrière-plan."
            + (f" Il y a {prevu} vidéos à faire, {duree}." if tout else " Ça peut prendre une à deux heures.")
            + " Je te préviens à la fin.")
 
 
 def main():
     if "--fichier" not in sys.argv:
-        sortir(False, "ERREUR : --fichier manquant", "Problème technique sur la récolte BOSS.")
+        sortir(False, "ERREUR : --fichier manquant", "Problème technique sur la récolte" + _qui() + ".")
     d = json.load(open(sys.argv[sys.argv.index("--fichier") + 1], encoding="utf-8-sig"))
     cible = str(d.get("cible") or "").strip()
     question = str(d.get("question") or "")
@@ -315,4 +321,4 @@ if __name__ == "__main__":
         raise
     except Exception as err:
         print(json.dumps({"ok": False, "resultat": "ERREUR recolte_lancer : " + str(err)[:300],
-                          "phrase_pour_utilisateur": "La récolte a eu un souci technique BOSS."}, ensure_ascii=False))
+                          "phrase_pour_utilisateur": "La récolte a eu un souci technique" + _qui() + "."}, ensure_ascii=False))

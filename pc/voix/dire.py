@@ -26,6 +26,12 @@ FINI = os.path.join(DOSSIER, "fini.txt")         # pid de la derniere lecture fi
 NETTOYER = os.path.join(ICI, "nettoyer_voix.js")
 
 
+def _qui():
+    """« , Camille » : le prenom du profil (ARCHI_UTILISATEUR, regle a l'installation) ; rien s'il manque."""
+    p = " ".join((os.environ.get("ARCHI_UTILISATEUR") or "").split())[:30]
+    return (", " + p) if p else ""
+
+
 def nettoyer(texte):
     try:
         r = subprocess.run(["node", NETTOYER], input=texte.encode("utf-8"), capture_output=True, timeout=15,
@@ -307,5 +313,5 @@ if __name__ == "__main__":
             ticket = None
         jouer(texte, ticket=ticket)
     else:
-        texte = sys.stdin.buffer.read().decode("utf-8", "replace").strip() or "Salut BOSS, c'est Archi. Je te parle depuis Claude."
+        texte = sys.stdin.buffer.read().decode("utf-8", "replace").strip() or "Salut" + _qui() + ", c'est Archi. Je te parle depuis Claude."
         print(json.dumps({"ok": True, "via": jouer(texte, bavard=True)}))
