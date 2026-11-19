@@ -247,7 +247,7 @@ taches.append({"id": "t77", "texte": "eteindre le radiateur", "statut": "en_cour
                "quand": {"type": "heure", "a": "2026-11-04T08:40"}})
 P.ecrire(P.TACHES, taches)
 t1 = P.tick()
-verif("action coupee : incertain + prevenu", any("je ne sais pas" in x for x in t1) and
+verif("action coupee : incertain + prevenu", any("je ne sais pas" in x.lower() for x in t1) and
       [x for x in P.lire(P.TACHES, [], True) if x["id"] == "t77"][0]["statut"] == "incertain", t1)
 # annonce sans voix : pas donnee a l'appli pendant 3 min
 P.ecrire(P.ANNONCES, [{"id": "a1", "tache": "t1", "texte": "x", "cree": L.isoformat(), "audio": "", "voix_faite": False, "telegram": True, "appli": False}])
@@ -326,6 +326,18 @@ t = P.tick()
 verif("rappel de lieu declenche par la position telegram", any("tomates" in x for x in t), t)
 r = cli(["--position"], {"lat": "n'importe quoi"})
 verif("position illisible refusee", not r["ok"], r)
+
+# --- le prenom du profil a la place de « BOSS » (19/11) : ARCHI_UTILISATEUR, sinon la phrase s'en passe
+os.environ["ARCHI_UTILISATEUR"] = "Camille"
+verif("interpeller avec prenom", P.interpeller("rappel : pain") == "Camille, rappel : pain")
+r = appel(P, action="ajouter", texte="acheter du pain", a="demain 9h")
+verif("ajout : prenom du profil", r["ok"] and r["phrase_pour_utilisateur"].startswith("C'est programmé, Camille : "), r)
+os.environ["ARCHI_UTILISATEUR"] = "  "
+verif("interpeller sans prenom", P.interpeller("rappel : pain") == "Rappel : pain")
+r = appel(P, action="ajouter", texte="acheter du lait", a="demain 10h")
+verif("ajout : sans prenom", r["ok"] and r["phrase_pour_utilisateur"].startswith("C'est programmé : "), r)
+verif("plus de BOSS dans le planificateur", "BOSS" not in open(os.path.join(ICI, "planificateur.py"), encoding="utf-8").read())
+os.environ.pop("ARCHI_UTILISATEUR", None)
 
 print(f"{OK} OK, {KO} ECHEC")
 sys.exit(1 if KO else 0)
