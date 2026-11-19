@@ -25,10 +25,12 @@ class FauxLM(BaseHTTPRequestHandler):
 
     def do_POST(self):
         corps = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-        if "gemma" in corps["model"] and corps.get("reasoning_effort") != "none":
+        # une demande « vue » porte une image ; le nom du modele ne dit plus rien (un seul modele voit et ecrit, 19/11)
+        vue = any(isinstance(m.get("content"), list) for m in corps.get("messages") or [])
+        if vue and corps.get("reasoning_effort") != "none":
             APPELS["vue"] += 1
-            rep = ""   # comme le vrai Gemma 4 qui reflechit : reponse vide
-        elif "gemma" in corps["model"]:
+            rep = ""   # comme un modele qui reflechit sans budget : reponse vide
+        elif vue:
             APPELS["vue"] += 1
             rep = "On voit une mire de couleurs et un compteur. **INTERET: 2**"   # tout sur une ligne
         else:
@@ -104,7 +106,7 @@ def main():
     # LM Studio injoignable
     env_mort = dict(env, VISION_VIDEO_LM="http://127.0.0.1:9/v1/chat/completions")
     r = outil({"source": courte}, "--sur-place", env2=env_mort)
-    verif("LM Studio eteint : erreur expliquee", r["ok"] is False and "Gemma" in r["phrase_pour_utilisateur"], r)
+    verif("LM Studio eteint : erreur expliquee", r["ok"] is False and "LM Studio" in r["phrase_pour_utilisateur"], r)
 
     # analyse complete (passage 0:05 -> 0:45 d'un fichier local, sans paroles)
     r = outil({"parametres": {"lien": courte, "question": "que montre la mire ?", "debut": "0:05", "images_max": "12"}},

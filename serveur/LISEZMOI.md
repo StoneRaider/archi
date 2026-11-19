@@ -48,7 +48,7 @@ Pour vérifier : ouvre `http://127.0.0.1:8765/sante` dans ton navigateur.
 | Variable | Rôle | Par défaut |
 |---|---|---|
 | `ARCHI_SERVEUR_DONNEES` | dossier des jetons et des journaux | `serveur/donnees` |
-| `ARCHI_LM_URL`, `ARCHI_MODELE` | LM Studio et le modèle | `http://127.0.0.1:1234/v1`, `openai/gpt-oss-20b` |
+| `ARCHI_LM_URL`, `ARCHI_MODELE` | LM Studio et le modèle | `http://127.0.0.1:1234/v1`, `qwythos-9b-claude-mythos-5-1m` |
 | `ARCHI_TRI_ACTION` | `tri_auto` (ranger) ou `corbeille` (jeter) | `tri_auto` |
 | `ARCHI_FUSEAU` | fuseau de l'agenda | `Europe/Paris` |
 | `ARCHI_UTILISATEUR` | prénom utilisé dans les consignes du modèle | « l'utilisateur » |

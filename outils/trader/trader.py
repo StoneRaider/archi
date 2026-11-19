@@ -429,7 +429,7 @@ def demander(c, contexte):
                                max_actif="%g" % c["max_par_actif_pct"], max_ordres="%g" % c["max_ordres_jour"],
                                ordre_min="%g" % c["ordre_min_usd"], frais="%g" % c["frais_pct"],
                                perte_sem="%g" % c["perte_max_semaine_pct"], max_decisions=MAX_DECISIONS)
-    corps = {"model": os.environ.get("ARCHI_MODELE") or "openai/gpt-oss-20b", "temperature": 0.3, "max_tokens": 1500,
+    corps = {"model": os.environ.get("ARCHI_MODELE") or "qwythos-9b-claude-mythos-5-1m", "temperature": 0.3, "max_tokens": 1500,
              "reasoning_effort": "low",
              "messages": [{"role": "system", "content": consigne}, {"role": "user", "content": contexte}]}
     try:

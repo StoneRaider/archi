@@ -227,7 +227,7 @@ def lisser(v, n=8):
 
 # ---------- modele local ----------
 def llm(systeme, contenu, jetons=2500):
-    corps = {"model": os.environ.get("ARCHI_MODELE", "openai/gpt-oss-20b"), "temperature": 0.3, "max_tokens": jetons,
+    corps = {"model": os.environ.get("ARCHI_MODELE", "qwythos-9b-claude-mythos-5-1m"), "temperature": 0.3, "max_tokens": jetons,
              "messages": [{"role": "system", "content": systeme}, {"role": "user", "content": contenu}]}
     req = urllib.request.Request(LM, data=json.dumps(corps).encode("utf-8"), headers={"Content-Type": "application/json"}, method="POST")
     with urllib.request.urlopen(req, timeout=600) as r:
@@ -236,7 +236,7 @@ def llm(systeme, contenu, jetons=2500):
 
 
 # ---------- les yeux : le modele d'image regarde une image toutes les 10 s ----------
-MODELE_IMAGE = os.environ.get("ARCHI_MODELE_VISION", "google/gemma-3-12b")
+MODELE_IMAGE = os.environ.get("ARCHI_MODELE_VISION", "qwythos-9b-claude-mythos-5-1m")
 PAS_IMAGES = 10
 PAR_LOT = 4
 

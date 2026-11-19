@@ -154,7 +154,7 @@ if (cleImage) {
   const buf = await this.helpers.getBinaryDataBuffer(0, cleImage);
   const rep = await this.helpers.httpRequest({
     method: 'POST', url: ($env.ARCHI_LM_URL || 'http://127.0.0.1:1234/v1') + '/chat/completions', json: true, timeout: 180000,
-    body: { model: $env.ARCHI_MODELE_VISION || 'google/gemma-3-12b', temperature: 0.2, messages: [{ role: 'user', content: [
+    body: { model: $env.ARCHI_MODELE_VISION || 'qwythos-9b-claude-mythos-5-1m', temperature: 0.2, messages: [{ role: 'user', content: [
       { type: 'text', text: "Decris precisement cette photo prise sur le terrain (objets, etat, texte lisible, mesures visibles). Pas d'hypothese sur les personnes." },
       { type: 'image_url', image_url: { url: 'data:' + bin[cleImage].mimeType + ';base64,' + buf.toString('base64') } }] }] },
   });
@@ -329,7 +329,7 @@ def cerveau(suffixe, x, y, cle_session):
               {"promptType": "define", "text": "={{ $json.texte }}",
                "options": {"systemMessage": SYSTEME, "maxIterations": 6, "returnIntermediateSteps": True}}),
         noeud("Modele local" + suffixe, "@n8n/n8n-nodes-langchain.lmChatOpenAi", 1.2, x - 80, y + 220,
-              {"model": {"__rl": True, "value": "={{ $env.ARCHI_MODELE || 'openai/gpt-oss-20b' }}", "mode": "id"},
+              {"model": {"__rl": True, "value": "={{ $env.ARCHI_MODELE || 'qwythos-9b-claude-mythos-5-1m' }}", "mode": "id"},
                "options": {"temperature": 0.3}},
               {"openAiApi": {"id": "ArchiLmStudio001", "name": "LM Studio (local)"}}),
         noeud("Memoire courte" + suffixe, "@n8n/n8n-nodes-langchain.memoryBufferWindow", 1.3, x + 80, y + 220,

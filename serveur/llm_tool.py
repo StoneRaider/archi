@@ -1,3 +1,5 @@
+import re
+
 import requests
 from reglages import LM_URL as LM_STUDIO_URL, MODELE, UTILISATEUR
 
@@ -19,10 +21,11 @@ def ask_llm(prompt: str) -> str:
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.3,
-        "max_tokens": 500,
+        "max_tokens": 2000,   # le modele reflechit avant d'ecrire : avec 500, Qwythos 9B rendait des reponses vides (banc du 19/11 : 5/5 avec 2000)
         "top_p": 0.9,
     }
 
     response = requests.post(LM_STUDIO_URL, json=payload, timeout=300)
     response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"]
+    texte = response.json()["choices"][0]["message"].get("content") or ""
+    return re.sub(r"(?s)<think>.*?</think>", "", texte).strip()   # une reflexion laissee dans le texte n'est pas la reponse

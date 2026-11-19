@@ -470,7 +470,7 @@
   "timeout_s": 180,
   "touche": [
    "internet (YouTube seulement)",
-   "LM Studio local (Gemma, gpt-oss)",
+   "LM Studio local",
    "Whisper local",
    "memoire/bibliotheque",
    "panneau Archi (une capture)"

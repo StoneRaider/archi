@@ -588,7 +588,7 @@ def propre(message):
 def appeler_modele(consigne, message, schema, appel=None):
     """le texte rendu par le modele local, sa forme imposee par le schema (si le serveur le permet)"""
     corps = {
-        "model": os.environ.get("ARCHI_MODELE") or "openai/gpt-oss-20b",
+        "model": os.environ.get("ARCHI_MODELE") or "qwythos-9b-claude-mythos-5-1m",
         "temperature": 0,
         "max_tokens": 1600,   # le modele reflechit avant de repondre : 700 ne suffisait pas toujours (relations)
         "reasoning_effort": "low",   # un travail de greffier : pas besoin de longue reflexion (ignore par les modeles qui ne l'ont pas)

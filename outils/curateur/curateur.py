@@ -429,7 +429,7 @@ def chercher_contradictions(fiches, appel=None):
             lignes.append("%d. %s" % (len(numerotes), court(sans_date(x), 200)))
     if len(numerotes) < 2:
         return []
-    corps = {"model": os.environ.get("ARCHI_MODELE") or "openai/gpt-oss-20b", "temperature": 0, "max_tokens": 900,
+    corps = {"model": os.environ.get("ARCHI_MODELE") or "qwythos-9b-claude-mythos-5-1m", "temperature": 0, "max_tokens": 900,
              "reasoning_effort": "low",
              "messages": [{"role": "system", "content": CONSIGNE}, {"role": "user", "content": "\n".join(lignes)}]}
     appel = appel or appel_par_defaut

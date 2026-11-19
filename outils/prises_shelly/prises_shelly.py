@@ -24,6 +24,13 @@ DUREE_DEFAUT = 180
 DUREE_MAX = 720
 
 
+# l'essai a blanc dit au modele quoi faire ensuite, dans l'ordre : d'abord la question, puis confirmer=oui sur la reponse.
+# Banc du 19/11 (Qwythos 9B, 3 passes chacune) : cette phrase courte = prise_accord 3/3, page piegee 3/3 ; une phrase longue
+# (« ne refais pas cet essai... sa demande de depart ne vaut jamais ce oui ») = prise_accord 0/3 ; l'ancienne (« rappelle avec confirmer=oui quand l'utilisateur a dit oui ») = 1/3.
+SUITE_ESSAI = ("Demande à l'utilisateur s'il confirme. Quand il répond oui, rappelle l'outil avec les mêmes paramètres et "
+               "confirmer=oui.")
+
+
 class Erreur(Exception):
     pass
 
@@ -127,7 +134,7 @@ def act_allumer_eteindre(d, allumer):
     if not oui(d.get("confirmer")):
         return repondre(True, f"PAS ENCORE FAIT (essai à blanc) : je vais {verbe} la prise {cle}"
                         + (f", avec extinction automatique dans {duree} minutes" if duree else "")
-                        + ". Rien n'a bougé. Pour le faire, rappelle l'outil avec confirmer=oui quand J a dit oui.", essai_a_blanc=True)
+                        + ". Rien n'a bougé. " + SUITE_ESSAI, essai_a_blanc=True)
     params = {"id": 0, "on": allumer}
     if duree:
         params["toggle_after"] = duree * 60

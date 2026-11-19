@@ -69,7 +69,7 @@
     "url": "={{ $env.ARCHI_LM_URL }}/chat/completions",
     "sendBody": true,
     "specifyBody": "json",
-    "jsonBody": "={\n  \"model\": \"{{ $env.ARCHI_MODELE_VISION || 'google/gemma-3-12b' }}\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": [\n        { \"type\": \"text\", \"text\": {{ JSON.stringify($('When Executed by Another Workflow').item.json.question || 'Décris cette image en détail, en français.') }} },\n        { \"type\": \"image_url\", \"image_url\": { \"url\": \"data:image/jpeg;base64,{{ $json.image64 }}\" } }\n      ]\n    }\n  ],\n  \"max_tokens\": 1000\n}",
+    "jsonBody": "={\n  \"model\": \"{{ $env.ARCHI_MODELE_VISION || 'qwythos-9b-claude-mythos-5-1m' }}\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": [\n        { \"type\": \"text\", \"text\": {{ JSON.stringify($('When Executed by Another Workflow').item.json.question || 'Décris cette image en détail, en français.') }} },\n        { \"type\": \"image_url\", \"image_url\": { \"url\": \"data:image/jpeg;base64,{{ $json.image64 }}\" } }\n      ]\n    }\n  ],\n  \"max_tokens\": 1000\n}",
     "options": {
      "response": {
       "response": {
@@ -188,7 +188,7 @@
     "url": "={{ $env.ARCHI_LM_URL }}/chat/completions",
     "sendBody": true,
     "specifyBody": "json",
-    "jsonBody": "={{ JSON.stringify({\n  model: $env.ARCHI_MODELE_VISION || 'google/gemma-3-12b',\n  messages: [\n    {\n      role: \"user\",\n      content: [\n        { type: \"text\", text: $('When Executed by Another Workflow').item.json.question || \"Décris cette image\" },\n        { type: \"image_url\", image_url: { url: \"data:image/jpeg;base64,\" + $json.image64 } }\n      ]\n    }\n  ],\n  max_tokens: 4000\n}) }}",
+    "jsonBody": "={{ JSON.stringify({\n  model: $env.ARCHI_MODELE_VISION || 'qwythos-9b-claude-mythos-5-1m',\n  messages: [\n    {\n      role: \"user\",\n      content: [\n        { type: \"text\", text: $('When Executed by Another Workflow').item.json.question || \"Décris cette image\" },\n        { type: \"image_url\", image_url: { url: \"data:image/jpeg;base64,\" + $json.image64 } }\n      ]\n    }\n  ],\n  max_tokens: 4000\n}) }}",
     "options": {
      "allowUnauthorizedCerts": false,
      "response": {

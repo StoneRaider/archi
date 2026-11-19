@@ -19,8 +19,8 @@ le contrôle « aucun secret ni donnée personnelle » et les tests. Rien n'est 
 ## 2. Ce qu'il faut
 
 - Windows 10 ou 11, 64 bits, une connexion Internet pour l'installation ;
-- une carte graphique de 16 Go de mémoire vidéo (12 Go au minimum) ; testé sur AMD Radeon RX 9070 ;
-- environ 25 Go de place libre (dont 16 Go pour les modèles : gpt-oss-20b et un modèle de vision) ;
+- une carte graphique de 16 Go de mémoire vidéo (le modèle en prend environ 7) ; testé sur AMD Radeon RX 9070 ;
+- environ 15 Go de place libre (dont 7 Go pour le modèle Qwythos 9B, qui sert aussi pour les photos) ;
 - aucun compte à créer, aucune clé API. Telegram est facultatif.
 
 ## 3. Installer : un double-clic
@@ -57,7 +57,7 @@ double-cliquer sur **`verifier_archi.bat`**.
 
 Avec un téléphone Android : scanner le QR code de la page d'accueil, installer l'appli, toucher « Brancher l'appli ».
 La page du PC coche chaque étape en direct. Ensuite on peut écrire, parler ou envoyer une photo depuis le téléphone :
-elle est décrite par le modèle de vision **du PC**.
+elle est décrite par le modèle **du PC**.
 
 ## 5. Ce qui est vérifiable
 

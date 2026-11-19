@@ -23,7 +23,7 @@ def chemin(*morceaux):
 
 
 LM_URL = os.environ.get("ARCHI_LM_URL", "http://127.0.0.1:1234/v1").rstrip("/") + "/chat/completions"
-MODELE = os.environ.get("ARCHI_MODELE", "openai/gpt-oss-20b")
+MODELE = os.environ.get("ARCHI_MODELE", "qwythos-9b-claude-mythos-5-1m")
 UTILISATEUR = os.environ.get("ARCHI_UTILISATEUR", "l'utilisateur")
 FUSEAU = os.environ.get("ARCHI_FUSEAU", "Europe/Paris")
 # Google : fichier OAuth « application de bureau » telecharge depuis Google Cloud (voir LISEZMOI.md)

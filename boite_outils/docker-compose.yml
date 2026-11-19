@@ -32,7 +32,7 @@ services:
     environment:
       - LLM=${LLM:-custom}
       - CUSTOM_LLM_URL=${CUSTOM_LLM_URL:-http://host.docker.internal:1234/v1}
-      - CUSTOM_MODEL=${CUSTOM_MODEL:-openai/gpt-oss-20b}
+      - CUSTOM_MODEL=${CUSTOM_MODEL:-qwythos-9b-claude-mythos-5-1m}
       - PEXELS_API_KEY=${PEXELS_API_KEY:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"

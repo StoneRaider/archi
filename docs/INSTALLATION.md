@@ -12,7 +12,7 @@ l'installateur, à régler un souci, ou à installer Archi à la main (Linux, ma
 ### Ce que l'installateur pose, étape par étape
 | Étape | Ce qu'il fait | Si ça coince |
 |---|---|---|
-| 1. Ton PC | lit la carte graphique, la mémoire vidéo et la place libre | sous 12 Go de mémoire vidéo, Archi marche mais lentement |
+| 1. Ton PC | lit la carte graphique, la mémoire vidéo et la place libre | sous 8 Go de mémoire vidéo, Archi marche mais lentement |
 | 3. Fichiers | copie le dépôt dans `%USERPROFILE%\Archi` | relance avec `-Destination C:\Archi` si ton nom de session a des accents |
 | 4. Python | `uv` (empreinte vérifiée) télécharge un Python 3.12 privé, puis les modules des outils et du serveur | pare-feu : autorise `github.com` et `pypi.org` |
 | 5. Node.js et n8n | Node.js 22 (zip officiel), puis `npm install n8n@1.123.92` dans `programmes\n8n` | c'est l'étape la plus longue (3 à 10 minutes) |
@@ -74,10 +74,11 @@ Chaque section du `.env` est commentée. Après un changement, relance Archi.
 Il faut compter environ 45 minutes. Tu crées toi-même tes comptes et tes clés : ce dépôt n'en contient aucune.
 Il faut Node.js 22, Python 3.12 ou plus récent, et LM Studio.
 
-### 1. Le cerveau : LM Studio et gpt-oss-20b
-1. Installe LM Studio (lmstudio.ai), puis télécharge `openai/gpt-oss-20b`.
-2. Pour les photos, télécharge aussi un modèle de vision, par exemple `google/gemma-3-4b`.
-3. Onglet Developer : démarre le serveur local, et charge gpt-oss-20b avec un contexte de 16k ou plus.
+### 1. Le cerveau : LM Studio et Qwythos 9B
+1. Installe LM Studio (lmstudio.ai), puis télécharge Qwythos 9B :
+   `lms get https://huggingface.co/empero-ai/Qwythos-9B-Claude-Mythos-5-1M-GGUF` (version Q4_K_M, 6,5 Go).
+2. Le même modèle décrit les photos : pas de second modèle à télécharger (`ARCHI_MODELE_VISION` = `ARCHI_MODELE`).
+3. Onglet Developer : démarre le serveur local, et charge Qwythos 9B avec un contexte de 16k.
 4. Vérifie avec `curl http://127.0.0.1:1234/v1/models`.
 
 ### 2. Le château et les outils

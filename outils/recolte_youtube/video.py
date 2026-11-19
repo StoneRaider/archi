@@ -18,7 +18,7 @@ import urllib.request
 
 PY = sys.executable
 LM = os.environ.get("ARCHI_LM_URL", "http://127.0.0.1:1234/v1").rstrip("/") + "/chat/completions"
-MODELE = os.environ.get("ARCHI_MODELE", "openai/gpt-oss-20b")
+MODELE = os.environ.get("ARCHI_MODELE", "qwythos-9b-claude-mythos-5-1m")
 FFMPEG_DIR = os.environ.get("ARCHI_WHISPER_DIR") or os.path.join(os.path.expanduser("~"), "whisper")   # dossier de ffmpeg + whisper.cpp (ARCHI_WHISPER_DIR)
 WHISPER = os.environ.get("ARCHI_WHISPER") or os.path.join(FFMPEG_DIR, "whisper-bin-x64", "Release", "whisper-cli.exe")
 WHISPER_MODELE = os.environ.get("ARCHI_WHISPER_MODELE") or os.path.join(FFMPEG_DIR, "ggml-medium-q5_0.bin")
