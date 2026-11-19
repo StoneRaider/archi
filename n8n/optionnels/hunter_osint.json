@@ -43,7 +43,7 @@
    "parameters": {
     "model": {
      "__rl": true,
-     "value": "={{ $env.ARCHI_MODELE || 'openai/gpt-oss-20b' }}",
+     "value": "={{ $env.ARCHI_MODELE || 'qwythos-9b-claude-mythos-5-1m' }}",
      "mode": "id"
     },
     "responsesApiEnabled": false,

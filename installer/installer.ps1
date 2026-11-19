@@ -57,9 +57,9 @@ $TELECHARGEMENTS = @{
     "pocket-tts.zip"  = @("https://github.com/kyutai-labs/pocket-tts/releases/download/v4.0.1/pocket-tts-3.3.0-x86_64-pc-windows-msvc.zip", "98753041f2e65744b989776f87bccb93f1f574a08afe1890c5427ec94cd6309c")
 }
 $VERSION_PYTHON = "3.12"
-$MODELE = "openai/gpt-oss-20b"     # le cerveau (12 Go)
-$VISION_GRANDE = "google/gemma-3-12b"   # 8 Go : cartes de 24 Go et plus
-$VISION_PETITE = "google/gemma-3-4b"    # 3 Go : tient a cote du cerveau sur une carte de 16 Go
+$MODELE = "qwythos-9b-claude-mythos-5-1m"   # le cerveau (6,5 Go) : Qwythos 9B, affinage de Qwen3.5-9B (Apache 2.0) ; il voit aussi les photos
+# ou le telecharger : LM Studio prend un depot Hugging Face par son adresse complete (lms get --help)
+$SOURCES_MODELES = @{ "qwythos-9b-claude-mythos-5-1m" = "https://huggingface.co/empero-ai/Qwythos-9B-Claude-Mythos-5-1M-GGUF" }
 
 $SOURCE = Split-Path -Parent $PSScriptRoot            # le dossier decompresse du ZIP
 $Destination = [System.IO.Path]::GetFullPath($Destination).TrimEnd('\')
@@ -173,9 +173,9 @@ $libreGo = 0
 try { $libreGo = [math]::Round((New-Object System.IO.DriveInfo ([System.IO.Path]::GetPathRoot($Destination))).AvailableFreeSpace / 1GB) } catch {}
 Noter ("Carte(s) graphique(s) : " + $(if ($cartes) { $cartes -join ", " } else { "inconnue" }) + $(if ($vramGo) { " ; memoire video : $vramGo Go" } else { "" }))
 Noter "Memoire : $ramGo Go ; place libre sur le disque : $libreGo Go"
-$VISION = if ($vramGo -ge 24) { $VISION_GRANDE } else { $VISION_PETITE }
-if ($vramGo -gt 0 -and $vramGo -lt 12) { Souci "Moins de 12 Go de memoire video : le cerveau (gpt-oss-20b) debordera sur le processeur. Archi marchera, mais lentement." }
-if ($libreGo -gt 0 -and $libreGo -lt 25) { Souci "Moins de 25 Go libres : les modeles (environ 16 Go) risquent de ne pas tenir." }
+$VISION = $MODELE     # un seul modele pour penser, ecrire et voir : la carte reste libre, rien a recharger
+if ($vramGo -gt 0 -and $vramGo -lt 8) { Souci "Moins de 8 Go de memoire video : le cerveau ($MODELE) debordera sur le processeur. Archi marchera, mais lentement." }
+if ($libreGo -gt 0 -and $libreGo -lt 15) { Souci "Moins de 15 Go libres : le modele (environ 7 Go) risque de ne pas tenir." }
 
 # ---------------------------------------------------------------- 2. ce qui va etre installe
 Titre "2. Ce que je vais installer"
@@ -185,8 +185,8 @@ Dire "   - les outils maison d'Archi, son chateau d'exemple (sa memoire) et ses 
 Dire "   - un tunnel HTTPS sans compte (Cloudflare) pour le telephone, et ffmpeg"
 if (-not $SansVoix) { Dire "   - la voix, en local : Whisper (il t'ecoute) et Pocket TTS (il te repond a voix haute), environ 1 Go" }
 if (-not $SansCerveau) {
-    Dire "  Le cerveau : LM Studio (installe par winget s'il manque) et deux modeles (environ 16 Go a telecharger) :"
-    Dire "   - $MODELE (le raisonnement) et $VISION (les photos)"
+    Dire "  Le cerveau : LM Studio (installe par winget s'il manque) et un modele (environ 7 Go a telecharger) :"
+    Dire "   - $MODELE (le raisonnement, l'ecriture et les photos)"
 }
 Dire "  Duree : 15 a 40 minutes selon ta connexion. Tu peux laisser tourner."
 if (-not (Demander "On y va ?" $true)) { Dire "D'accord, rien n'a ete installe."; exit 0 }
@@ -375,7 +375,7 @@ Noter "Fichier .env pret (deux cles aleatoires, creees a la premiere installatio
 function ModelesLa([string]$lms) {
     try { return @(((Lancer $lms @("ls", "--json") 120).sortie | ConvertFrom-Json) | ForEach-Object { $_.modelKey }) } catch { return @() }
 }
-# la cle du modele deja la : la cle exacte, sinon la meme sans l'editeur ('gpt-oss-20b') ; sinon rien
+# la cle du modele deja la : la cle exacte, sinon la meme sans l'editeur ('openai/x' -> 'x') ; sinon rien
 function CleDuModele([string[]]$la, [string]$voulu) {
     if ($la -contains $voulu) { return $voulu }
     $court = ($voulu -split "/")[-1]
@@ -409,7 +409,8 @@ if (-not $SansCerveau) {
             $cle = CleDuModele $la $voulu
             if (-not $cle -and -not $SansModeles -and -not $SansReseau) {
                 Dire "  telechargement du modele $voulu (plusieurs Go : la barre de progression est celle de LM Studio)"
-                & $lms get $voulu --gguf -y
+                $source = if ($SOURCES_MODELES.ContainsKey($voulu)) { $SOURCES_MODELES[$voulu] } else { $voulu }
+                & $lms get $source --gguf -y
                 if ($LASTEXITCODE -ne 0) { Souci "Le modele $voulu n'a pas pu etre telecharge : dans LM Studio, cherche-le et telecharge-le, puis relance Archi." }
                 $la = ModelesLa $lms
                 $cle = CleDuModele $la $voulu

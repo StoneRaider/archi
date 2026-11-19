@@ -49,8 +49,8 @@ AFFICHER = os.path.join(os.environ.get("ARCHI_BASE") or os.path.join(os.path.exp
 ETAT = os.environ.get("VISION_VIDEO_ETAT") or os.path.join(ICI, "etat.json")
 JOURNAL = os.environ.get("VISION_VIDEO_JOURNAL") or os.path.join(ICI, "journal.txt")
 LM = os.environ.get("VISION_VIDEO_LM") or os.environ.get("ARCHI_LM_URL", "http://127.0.0.1:1234/v1").rstrip("/") + "/chat/completions"
-MODELE_VUE = os.environ.get("ARCHI_MODELE_VISION", "google/gemma-3-12b")
-MODELE_TEXTE = os.environ.get("ARCHI_MODELE", "openai/gpt-oss-20b")
+MODELE_VUE = os.environ.get("ARCHI_MODELE_VISION", "qwythos-9b-claude-mythos-5-1m")
+MODELE_TEXTE = os.environ.get("ARCHI_MODELE", "qwythos-9b-claude-mythos-5-1m")
 # webhook n8n LOCAL qui previent l'utilisateur (facultatif ; sans lui, rien n'est envoye)
 RETOUR = os.environ.get("ARCHI_WEBHOOK_ALERTE", "")
 _WH = os.environ.get("ARCHI_WHISPER_DIR") or os.path.join(os.path.expanduser("~"), "whisper")   # dossier de whisper.cpp (ARCHI_WHISPER_DIR)
@@ -551,7 +551,7 @@ def ecrire_fiche(v, d, captures, source_son, nb_images, debut, fin, question):
         f"**Captures :**\n" + ("\n".join(lignes_cap) or "- (aucune)") + "\n"
         f"**À vérifier :**\n{bloc('A_VERIFIER', '- Aucune')}\n"
         f"**Utile pour J :** {bloc('UTILE_POUR_J', 'Rien de particulier')}\n"
-        f"**Sources :**\n- {lien} (images décrites par Gemma en local, paroles : {source_son})\n"
+        f"**Sources :**\n- {lien} (images décrites par le modèle local, paroles : {source_son})\n"
         f"**Liens :**\n- [[videos_analysees]] · [[Bibliothèque]]\n")
     chemin = os.path.join(BIBLIO, nom + ".md")
     with open(chemin, "w", encoding="utf-8") as f:
@@ -640,7 +640,7 @@ def travailler(dossier):
         imgs[0]["vu"], imgs[0]["note"] = decrire(imgs[0], v["titre"], paroles_entre(segs, imgs[0]["t"] - 4,
                                                  min(bornes[1], imgs[0]["t"] + 8)), question)
     except Exception as e:
-        raise ErreurSimple("Le modèle qui voit (Gemma dans LM Studio) ne répond pas.", str(e)[:300])
+        raise ErreurSimple("Le modèle qui voit (dans LM Studio) ne répond pas.", str(e)[:300])
     faites = [1]
 
     def une(k):
@@ -666,7 +666,7 @@ def travailler(dossier):
     ecrire_etat(etape="j'écris la fiche (images et paroles croisées)")
     d = synthese(v, imgs, segs, question, source_son, segs_st)
     if not d.get("RESUME"):
-        raise ErreurSimple("Le cerveau d'Archi (gpt-oss) n'a pas réussi à écrire la fiche.")
+        raise ErreurSimple("Le cerveau d'Archi n'a pas réussi à écrire la fiche.")
     captures = choisir_captures(imgs, d)
     nom, chemin = ecrire_fiche(v, d, captures, source_son, len(imgs), debut, fin, question)
     meilleure = max(captures, key=lambda c: c.get("note", 1)) if captures else None

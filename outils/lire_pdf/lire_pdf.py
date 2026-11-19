@@ -28,7 +28,7 @@ RACINES = [BASE, os.path.join(MAISON, "Downloads"),
 LECTURES = os.path.join(BASE, "admin", "lectures")
 VENV = os.environ.get("ARCHI_PY", "")
 LM = os.environ.get("ARCHI_LM_URL", "http://127.0.0.1:1234/v1").rstrip("/") + "/chat/completions"
-MODELE_IMAGE = os.environ.get("ARCHI_MODELE_VISION", "google/gemma-3-12b")
+MODELE_IMAGE = os.environ.get("ARCHI_MODELE_VISION", "qwythos-9b-claude-mythos-5-1m")
 MAX_OCR = 6          # pages scannees recopiees par appel (environ 20 s chacune)
 EXTRAIT = 3500       # caracteres rendus a Archi dans la reponse
 

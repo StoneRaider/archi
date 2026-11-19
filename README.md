@@ -1,11 +1,11 @@
 # Archi : un agent IA 100 % local, dans la poche et sur le PC
 
 Archi est l'assistant personnel que j'utilise tous les jours depuis l'automne 2026. Tout tourne sur mon PC :
-le modèle (**gpt-oss-20b** via LM Studio), l'orchestration (**n8n**), la mémoire (des fiches Markdown) et
+le modèle (**Qwythos 9B**, un affinage communautaire de Qwen3.5-9B, via LM Studio), l'orchestration (**n8n**), la mémoire (des fiches Markdown) et
 les outils (des scripts Python). Aucun cloud d'IA. On lui parle depuis **le PC**, **son appli Android** ou **Telegram**.
 
 Sur le terrain, je prends une photo depuis l'appli et je demande à Archi de m'aider. La photo part
-sur **mon** PC, un modèle de vision local la décrit, puis l'agent raisonne et utilise ses outils.
+sur **mon** PC, le même modèle local la décrit, puis l'agent raisonne et utilise ses outils.
 Ni la photo ni la conversation ne passent par un service d'IA en ligne.
 
 > Ce dépôt est la **version publique et nettoyée** d'Archi, préparée pour l'ASUS Agent Computer Challenge
@@ -17,7 +17,7 @@ Ni la photo ni la conversation ne passent par un service d'IA en ligne.
 
 ## L'essayer : 3 gestes, aucun compte à créer
 
-Il faut Windows 10 ou 11, une carte graphique de 16 Go (12 Go au minimum) et environ 25 Go de place libre.
+Il faut Windows 10 ou 11, une carte graphique de 16 Go (le modèle en prend environ 7) et environ 15 Go de place libre.
 
 1. **Télécharge `Archi-1.0.zip`** sur la page [Releases](../../releases/latest), puis extrais-le
    (clic droit › « Extraire tout »).
@@ -37,7 +37,7 @@ Les fois suivantes, le raccourci **Archi** du Bureau suffit.
 | Étape | Ce qui est installé | Où |
 |---|---|---|
 | Programmes | Python 3.12, Node.js 22, n8n 1.x, ffmpeg, le tunnel du téléphone | **dans le dossier d'Archi**, en privé |
-| Cerveau | LM Studio, s'il n'est pas déjà là (par `winget`), puis gpt-oss-20b et un modèle de vision (16 Go) | LM Studio |
+| Cerveau | LM Studio, s'il n'est pas déjà là (par `winget`), puis Qwythos 9B, qui pense, écrit et voit les photos (environ 7 Go) | LM Studio |
 | Mémoire | le château d'exemple (des fiches Markdown) et les outils maison | `chateau\` |
 | Réglages | le fichier `.env`, avec deux clés aléatoires créées sur ton PC | à la racine, jamais affiché |
 | Agent | les identifiants et les 10 workflows, importés puis activés dans n8n | `donnees\n8n\` |
@@ -45,8 +45,7 @@ Les fois suivantes, le raccourci **Archi** du Bureau suffit.
 - **Rien n'est installé pour tout Windows**, sauf LM Studio. Ni le PATH ni un Node.js ou un Python déjà présents
   ne sont touchés. Pour désinstaller, supprime le dossier `Archi` de ton dossier personnel.
 - **Aucune télémétrie** : celle de n8n est coupée dans le `.env`.
-- L'installateur détecte la carte graphique : sur 16 Go, il prend un petit modèle de vision qui tient à côté du
-  cerveau ; à partir de 24 Go, un plus gros.
+- Un seul modèle fait tout (raisonner, écrire, décrire les photos) : il reste chargé, rien n'attend un chargement.
 - Il peut être relancé sans risque : ce qui est déjà là est gardé, y compris le château et le `.env`.
 - Les programmes téléchargés sont pris dans une version précise, et leur empreinte SHA-256 est vérifiée.
 - Le bilan est écrit dans `installation.txt`. Un souci éventuel y figure en clair, avec quoi faire.
@@ -88,7 +87,8 @@ Dis-lui « mon chien s'appelle Médor » : Archi le range tout seul dans une fic
 - Les garde-fous sont dans le code, pas seulement dans la consigne : jamais de mot de passe, de code, de numéro de
   carte, d'adresse postale ni de téléphone ; un fait doit reprendre des mots de ton message ; trois faits au plus par message.
 - Mesuré le 12/11/2026 avec gpt-oss-20b, au format du château : 30 phrases sur 30 bien classées (15 à retenir,
-  15 à laisser), sur 3 passages de suite. Le banc se rejoue avec `python outils/memoire/banc_memoire.py`.
+  15 à laisser), sur 3 passages de suite. Repassé le 19/11/2026 avec Qwythos 9B : 29 sur 30 (14 sur 15 à retenir,
+  15 sur 15 à laisser). Le banc se rejoue avec `python outils/memoire/banc_memoire.py`.
 
 ### La voix : parle-lui, il te répond
 Archi écoute et parle, **sans quitter le PC** : whisper.cpp transcrit ta voix, Pocket TTS lit la réponse.
@@ -193,11 +193,11 @@ flowchart LR
     NAV[Page d'accueil<br/>navigateur du PC] --> PO
     PO --> N[n8n<br/>127.0.0.1 seulement]
     N --> C[contexte.js<br/>château + aiguillages + règles]
-    C --> G[Agent n8n<br/>gpt-oss-20b · LM Studio]
+    C --> G[Agent n8n<br/>Qwythos 9B · LM Studio]
     G -- outils_maison --> O[Lanceur<br/>registre + garde-fous]
     O --> P1[planificateur<br/>heure + lieu] & P2[telephone · oeil · cameras] & P3[pdf · mails · musique] & P4[les autres outils maison]
     G --> V[verifier_reponse.js]
-    A2[Photo] -.-> VI[Modèle de vision local]
+    A2[Photo] -.-> VI[Qwythos 9B voit la photo]
   end
   V --> PO
 ```
@@ -222,8 +222,8 @@ le ZIP et l'appli Android de la page Releases.
 
 ## Matériel
 
-Le PC actuel d'Archi a une carte AMD Radeon RX 9070 (16 Go). gpt-oss-20b et un modèle de vision doivent s'y
-partager la mémoire vidéo. Ce que le matériel visé changerait est expliqué dans [docs/MATERIEL.md](docs/MATERIEL.md).
+Le PC actuel d'Archi a une carte AMD Radeon RX 9070 (16 Go). Qwythos 9B y tient seul, avec de la place à côté
+pour le bureau. Ce que le matériel visé changerait est expliqué dans [docs/MATERIEL.md](docs/MATERIEL.md).
 
 ## Sécurité et vie privée
 

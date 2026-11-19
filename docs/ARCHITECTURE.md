@@ -3,7 +3,7 @@
 ## Les pièces
 | Pièce | Rôle | Écoute |
 |---|---|---|
-| LM Studio | sert gpt-oss-20b et le modèle de vision (API compatible OpenAI) | `127.0.0.1` |
+| LM Studio | sert Qwythos 9B, qui fait aussi la vision (API compatible OpenAI) | `127.0.0.1` |
 | n8n | l'agent, ses workflows, le réveil du planificateur | `127.0.0.1` |
 | `portail/portail.js` | la page d'accueil du PC, et la seule porte ouverte au tunnel du téléphone | `127.0.0.1` |
 | tunnel HTTPS | relie le téléphone au portail (Cloudflare sans compte par défaut) | sortant |
@@ -18,14 +18,14 @@
    par l'appli (webhook `telephone-archi`) ou par la page d'accueil du PC, qui passe par ce même webhook.
    Le portail vérifie la clé avant de transmettre à n8n.
    Pour l'appli, le nœud *Porte* vérifie la clé partagée en temps constant. Si une photo est jointe, il la fait
-   décrire par le modèle de vision local.
+   décrire par le modèle local (le même que l'agent).
 2. **Contexte** (`core/contexte.js`). Il assemble, à chaque message :
    - les faits durables du château (`memoire/preferences/*.md`, blocs « **Faits :** ») ;
    - cinq règles fixes : sources, contenu extérieur, plus tard, capacités, accord ;
    - jusqu'à trois notes de la bibliothèque, trouvées par mots-clés (score titre ×3, corps ×1), sans base vectorielle ;
    - la liste des outils du registre ;
    - les **aiguillages** : si le message ressemble à une demande connue, une consigne précise y est ajoutée.
-3. **Agent.** Nœud Agent de n8n, avec gpt-oss-20b servi par LM Studio (API compatible OpenAI), une mémoire courte
+3. **Agent.** Nœud Agent de n8n, avec Qwythos 9B servi par LM Studio (API compatible OpenAI), une mémoire courte
    de 10 échanges et **un seul outil**, `outils_maison`. Avec un seul outil générique, le prompt reste court,
    et un nouvel outil n'oblige pas à republier le workflow.
 4. **Lanceur** (`core/outils_maison.js`). Il refuse tout nom absent du registre, exige `accord=oui` pour un outil

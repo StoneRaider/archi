@@ -37,7 +37,7 @@ POSITION = os.path.join(BASE, "memoire", "position.json")
 GAMMA = "https://gamma-api.polymarket.com"
 HOTES_LECTURE = {"gamma-api.polymarket.com", "news.google.com"}     # data-api (comptes, transactions) VOLONTAIREMENT absent
 LM = os.environ.get("POLY_LM") or os.environ.get("ARCHI_LM_URL", "http://127.0.0.1:1234/v1").rstrip("/") + "/chat/completions"
-LM_MODELE = os.environ.get("ARCHI_MODELE", "openai/gpt-oss-20b")
+LM_MODELE = os.environ.get("ARCHI_MODELE", "qwythos-9b-claude-mythos-5-1m")
 # webhook n8n LOCAL qui relaie l'alerte sur Telegram (facultatif : sans lui, l'alerte est seulement notee au journal)
 RETOUR = os.environ.get("POLY_RETOUR") or os.environ.get("ARCHI_WEBHOOK_ALERTE", "")
 UA = {"User-Agent": "Mozilla/5.0 (Archi, assistant personnel, lecture seule)", "Accept": "application/json, text/xml"}

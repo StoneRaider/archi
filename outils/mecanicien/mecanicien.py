@@ -203,7 +203,7 @@ def appel_par_defaut(corps):
 
 
 def demander(messages, schema, max_tokens=3500, effort="medium"):
-    corps = {"model": os.environ.get("ARCHI_MODELE") or "openai/gpt-oss-20b", "temperature": 0.2, "max_tokens": max_tokens,
+    corps = {"model": os.environ.get("ARCHI_MODELE") or "qwythos-9b-claude-mythos-5-1m", "temperature": 0.2, "max_tokens": max_tokens,
              "reasoning_effort": effort, "messages": messages}
     appel = APPEL or appel_par_defaut
     try:

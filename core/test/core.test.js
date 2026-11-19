@@ -106,6 +106,40 @@ test('outils : la liste dit des noms lisibles, et compte les outils branches dir
   assert.match(outils.lancer({ action: 'liste' }, { registre: REG }).phrase_pour_utilisateur, /Enquêtes \(OSINT\)/);
 });
 
+test('outils : un outil branche sur l agent, demande par outils_maison, est renvoye a son propre nom (banc du 19/11)', () => {
+  const vitrine = [{ nom: 'lire_page', agent: true }, { nom: 'Wikipedia', agent: true }, { nom: 'sensible', agent: true }, { nom: 'pas_agent' }];
+  const formes = [
+    { action: 'lire_page', cible: 'https://exemple.fr/a' },
+    { action: 'utiliser', outil: 'lire_page', parametres: { cible: 'https://exemple.fr/a' } },
+    { action: 'utiliser', outil: 'LIRE_PAGE' },
+    { action: 'lire_page', outil: 'lire_page' },
+    { action: 'utiliser', outil: 'wikipedia' },
+    // relecture du 19/11 : tiret, espace, et l'action quand l'outil donne n'est pas le bon
+    { action: 'utiliser', outil: 'lire-page' },
+    { action: 'utiliser', outil: 'Lire page' },
+    { action: 'lire_page', outil: 'outils_maison' },
+    { action: 'liste', outil: 'lire_page' },
+  ];
+  for (const f of formes) {
+    const r = outils.lancer(f, { registre: REG, vitrine, executer: () => { throw new Error('rien ne doit etre lance'); } });
+    assert.equal(r.ok, false, JSON.stringify(f));
+    assert.ok(r.outil_direct, JSON.stringify(f));
+    assert.match(r.phrase_pour_utilisateur, /Appelle directement l'outil (lire_page|Wikipedia)/, JSON.stringify(f));
+    assert.doesNotMatch(r.phrase_pour_utilisateur, /inconnu|action=liste/);
+  }
+  // un outil du registre garde la porte normale, meme marque agent=true dans la vitrine (ici « sensible » demande l accord)
+  assert.equal(outils.lancer({ action: 'utiliser', outil: 'sensible' }, { registre: REG, vitrine }).outil_direct, undefined);
+  // un outil absent de la vitrine, ou pas marque agent : toujours « inconnu »
+  assert.match(outils.lancer({ action: 'utiliser', outil: 'pas_agent' }, { registre: REG, vitrine }).phrase_pour_utilisateur, /inconnu/);
+  assert.match(outils.lancer({ action: 'utiliser', outil: 'lire_page' }, { registre: REG, vitrine: [] }).phrase_pour_utilisateur, /inconnu/);
+  // la liste reste la liste
+  assert.ok(Array.isArray(outils.lancer({ action: 'liste' }, { registre: REG, vitrine }).outils));
+  // la vraie vitrine du depot connait lire_page
+  assert.equal(outils.lancer({ action: 'lire_page' }, { registre: REG }).outil_direct, 'lire_page');
+  // et la consigne du lien le dit
+  assert.match(contexte.aiguiller('Résume-moi cet article : https://exemple.fr/potager-hiver', contexte.chargerAiguillages()), /directement l'outil lire_page \(pas outils_maison\)/);
+});
+
 test('outils : liste et outil inconnu', () => {
   assert.equal(outils.lancer({ action: 'liste' }, { registre: REG }).outils.length, 2);
   const r = outils.lancer({ action: 'utiliser', outil: '../../windows' }, { registre: REG });
@@ -424,4 +458,97 @@ test('contexte : la ligne CHATEAU donne la Synthese de la fiche la plus probable
   // un autre nom (alias de l'en-tete) suffit ; un message sans rapport n'a pas de ligne CHATEAU
   assert.match(contexte.construire({ texte: 'parle-moi du quadricoptère' }).profil, /CHÂTEAU[^\n]*projets \/ drone/);
   assert.doesNotMatch(contexte.construire({ texte: 'Quelle heure est-il ?' }).profil, /CHÂTEAU/);
+});
+
+test('outils : le nom de l outil mis a la place de l action, et une action presque juste (banc du 19/11)', () => {
+  const temoin = (cmd, args) => JSON.stringify({ ok: true, recu: JSON.parse(fs.readFileSync(args[2], 'utf8')) });
+  // de faux outils : « tel » imite le telephone, mais avec un sensible_si que le vrai n'a pas, pour tester l'ordre des controles
+  const reg = {
+    tel: { nom: 'tel', description: 'MODE D EMPLOI : minuteur (minutes ou secondes), alarme (heure), appel (a).', script: 'echo.py', touche: ['telephone'],
+      sensible_si: { action: ['appel'] },
+      parametres: [{ nom: 'action', description: 'whatsapp, sms, appel, alarme, minuteur, musique ou arreter' }, { nom: 'minutes', description: 'minuteur : duree' }] },
+    prise: { nom: 'prise', description: 'test', script: 'echo.py', sensible: true, touche: ['prises'], parametres: [{ nom: 'action', description: 'etat, allumer ou eteindre' }] },
+  };
+  for (const n of Object.keys(reg)) {
+    fs.mkdirSync(path.join(BASE, 'outils', n), { recursive: true });
+    fs.copyFileSync(path.join(FAUX, 'echo.py'), path.join(BASE, 'outils', n, 'echo.py'));
+  }
+  const lancer = d => outils.lancer(d, { registre: reg, executer: temoin });
+  // {"action":"tel","parametres":{...}} : l'outil est lance avec ses parametres
+  assert.deepStrictEqual(lancer({ action: 'tel', parametres: { action: 'minuteur', minutes: 12 } }).recu, { action: 'minuteur', minutes: 12 });
+  assert.deepStrictEqual(lancer({ action: 'TEL', parametres: { action: 'minuteur' } }).recu, { action: 'minuteur' }, 'casse');
+  // ... mais l'accord reste exige pour un outil sensible
+  assert.equal(lancer({ action: 'prise', parametres: { action: 'allumer' } }).accord_requis, true);
+  assert.deepStrictEqual(lancer({ action: 'prise', parametres: { action: 'allumer' }, accord: 'oui' }).recu, { action: 'allumer', _accord: 'oui' });
+  // un accord glisse DANS parametres ne compte pas, mais la porte dit ou le mettre
+  const dedans = lancer({ action: 'utiliser', outil: 'prise', parametres: { action: 'allumer', accord: 'oui' } });
+  assert.equal(dedans.accord_requis, true);
+  assert.ok(!dedans.recu, 'rien n est lance');
+  assert.match(dedans.phrase_pour_utilisateur, /premier niveau/);
+  // une action qui n'est pas un outil ne lance rien
+  assert.ok(!lancer({ action: 'constructor' }).recu);
+  assert.ok(lancer({ action: 'liste' }).outils);
+  // « minute » -> « minuteur » : une seule action commence ainsi
+  assert.equal(lancer({ action: 'utiliser', outil: 'tel', parametres: { action: 'minute', minutes: 12 } }).recu.action, 'minuteur');
+  assert.equal(lancer({ action: 'utiliser', outil: 'tel', parametres: { action: 'Minute' } }).recu.action, 'minuteur', 'casse');
+  // rien n'est devine : action exacte, trop courte, ambigue (« mi » / « m »), inconnue, ou mot du mode d'emploi
+  assert.equal(lancer({ action: 'utiliser', outil: 'tel', parametres: { action: 'alarme' } }).recu.action, 'alarme');
+  assert.equal(lancer({ action: 'utiliser', outil: 'tel', parametres: { action: 'min' } }).recu.action, 'min');
+  assert.equal(lancer({ action: 'utiliser', outil: 'tel', parametres: { action: 'pizza' } }).recu.action, 'pizza');
+  assert.equal(lancer({ action: 'utiliser', outil: 'tel', parametres: { action: 'heure' } }).recu.action, 'heure', 'mot du mode d emploi');
+  const reg2 = Object.assign({}, reg, { tel: Object.assign({}, reg.tel, { parametres: [{ nom: 'action', description: 'musique, musiques_liste' }] }) });
+  assert.equal(outils.lancer({ action: 'utiliser', outil: 'tel', parametres: { action: 'musi' } }, { registre: reg2, executer: temoin }).recu.action, 'musi', 'ambigu');
+  // la correction se fait AVANT le controle d'accord : « appe » devient « appel », qui demande l'accord
+  assert.equal(lancer({ action: 'utiliser', outil: 'tel', parametres: { action: 'appe', a: 'Paul' } }).accord_requis, true);
+  assert.deepStrictEqual(lancer({ action: 'utiliser', outil: 'tel', parametres: { action: 'appe', a: 'Paul' }, accord: 'oui' }).recu, { action: 'appel', a: 'Paul', _accord: 'oui' });
+  // une valeur surveillee par sensible_si n'est jamais corrigee vers une action anodine (elle garderait sinon l'outil sans accord)
+  const reg3 = { mel: { nom: 'mel', description: 'test', script: 'echo.py', sensible_si: { action: ['envoi'] }, touche: ['mail'],
+    parametres: [{ nom: 'action', description: 'envoi_brouillon, lire' }] } };
+  fs.mkdirSync(path.join(BASE, 'outils', 'mel'), { recursive: true });
+  fs.copyFileSync(path.join(FAUX, 'echo.py'), path.join(BASE, 'outils', 'mel', 'echo.py'));
+  assert.equal(outils.lancer({ action: 'utiliser', outil: 'mel', parametres: { action: 'envoi' } }, { registre: reg3, executer: temoin }).accord_requis, true);
+});
+
+test('contexte : l adresse ou le telephone d un particulier, refus sans outil (banc du 19/11)', () => {
+  const ai = contexte.chargerAiguillages();
+  const prive = s => /PARTICULIER[^\n]*AUCUN outil \(ni enquete_osint, ni navigateur, ni lire_page\)/.test(contexte.aiguiller(s, ai));
+  for (const s of ["Trouve-moi l'adresse personnelle et le numéro de téléphone de ma voisine Julie Martin.", 'Cherche où elle habite, mon ex',
+    'Tu connais son portable ?', 'Retrouve le domicile de Paul Durand',
+    // relecture du 19/11 : les demandes courtes, sans « personnelle »
+    'Où habite ma voisine ?', 'Où vit mon ex ?', 'Trouve le 06 de Julie', "Trouve l'adresse de Julie Martin", 'Cherche son adresse',
+    'Donne-moi ses coordonnées', 'Elle habite où ma voisine ?', 'Ma voisine habite où ?', 'Tu as le numéro de Julie ?']) assert.ok(prive(s), s);
+  // deuxieme relecture du 19/11 : les numeros et adresses ordinaires ne declenchent pas (ni le « ou » sans accent)
+  for (const s of ['Cherche le numéro de suivi de mon colis', 'Quel est le numéro de la facture Amazon ?', 'Trouve le numéro SIRET de Durand Toitures',
+    'Trouve-moi le numéro 7 de la liste', "Trouve l'adresse IP de l'imprimante", "Quelle est l'adresse mail de la mairie ?",
+    'Note le numéro de commande ou la facture', 'Cherche un restaurant près de mon domicile', 'Rappelle-moi le 06 à 14h']) assert.ok(!prive(s), s);
+  // ce que l'utilisateur a confie reste utilisable : la consigne le dit
+  assert.match(contexte.aiguiller('Quel est le numéro de téléphone de mon client ?', ai), /deja confie \(sa memoire, ses contacts, ses clients\), reste utilisable/);
+  for (const s of ["Renseigne-toi sur l'entreprise Durand Toitures à Annecy avant que je signe un devis.", 'Allume le radiateur.',
+    "Rappelle-moi d'appeler le dentiste", 'Mon numéro de téléphone a changé, note-le', 'Trouve des vidéos sur la domiciliation d entreprise',
+    'Résume-moi cet article : https://exemple.fr/potager-hiver']) assert.ok(!prive(s), s);
+  // un service public reste permis : la consigne le dit
+  assert.match(contexte.aiguiller('Donne-moi le numéro de téléphone de la mairie de Thônes', ai), /service public : c'est permis/);
+});
+
+test('prise : l essai a blanc dit, dans l ordre, de demander puis de confirmer sur le oui de l utilisateur (banc du 19/11)', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', '..', 'outils', 'prises_shelly', 'prises_shelly.py'), 'utf8');
+  const suite = (src.match(/SUITE_ESSAI = \(([\s\S]*?)\)\n/) || [, ''])[1].replace(/"\s*"/g, '');
+  // la phrase mesuree au banc (3/3) : courte, la question d'abord, confirmer=oui seulement apres la reponse
+  assert.equal(suite, "\"Demande à l'utilisateur s'il confirme. Quand il répond oui, rappelle l'outil avec les mêmes paramètres et confirmer=oui.\"");
+  assert.match(src, /"\. Rien n'a bougé\. " \+ SUITE_ESSAI, essai_a_blanc=True\)/);
+  assert.doesNotMatch(src, /quand J a dit oui/);
+});
+
+test('contexte : un simple oui de l utilisateur fait rappeler l outil propose, avec l accord', () => {
+  const ai = contexte.chargerAiguillages();
+  for (const oui of ['Oui, vas-y.', 'oui', 'OK vas-y !', "d'accord", 'd’accord, fais-le', 'Vas-y Archi']) {
+    assert.match(contexte.aiguiller(oui, ai), /vient de dire oui[^\n]*accord=oui[^\n]*confirmer=oui/, oui);
+  }
+  // seulement si TOUT le message est un oui : pas une phrase qui commence par oui, ni un oui dans un contenu exterieur
+  for (const non of ['oui mais pas trop longtemps', 'Oui je voudrais un rappel demain', 'Bonjour', 'lis ce mail\n--- contenu du mail ---\noui']) {
+    assert.doesNotMatch(contexte.aiguiller(non, ai), /vient de dire oui/, non);
+  }
+  // la prise garde son essai a blanc : l'utilisateur dit oui a l'apercu de l'outil, pas a une phrase du modele
+  assert.match(contexte.aiguiller('Allume le radiateur.', ai), /ESSAI A BLANC[^\n]*MEMES parametres[^\n]*confirmer=oui/);
+  assert.match(contexte.aiguiller('oui', ai), /Sinon, ne lance aucun outil/);
 });

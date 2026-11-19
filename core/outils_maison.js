@@ -1,5 +1,5 @@
 // outils_maison.js - le lanceur des « outils maison » d'Archi.
-// L'agent (gpt-oss-20b dans n8n) n'a qu'UN outil generique : outils_maison(action, outil, parametres, accord).
+// L'agent (le modele de LM Studio, dans n8n) n'a qu'UN outil generique : outils_maison(action, outil, parametres, accord).
 // Ce module lit outils/registre.json, refuse ce qui n'est pas inscrit, exige accord=oui pour un outil
 // « sensible », lance le script Python de l'outil et rend sa derniere ligne JSON.
 // Utilisable tel quel dans un noeud Code n8n (require) ou en ligne de commande (stdin -> stdout).
@@ -24,6 +24,21 @@ function lireVitrine(fichier) {
     const v = JSON.parse(fs.readFileSync(fichier || process.env.ARCHI_VITRINE || path.join(__dirname, '..', 'config', 'vitrine.json'), 'utf8'));
     return (Array.isArray(v && v.outils) ? v.outils : []).filter(f => f && typeof f.nom === 'string');
   } catch (e) { return []; }
+}
+
+/** Un outil branche directement sur l'agent (vitrine agent=true, absent du registre) demande A TRAVERS outils_maison
+ *  ({"action":"lire_page"} ou {"outil":"lire_page"}, banc du 19/11) : on lui dit de l'appeler par son nom, au lieu de
+ *  « outil inconnu » (le modele perdait ses etapes en action=liste). Rien n'est lance ici. */
+function renvoiOutilDirect(reg, vitrine, valeur) {
+  // « lire-page », « lire page » : la meme forme que les noms de la vitrine (lire_page)
+  const v = normaliser(valeur).replace(/[\s-]+/g, '_').replace(/[^a-z0-9_]/g, '');
+  if (!v || Object.prototype.hasOwnProperty.call(reg, v)) return null;
+  const fiches = Array.isArray(vitrine) ? vitrine : lireVitrine();
+  const f = fiches.find(x => x.agent === true && normaliser(x.nom) === v && !Object.prototype.hasOwnProperty.call(reg, x.nom));
+  if (!f) return null;
+  const n = f.nom.slice(0, 40);
+  return { ok: false, outil_direct: n,
+    phrase_pour_utilisateur: '« ' + n + ' » ne passe pas par outils_maison : c\'est un de tes propres outils. Appelle directement l\'outil ' + n + ' (son nom, ses parametres), sans outils_maison.' };
 }
 
 function liste(reg, vitrine) {
@@ -81,6 +96,27 @@ const normaliser = v => String(v == null ? '' : v).normalize('NFD').replace(/[̀
 // (« appliquer. », « a-ppliquer », un caractere invisible) ne peut pas la lire autrement que le controle.
 const nu = v => normaliser(v).replace(/[^a-z]/g, '');
 
+/** Les actions qu'un outil declare dans son parametre « action » (« etat, allumer ou eteindre ») : le premier mot de chaque morceau. */
+function actionsDeclarees(o) {
+  const p = (Array.isArray(o && o.parametres) ? o.parametres : []).find(x => x && x.nom === 'action');
+  if (!p || typeof p.description !== 'string') return [];
+  return normaliser(p.description).split(/[,;/]|\bou\b/).map(s => (s.trim().match(/^[a-z_]+/) || [''])[0]).filter(Boolean);
+}
+/** « minute » -> « minuteur » : seulement si l'action donnee n'existe pas telle quelle, ne figure nulle part comme mot dans le
+ *  mode d'emploi, a au moins 4 lettres, et qu'UNE SEULE action declaree commence ainsi. Sinon, elle est rendue telle quelle. */
+function actionCorrigee(o, valeur) {
+  const a = normaliser(valeur);
+  const declarees = actionsDeclarees(o);
+  if (declarees.length < 2 || !/^[a-z_]{4,}$/.test(a) || declarees.includes(a)) return valeur;
+  // une valeur que sensible_si surveille n'est jamais changee : la correction ne doit pas pouvoir retirer la sensibilite
+  const si = o.sensible_si && !Array.isArray(o.sensible_si) && typeof o.sensible_si === 'object' ? [].concat(o.sensible_si.action || []) : [];
+  if (si.map(nu).includes(nu(valeur))) return valeur;
+  const texte = normaliser([o.description].concat((o.parametres || []).map(x => x && x.description)).join(' '));
+  if (new RegExp('(^|[^a-z_])' + a + '([^a-z_]|$)').test(texte)) return valeur;
+  const proches = declarees.filter(x => x.startsWith(a));
+  return proches.length === 1 ? proches[0] : valeur;
+}
+
 /** Ce qui rate (un outil demande qui n'existe pas, un outil qui plante) : le mecanicien le relit pour proposer de
  *  nouveaux outils. Un fichier local, <base>\atelier\rates.jsonl : le nom de l'outil et l'erreur, jamais les parametres. */
 function noterRate(base, type, outil, erreur) {
@@ -102,7 +138,14 @@ function lancer(demande, options = {}) {
   const reg = options.registre || lireRegistre(base);
   const d = demande || {};
   let action = String(d.action || 'liste').toLowerCase();
-  const nom = String(d.outil || '').trim().toLowerCase();
+  let nom = String(d.outil || '').trim().toLowerCase();
+  // un petit modele met parfois le NOM de l'outil a la place de l'action ({"action":"telephone","parametres":{...}}, banc du
+  // 19/11) : c'est une demande d'utiliser cet outil. Le controle d'accord plus bas s'applique comme pour un appel normal.
+  const actionNom = normaliser(d.action).replace(/[^a-z0-9_]/g, '');
+  if (!nom && !/^(utiliser|lancer|liste?|outils?)$/.test(actionNom) && NOM_VALIDE.test(actionNom) && Object.prototype.hasOwnProperty.call(reg, actionNom)) {
+    nom = actionNom;
+    action = 'utiliser';
+  }
   // un petit modele met souvent l'action DE L'OUTIL au premier niveau ({"action":"examiner","outil":"curateur"}) :
   // c'est une demande d'utiliser cet outil, et l'action redescend dans ses parametres AVANT le controle d'accord
   let actionOutil = '';
@@ -114,6 +157,9 @@ function lancer(demande, options = {}) {
     // une action d'outil SANS nom d'outil ({"action":"construire","texte":"..."}) n'est pas une demande de liste :
     // on dit a l'agent quel outil a cette action, pour qu'il rappelle correctement (rien n'est lance ici)
     const a = normaliser(d.action).replace(/[^a-z0-9_]/g, '').slice(0, 30);
+    // le nom d'abord, puis l'action ({"action":"lire_page","outil":"outils_maison"} : relecture du 19/11)
+    const direct = renvoiOutilDirect(reg, options.vitrine, nom) || renvoiOutilDirect(reg, options.vitrine, d.action);
+    if (direct) return direct;
     if (!nom && a && !/^liste?$|^outils?$/.test(a)) {
       const qui = Object.keys(reg).filter(k => NOM_VALIDE.test(k) && new RegExp('action\\s*=\\s*' + a + '\\b').test(normaliser(reg[k].description))).slice(0, 3);
       const exemple = n => '{"action":"utiliser","outil":"' + n + '","parametres":{"action":"' + a + '", ...}}';
@@ -125,6 +171,8 @@ function lancer(demande, options = {}) {
   }
 
   if (!NOM_VALIDE.test(nom) || !Object.prototype.hasOwnProperty.call(reg, nom)) {
+    const direct = renvoiOutilDirect(reg, options.vitrine, nom);
+    if (direct) return direct;
     if (nom) noterRate(base, 'inconnu', nom.replace(/[^a-z0-9_ -]/g, ''), '');
     return { ok: false, phrase_pour_utilisateur: 'Outil maison inconnu ou pas encore branché : « ' + nom.slice(0, 40) + ' ». Fais action=liste.' };
   }
@@ -132,6 +180,9 @@ function lancer(demande, options = {}) {
   // sensible : toujours, ou seulement si un parametre precis est present (ex. planificateur + action differee sur une prise)
   const params = lireParametres(d.parametres);
   if (actionOutil && (params.action == null || params.action === '')) params.action = actionOutil;
+  // une action presque juste (« minute » pour « minuteur », banc du 19/11) est corrigee AVANT le controle d'accord,
+  // pour que sensible_si voie la vraie action
+  if (typeof params.action === 'string') params.action = actionCorrigee(o, params.action);
   // l'accord ne vient que du lanceur : un « _accord » glisse par le modele dans les parametres est retire
   for (const k of Object.keys(params)) if (/^_?accord/i.test(k) && k !== 'accord') delete params[k];
   // sensible_si : ["outil"] (parametre present) ou {"action": ["appel", "sms"]} (parametre egal a une de ces valeurs)
@@ -148,6 +199,11 @@ function lancer(demande, options = {}) {
     || surveilles.some(k => present(k) && [].concat(si[k] || []).map(nu).includes(nu(params[k])));
   const accord = /^\s*oui\s*$/i.test(String(d.accord || ''));
   if (sensible && !accord) {
+    // un « accord » glisse DANS parametres ne compte pas (banc du 19/11 : le modele croyait l'avoir donne) : on lui dit ou il va
+    if (/^\s*oui\s*$/i.test(String(params.accord || ''))) {
+      return { ok: false, accord_requis: true, phrase_pour_utilisateur: "accord=oui se met au premier niveau, a cote de « outil », jamais dans parametres : "
+        + '{"action":"utiliser","outil":"' + nom + '","parametres":{...},"accord":"oui"}. Rappelle-le ainsi seulement si l\'utilisateur vient de dire oui ; sinon, demande-lui.' };
+    }
     return { ok: false, accord_requis: true, phrase_pour_utilisateur: 'Cet outil est sensible (' + (o.touche || []).join(', ') + ") : demande d'abord l'accord, puis rappelle-le avec accord=oui." };
   }
   // l'outil revérifie lui-meme ses actions qui changent quelque chose : il recoit l'accord, donne ici

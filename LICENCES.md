@@ -29,7 +29,7 @@ La plupart ne sont pas dans ce dépôt : l'installateur les télécharge depuis 
 | Python | les outils maison | PSF License | installé par uv |
 | FFmpeg (version « essentials » de GyanD) | lire et convertir le son et la vidéo | GPL v3 | téléchargé par l'installateur, jamais modifié |
 | LM Studio | sert le modèle de langage sur le PC | conditions d'utilisation de LM Studio (lmstudio.ai) | installé par winget ou par l'utilisateur |
-| gpt-oss-20b | le modèle de langage local | Apache 2.0 (OpenAI) | téléchargé par LM Studio |
+| Qwythos 9B (fichier `Qwythos-9B-Claude-Mythos-5-1M-Q4_K_M.gguf`, dépôt `empero-ai` sur Hugging Face) | le modèle local : raisonner, écrire, décrire les photos | Apache 2.0, héritée de Qwen3.5-9B (Alibaba) ; affinage communautaire par Empero, sans lien avec Anthropic ni OpenAI | téléchargé par LM Studio |
 | whisper.cpp et modèle Whisper | l'oreille (voix vers texte) | MIT | téléchargés par l'installateur |
 | Pocket TTS (Kyutai) | la voix (texte vers voix) | licence dans son dossier ; licence de chaque voix sur la page `kyutai/tts-voices` de Hugging Face | téléchargé par l'installateur |
 | cloudflared | le tunnel pour le téléphone | Apache 2.0 | téléchargé par l'installateur |
