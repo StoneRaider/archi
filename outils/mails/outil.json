@@ -1,0 +1,54 @@
+{
+ "nom": "mails",
+ "description": "MODE D EMPLOI : les mails (Gmail, Outlook). action=chercher (texte, date, boite) ; lire (numero de la liste) ; contact (nom : trouve une adresse) ; preparer (a, sujet, texte) : cree le BROUILLON, rien ne part, l'APERCU s'affiche tout seul. action=envoyer : SEULEMENT si le message suivant de l'utilisateur est « envoie » ; envoie cet apercu tel quel. annuler : oublie l'apercu.",
+ "script": "mails.py",
+ "parametres": [
+  {
+   "nom": "action",
+   "description": "chercher, lire, contact, preparer, envoyer ou annuler"
+  },
+  {
+   "nom": "texte",
+   "description": "chercher : mot, expediteur ou sujet ; preparer : le texte du mail, tel que l'utilisateur l'a dit"
+  },
+  {
+   "nom": "date",
+   "description": "chercher : AAAA-MM-JJ (facultatif)"
+  },
+  {
+   "nom": "boite",
+   "description": "gmail ou outlook (facultatif)"
+  },
+  {
+   "nom": "numero",
+   "description": "lire : le numero du mail dans la liste de chercher"
+  },
+  {
+   "nom": "nom",
+   "description": "contact : nom ou prenom a chercher"
+  },
+  {
+   "nom": "a",
+   "description": "preparer : adresse complete du destinataire (nom@domaine)"
+  },
+  {
+   "nom": "sujet",
+   "description": "preparer : l'objet du mail"
+  }
+ ],
+ "timeout_s": 25,
+ "touche": [
+  "mail",
+  "internet",
+  "gmail",
+  "outlook"
+ ],
+ "sensible_si": {
+  "action": [
+   "envoyer"
+  ]
+ },
+ "recoit_tache": true,
+ "accord_dans_message": true,
+ "accord_refuse_action": "rappeler"
+}

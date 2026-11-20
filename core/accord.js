@@ -241,6 +241,14 @@ const OUTILS = {
       annuler: { verbe: verbe('annule annules annulez remets defais reviens restaure', 'annuler remettre defaire revenir restaurer'), objets: mots('rangement deplacement') },
     },
   },
+  // mails : seul « envoyer » demande l'accord. Ce qui part est le brouillon fige par le serveur, deja montre : l'envoi
+  // n'a aucun parametre a comparer au message (« envoie », « oui », « envoie le mail »).
+  mails: {
+    generiques: mots('mail mails email emails courriel courriels message messages brouillon brouillons reponse'), cles: [],
+    lectures: { chercher: mots('recu recus recois arrive arrives expediteur'), lire: null, contact: mots('adresse adresses contact'),
+      preparer: mots('brouillon apercu') },
+    actions: { envoyer: { verbe: verbe('envoie envoies envois envoyez envoye envoi expedie expedies expediez', 'envoyer expedier') } },
+  },
   imprimante_3d: {
     generiques: mots('impression impressions imprimante print gcode 3mf stl fabrication plateau piece pieces'), cles: ['fichier'],
     alias: { televerser: 'envoyer', upload: 'envoyer', imprimer: 'lancer', demarrer: 'lancer', start: 'lancer', stop: 'annuler', arreter: 'annuler' },
@@ -636,4 +644,71 @@ function ouiStrict(message) {
   }
 }
 
-module.exports = { accordDansMessage, ouiStrict, OUTILS_CONNUS: Object.keys(OUTILS), _interne: { lire, enMots, classer, ouiPur, choixDans, parametresDe } };
+/** L'accord a un appel DEJA en attente, qui n'a aucun parametre a comparer au message (ex. mails, action=envoyer : ce qui
+ *  part est l'apercu qui vient d'etre affiche). Le message doit etre l'ORDRE de cette action, et rien d'autre.
+ *  Il est lu comme une suite d'expressions, dans l'ordre, sans rien laisser de cote :
+ *      [euh, bon, ben]  [oui, ok, d'accord, parfait, c'est bon…]  L'ORDRE  [maintenant, tel quel, comme ça, vite]  [stp, merci]
+ *  L'ordre est obligatoire : « envoie », « envoie-le », « oui envoie le mail », « c'est parfait, tu peux l'envoyer ».
+ *  Un oui seul ne suffit PAS (« oui », « ok », « d'accord ») : il peut repondre a autre chose (un rappel arrive entre-temps,
+ *  une autre question), et une dictee coupee commence souvent par oui (« oui tu peux… », « ok donc… »).
+ *  Tout mot hors de ces expressions fait refuser : « envoie-le-moi », « envoie la suite », « envoie-le demain », « envoie
+ *  le mail au notaire » (un destinataire nomme n'est pas compare a l'apercu), « n'envoie pas », « oui mais ».
+ *  Une question, des deux-points, une citation, plus de 8 expressions : refuse. Outil ou action inconnus : refuse. */
+const EN_TETE = ['euh', 'ben', 'bah', 'bon', 'alors', 'allez', 'stp', 'svp', "s' il te plait", "s' il vous plait"];
+const D_ACCORD = ['oui', 'ouais', 'ok', 'okay', 'yes', 'go', "d' accord", 'vas y', 'allez y', 'ca marche', 'bien sur', 'absolument', 'ca me va',
+  "c' est bon", "c' est bon comme ca", "c' est bon pour moi", 'ok pour moi', 'je confirme', 'je valide', 'parfait', "c' est parfait", 'nickel', 'super',
+  'impeccable', 'tres bien', "c' est tres bien"];
+const APRES_L_ORDRE = ['maintenant', 'tel quel', 'telle quelle', 'comme ca', 'vite'];
+const POLITESSE = ['stp', 'svp', "s' il te plait", "s' il vous plait", 'merci'];
+/** la plus longue expression de la liste qui commence a cet endroit (mots entiers), ou '' */
+function expressionEn(liste, texte, debut) {
+  let trouvee = '';
+  for (const e of liste) {
+    if (e.length > trouvee.length && texte.startsWith(e, debut) && (texte.length === debut + e.length || texte[debut + e.length] === ' ')) trouvee = e;
+  }
+  return trouvee;
+}
+function accordEnAttente(message, appel) {
+  try {
+    if (typeof message !== 'string' || !message.trim() || message.length > 200) return false;
+    if (/[?:«»"“”„‟<>]/.test(message)) return false;
+    const fiche = appel && Object.prototype.hasOwnProperty.call(OUTILS, appel.outil) ? OUTILS[appel.outil] : null;
+    const a = fiche && typeof appel.action === 'string' && Object.prototype.hasOwnProperty.call(fiche.actions, appel.action) ? fiche.actions[appel.action] : null;
+    if (!a || !a.verbe) return false;
+    // les formes de l'ordre : « envoie », « envoie-le », « envoie le mail », « l'envoie », « tu l'envoies », « tu peux l'envoyer »
+    const verbes = [...a.verbe.ordres], infinitifs = [...a.verbe.infinitifs], objets = [...fiche.generiques].filter(x => !x.endsWith('s'));
+    const ordres = [];
+    // ce que l'ordre touche, s'il le nomme : « le », « le lui », « le mail », « l'email », « ce message »
+    const complements = ['', ' le', ' la', ' ca', ' le lui', ' lui'];
+    for (const o of objets) complements.push(' le ' + o, ' la ' + o, " l' " + o, ' ce ' + o, ' cet ' + o, ' cette ' + o);
+    const quand = ['', ' maintenant', ' vite'];                 // « envoie maintenant le mail »
+    for (const v of verbes.concat(infinitifs)) {
+      for (const c of complements) for (const q of quand) ordres.push(v + q + c, 'tu ' + v + q + c);
+      ordres.push("l' " + v, "tu l' " + v);
+    }
+    for (const v of infinitifs) {
+      for (const c of complements) ordres.push('tu peux ' + v + c);
+      ordres.push("tu peux l' " + v, "je confirme l' " + v);
+    }
+    // la dictee : « en voie » pour « envoie » ; « tout de suite » vaut « maintenant »
+    const dit = (' ' + enMots(unifier(message).toLowerCase()).join(' ') + ' ').replace(/ en voie /g, ' envoie ').replace(/ tout de suite /g, ' maintenant ').trim();
+    if (!dit) return false;
+    let i = 0, n = 0, etape = 0, ordre = false;       // etape : 0 en-tete, 1 accord, 2 l'ordre est dit, 3 politesse
+    while (i < dit.length) {
+      if (++n > 8) return false;
+      let e = '';
+      if (etape === 0 && (e = expressionEn(EN_TETE, dit, i)) && e.length >= expressionEn(D_ACCORD, dit, i).length) { /* un bouche-trou, au debut seulement (« allez », mais pas « allez-y ») */ }
+      else if (etape <= 1 && (e = expressionEn(ordres, dit, i))) { etape = 2; ordre = true; }
+      else if (etape <= 1 && (e = expressionEn(D_ACCORD, dit, i))) { etape = 1; }
+      else if (etape === 2 && (e = expressionEn(APRES_L_ORDRE, dit, i))) { /* « envoie-le maintenant » */ }
+      else if (etape >= 2 && (e = expressionEn(POLITESSE, dit, i))) { etape = 3; }
+      else return false;
+      i += e.length + 1;
+    }
+    return ordre;
+  } catch (e) {
+    return false;
+  }
+}
+
+module.exports = { accordDansMessage, ouiStrict, accordEnAttente, OUTILS_CONNUS: Object.keys(OUTILS), _interne: { lire, enMots, classer, ouiPur, choixDans, parametresDe } };

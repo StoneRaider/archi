@@ -3,6 +3,7 @@ import os
 import threading
 import traceback
 from datetime import datetime
+from typing import Optional
 
 import uvicorn
 from fastapi import FastAPI, Query
@@ -118,10 +119,14 @@ def mails_preparer(m: MailAPreparer):
         return {"ok": False, "statut": "ERREUR", "phrase_pour_utilisateur": f"Je n'ai pas pu préparer le mail{_qui()} : {e}"}
 
 
+class MailAEnvoyer(BaseModel):
+    empreinte: str = ""
+
+
 @app.post("/mails/envoyer")
-def mails_envoyer():
+def mails_envoyer(m: Optional[MailAEnvoyer] = None):
     try:
-        return mail_commande.envoyer()
+        return mail_commande.envoyer(m.empreinte if m else None)
     except Exception as e:
         return {"ok": False, "statut": "ERREUR", "phrase_pour_utilisateur": f"Le mail n'est PAS parti{_qui()} : {e}"}
 

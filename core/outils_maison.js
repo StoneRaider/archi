@@ -201,6 +201,8 @@ function lancer(demande, options = {}) {
   if (typeof params.action === 'string') params.action = actionCorrigee(o, params.action);
   // l'accord ne vient que du lanceur : un « _accord » glisse par le modele dans les parametres est retire
   for (const k of Object.keys(params)) if (/^_?accord/i.test(k) && k !== 'accord') delete params[k];
+  // pareil pour « _tache » (le numero du message en cours) : il ne vient que du lanceur, voir plus bas
+  for (const k of Object.keys(params)) if (/^_tache/i.test(k)) delete params[k];
   // sensible_si : ["outil"] (parametre present) ou {"action": ["appel", "sms"]} (parametre egal a une de ces valeurs)
   const si = o.sensible_si;
   const surveilles = si && !Array.isArray(si) && typeof si === 'object' ? Object.keys(si) : [];
@@ -222,6 +224,32 @@ function lancer(demande, options = {}) {
       observer(base, 'accords_observes.jsonl', { outil: nom, action: motDAction(params.action), aurait: v.accorde ? 'accorde' : 'refuse', raison: v.raison });
     } catch (e) { /* l'observation ne bloque jamais */ }
   }
+  // accord_dans_message (fiche de l'outil, ex. mails : un envoi ne se rattrape pas) : ici le code ne fait pas qu'observer.
+  // L'outil ne part que si le DERNIER message de l'utilisateur n'est que l'ordre de cette action (« envoie », « oui
+  // envoie-le », « tu peux l'envoyer »). Message inconnu (pas de carte de tache), coupe a 140 caracteres, ou le moindre
+  // doute : il ne part pas. A la place, si la fiche le prevoit (accord_refuse_action, ex. « rappeler »), l'outil est lance
+  // avec cette action-la, sans aucun accord : il remontre ce qui attend, et l'utilisateur peut repondre.
+  let sansAccord = false;
+  if (sensible && accord && o.accord_dans_message === true) {
+    let donne = false;
+    try {
+      const m = options.dernierMessage;
+      donne = typeof d.accord === 'string' && typeof m === 'string' && m.length < 140
+        && require('./accord').accordEnAttente(m, { outil: nom, action: params.action }) === true;
+    } catch (e) { donne = false; }
+    if (!donne) {
+      const repli = typeof o.accord_refuse_action === 'string' && /^[a-z_]{1,24}$/.test(o.accord_refuse_action) ? o.accord_refuse_action : '';
+      const surveillee = [].concat((si && !Array.isArray(si) && si.action) || []).map(nu).includes(nu(repli));
+      if (!repli || o.sensible || surveillee) {
+        return { ok: false, accord_requis: true, phrase_pour_utilisateur: "PAS FAIT : le dernier message de l'utilisateur n'est pas un accord clair à cette action. "
+          + 'Ne réessaie pas maintenant : pose-lui la question, et attends sa réponse.' };
+      }
+      for (const k of Object.keys(params)) delete params[k];      // rien de ce que le modele a ecrit ne passe
+      params.action = repli;
+      params._accord_refuse = 'oui';      // la preuve que c'est le lanceur qui demande ce repli (« _accord… » forge : retire plus haut)
+      sansAccord = true;
+    }
+  }
   if (sensible && !accord) {
     // un « accord » glisse DANS parametres ne compte pas (banc du 19/11 : le modele croyait l'avoir donne) : on lui dit ou il va
     if (/^\s*oui\s*$/i.test(String(params.accord || ''))) {
@@ -231,7 +259,17 @@ function lancer(demande, options = {}) {
     return { ok: false, accord_requis: true, phrase_pour_utilisateur: 'Cet outil est sensible (' + (o.touche || []).join(', ') + ") : demande d'abord l'accord, puis rappelle-le avec accord=oui." };
   }
   // l'outil revérifie lui-meme ses actions qui changent quelque chose : il recoit l'accord, donne ici
-  if (sensible) params._accord = 'oui';
+  if (sensible && !sansAccord) params._accord = 'oui';
+  // la preuve que le controle du message a eu lieu : l'outil l'exige, pour qu'une vieille fiche sans
+  // « accord_dans_message » dans le registre installe ne laisse pas passer un envoi (« _accord… » forge : retire plus haut)
+  if (sensible && !sansAccord && o.accord_dans_message === true) params._accord_message = 'oui';
+  // un outil qui le demande (recoit_tache, ex. mails) recoit le numero du message de l'utilisateur en cours et celui du
+  // message d'avant (core/tache.js) : il peut refuser d'envoyer ailleurs que dans le message qui suit l'affichage de l'apercu
+  const numero = x => (typeof x === 'string' && /^[a-z0-9]{6,20}$/.test(x) ? x : '');
+  if (o.recoit_tache === true && numero(options.tache)) {
+    params._tache = options.tache;
+    if (numero(options.tacheAvant)) params._tache_avant = options.tacheAvant;
+  }
   const dossier = path.join(base, 'outils', nom);
   const script = path.join(dossier, path.basename(String(o.script || '')));
   if (!o.script || !fs.existsSync(script)) return { ok: false, phrase_pour_utilisateur: 'Le script de « ' + nom + ' » est introuvable.' };
@@ -292,10 +330,16 @@ if (require.main === module) {
     n = carte.etapeDebut({ outil: entree.outil || 'liste', action: p.action || (entree.outil ? '' : entree.action) });
   } catch (e) { carte = null; }
   let dernierMessage;      // le dernier message de l'utilisateur, tel que la carte de tache le garde (140 caracteres)
-  try { const t = carte && carte.voir().tache; if (t && t.en_cours) dernierMessage = String(t.demande || ''); } catch (e) { /* pas de carte : pas d'observation */ }
-  const r = lancer(entree, { dernierMessage });
+  let tache, tacheAvant;   // son numero, et celui du message d'avant : un nouveau message = un nouveau numero
   try {
-    if (carte && n) carte.etapeFin({ n, ok: r.ok !== false, phrase: r.accord_requis ? 'attend ton accord' : r.phrase_pour_utilisateur });
+    const t = carte && carte.voir().tache;
+    if (t && t.en_cours) { dernierMessage = String(t.demande || ''); tache = String(t.id || ''); tacheAvant = String(t.avant || ''); }
+  } catch (e) { /* pas de carte : pas d'observation */ }
+  const r = lancer(entree, { dernierMessage, tache, tacheAvant });
+  try {
+    // phrase_carte : ce qu'un outil veut voir sur la page d'accueil a la place de sa phrase (mails : jamais le texte d'un mail)
+    const pourLaCarte = typeof r.phrase_carte === 'string' && r.phrase_carte ? r.phrase_carte : r.phrase_pour_utilisateur;
+    if (carte && n) carte.etapeFin({ n, ok: r.ok !== false, phrase: r.accord_requis ? 'attend ton accord' : pourLaCarte });
   } catch (e) { /* la carte ne bloque rien */ }
   process.stdout.write(JSON.stringify(r));
 }

@@ -25,6 +25,7 @@
   {"nom": "vision_video", "titre": "Regarder une vidéo", "quoi": "Il regarde et écoute une vidéo en entier, en local, et en range une fiche."},
   {"nom": "recolte_youtube", "titre": "Récolte YouTube", "quoi": "Transforme les vidéos d'une chaîne en fiches dans ta bibliothèque."},
   {"nom": "presentation", "titre": "Présentation", "quoi": "Fabrique un diaporama écrit par le modèle local.", "besoin": "Presenton"},
+  {"nom": "mails", "titre": "Mails", "quoi": "Chercher et lire tes mails, préparer un brouillon. Rien ne part sans ton « envoie ».", "besoin": "un compte mail relié"},
   {"nom": "ranger_mails", "titre": "Ranger les mails", "quoi": "Chercher et ranger dans Gmail ou Outlook. Rien ne bouge sans ton accord.", "besoin": "un compte mail relié"},
   {"nom": "liasse_fiscale", "titre": "Liasse fiscale", "quoi": "Prépare la liasse annuelle d'une petite entreprise individuelle."},
   {"nom": "retro", "titre": "Rétro-ingénierie", "quoi": "Comprendre comment marche un logiciel ou un appareil qui t'appartient."},
@@ -36,7 +37,7 @@
   {"titre": "Trader : le tour automatique", "quoi": "Aujourd'hui il décide quand tu le lui demandes. Bientôt : un tour par jour, tout seul, et d'autres marchés que les cryptos."},
   {"titre": "Concevoir une pièce 3D", "quoi": "Décrire une pièce simple : il en fait un fichier prêt à imprimer, ou la trouve dans un catalogue."},
   {"titre": "Monteur vidéo", "quoi": "Monter les temps forts d'une soirée, avec sous-titres."},
-  {"titre": "Mails et agenda à la voix", "quoi": "Lire ses mails, préparer un brouillon, voir son agenda."},
+  {"titre": "Agenda à la voix", "quoi": "Voir son agenda et y ajouter un rendez-vous."},
   {"titre": "Recherche sur le web", "quoi": "Chercher une information récente sur Internet, pas seulement lire un lien donné."},
   {"titre": "Analyser une image depuis un lien", "quoi": "Aujourd'hui il décrit la photo que tu joins. Bientôt : une image donnée par son adresse."}
  ]

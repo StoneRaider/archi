@@ -53,7 +53,11 @@ function creer(options) {
   }
 
   function debut(e) {
-    const t = { id: maintenant().toString(36) + Math.random().toString(36).slice(2, 6), source: ['telegram', 'appli', 'page'].includes(e && e.source) ? e.source : 'appli',
+    // avant : le numero du message precedent. Il dit si un message est « le suivant » d'un autre (outils/mails : on
+    // n'envoie un mail que dans le message qui suit l'affichage de son apercu). Carte absente ou illisible : vide.
+    const precedent = lire(F);
+    const avant = precedent && typeof precedent.id === 'string' && /^[a-z0-9]{6,20}$/.test(precedent.id) ? precedent.id : '';
+    const t = { id: maintenant().toString(36) + Math.random().toString(36).slice(2, 6), avant, source: ['telegram', 'appli', 'page'].includes(e && e.source) ? e.source : 'appli',
       demande: court(e && e.texte, 140), debut: maintenant(), fin: 0, ok: null, etapes: [] };
     ecrire(F, t);
     return t.id;
@@ -120,7 +124,7 @@ function creer(options) {
     return {
       maintenant: maintenant(),
       tache: {
-        id: court(t.id, 20), source: court(t.source, 10), demande: court(t.demande, 140), debut: Number(t.debut) || 0,
+        id: court(t.id, 20), avant: typeof t.avant === 'string' && /^[a-z0-9]{6,20}$/.test(t.avant) ? t.avant : '', source: court(t.source, 10), demande: court(t.demande, 140), debut: Number(t.debut) || 0,
         fin: Number(t.fin) || 0, ok: t.ok === null ? null : !!t.ok, en_cours: !t.fin && !abandonnee, abandonnee,
         etapes: t.etapes.slice(0, MAX_ETAPES).map(s => ({ n: Number(s.n) || 0, outil: nomOutil(s.outil), action: motAction(s.action),
           debut: Number(s.debut) || 0, fin: Number(s.fin) || 0, ok: s.ok === null ? null : !!s.ok, phrase: court(s.phrase, 240),

@@ -1,0 +1,5 @@
+{
+ "ok": true,
+ "date": "2026-11-20",
+ "resume": "196 controles avec un faux serveur d'Archi (test_mails.py), 31 avec le vrai serveur et une fausse messagerie (test_liaison.py), et 16 parcours de bout en bout avec le lanceur, la carte de tache et le verificateur (core/test/mails_bout_en_bout.test.js). Quatre relectures adversariales rejouees. Aucun essai avec une vraie messagerie ni avec un vrai modele."
+}

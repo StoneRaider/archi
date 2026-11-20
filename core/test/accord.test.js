@@ -30,7 +30,7 @@ const accorde = (message, appel) => accordDansMessage(message, appel).accorde;
 const raison = (message, appel) => accordDansMessage(message, appel).raison;
 
 test('les outils sensibles du registre ont tous leur vocabulaire', () => {
-  assert.deepStrictEqual([...OUTILS_CONNUS].sort(), ['cameras', 'curateur', 'imprimante_3d', 'lire_pdf', 'mecanicien', 'planificateur', 'prises_shelly', 'ranger_mails', 'retro']);
+  assert.deepStrictEqual([...OUTILS_CONNUS].sort(), ['cameras', 'curateur', 'imprimante_3d', 'lire_pdf', 'mails', 'mecanicien', 'planificateur', 'prises_shelly', 'ranger_mails', 'retro']);
 });
 
 // --- un oui pur : tout le message n'est qu'accord, politesse et bouche-trous ---------------------------------------------

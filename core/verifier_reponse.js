@@ -136,8 +136,21 @@ function main() {
   const inp = lireEntree();
   const propre = t => String(t || '').replace(/[\u2010\u2011\u2012\u2013\u2212]/g, '-').replace(/[\u00a0\u202f\u2009]/g, ' ');
   const reponse = propre(inp.reponse);
-  if (!reponse.trim()) { process.stdout.write(JSON.stringify({ reponse, alertes: [] })); return; }
   const steps = Array.isArray(inp.steps) ? inp.steps : [];
+  // L'apercu d'un mail prepare dans ce tour est affiche par le code (core/apercu_mail.js), quoi qu'ait ecrit le modele :
+  // toutes les sorties de cette fonction passent par ici. Sans mail prepare, la reponse ne change pas d'un caractere.
+  const rendre = (texte, lignes) => {
+    let m = { reponse: texte, alertes: [] };
+    try { m = require('./apercu_mail').montrer(texte, steps); } catch (e) { m = { reponse: texte, alertes: [] }; }
+    // Quand l'apercu remplace la reponse du modele, ce que CE programme avait ajoute dessous (« À vérifier : … ») reste :
+    // c'est du code, pas du modele. Seulement si le tout tient dans un message.
+    if (m.reponse !== texte && texte.startsWith(reponse) && texte.length > reponse.length) {
+      const ajout = texte.slice(reponse.length);
+      if (m.reponse.length + ajout.length <= 4096) m.reponse += ajout;
+    }
+    process.stdout.write(JSON.stringify({ reponse: m.reponse, alertes: lignes.concat(m.alertes) }));
+  };
+  if (!reponse.trim()) { rendre(reponse, []); return; }
   // Seules les REPONSES des outils comptent : ce qu'Archi a tape dans sa requete (toolInput) reste sa propre invention.
   const obs = steps.map(s => { const o = s && s.observation; return typeof o === 'string' ? o : JSON.stringify(o || ''); });
   const anciens = cacheLire();
@@ -167,7 +180,7 @@ function main() {
   if (promesseSansPlanificateur(reponse, obs)) {
     alertes.push('promesse sans planificateur');
     sortie += "\n\n⚠️ À vérifier : je n'ai pas appelé le planificateur à l'instant, donc rien de nouveau n'est programmé. Si c'est un nouveau rappel, redemande-le-moi.";
-    process.stdout.write(JSON.stringify({ reponse: sortie, alertes }));
+    rendre(sortie, alertes);
     return;
   }
   if (alertes.length) {
@@ -190,6 +203,6 @@ function main() {
   try {
     for (const m of require('./promesses').promessesEnLAir(reponse, steps)) alertes.push('[journal] promesse en l air : ' + m.famille + ' (' + m.raison + ')');
   } catch (e) { /* la piece ne doit jamais empecher la reponse de partir */ }
-  process.stdout.write(JSON.stringify({ reponse: sortie, alertes }));
+  rendre(sortie, alertes);
 }
 try { main(); } catch (e) { try { process.stdout.write(JSON.stringify({ reponse: String((ENTREE || {}).reponse || ''), alertes: [], erreur: String(e.message || e) })); } catch (e2) { process.stdout.write(JSON.stringify({ reponse: '', alertes: [] })); } }
