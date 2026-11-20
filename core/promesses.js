@@ -219,6 +219,7 @@ function t(motif, options) {
 }
 /** Un outil qui soutient une famille. sauf : ses actions qui ne font pas le geste (lectures) ; seulement : ses seules actions qui comptent. */
 const o = (outil, regles) => Object.assign({ outil, sauf: null, seulement: null }, regles || {});
+const LIRE_LES_MAILS = ['chercher', 'lire', 'contact'];      // les actions de l'outil mails qui ne font que lire
 
 // ---------------------------------------------------------------------------------------------------------------
 // 3. Ce que le texte affirme -> les outils dont un succes, dans ce tour, rend l'affirmation vraie
@@ -457,10 +458,11 @@ const FAMILLES = [
   {
     // Essai humain d'Intendant (19/11) : « J'ai prepare a nouveau le brouillon de mail… Il est maintenant ouvert dans ta
     // messagerie. » Dans Archi, ecrire le texte d'un brouillon dans la reponse est permis ; dire qu'il est OUVERT ou
-    // ENREGISTRE dans la messagerie ne l'est pas : aucun outil ne le fait (ranger_mails ne cree ni n'envoie rien).
+    // ENREGISTRE dans la messagerie ne l'est que si l'outil mails vient de le creer (action=preparer) : ranger_mails ne cree
+    // ni n'envoie rien.
     famille: 'un brouillon ouvert dans la messagerie',
-    soutiens: [],
-    lectures: [o('ranger_mails')],
+    soutiens: [o('mails', { seulement: ['preparer', 'envoyer'] })],
+    lectures: [o('ranger_mails'), o('mails', { seulement: LIRE_LES_MAILS })],
     tournures: [
       t('\\b(?:brouillons?|mails?|e-mails?|emails?|courriels?|messages?|il|elle)' + SUITE + ' ' + SANS_NEGATION + "est|sont|s'est|a ete|vient d'etre) " + BIEN
         + "(?:ouvert|enregistre|pret|cree|sauvegarde|disponible|place)e?s? dans (?:(?:ta|votre|la) (?:messagerie|boite mail|boite d'envoi)|(?:tes|vos|les) brouillons)\\b",
@@ -471,7 +473,7 @@ const FAMILLES = [
   },
 ];
 
-// --- l'envoi : aucun outil d'Archi n'envoie de mail --------------------------------------------------------------
+// --- l'envoi : un mail ne part que par l'outil mails, action=envoyer ---------------------------------------------
 const ENVOI = 'un envoi';
 // « Cette lettre a ete envoyee par la CAF le 3 novembre », « previens-moi quand le mail est envoye » : un recit, une condition
 const ENVOI_D_UN_AUTRE = new RegExp("\\b(?:envoye|expedie|poste|transmis|parti)e?s? (?:par|le \\d|depuis|de la part)\\b|\\b(?:quand|une fois que|des que|si)\\b"
@@ -490,9 +492,11 @@ const ENVOIS = [
   t('\\b' + UN_ENVOI + SUITE + ' (?:vient|viennent) de partir\\b', { exclut: ENVOI_D_UN_AUTRE, type: 'constat' }),
 ];
 // Les outils qui font vraiment partir quelque chose, et les mots d'une phrase qui parle de ce qu'ils font. Une phrase
-// qui nomme un mail (« j'ai envoye le mail ») n'est couverte par aucun d'eux.
+// qui nomme un mail (« j'ai envoye le mail ») n'est couverte que par l'envoi reussi de l'outil mails.
 const UN_MAIL = /\b(?:mails?|e-mails?|emails?|courriels?|gmail|outlook|messagerie|boite mail)\b/;
+const MAIL_PARTI = o('mails', { seulement: ['envoyer'] });
 const PORTEURS = [
+  { outil: MAIL_PARTI, parle: UN_MAIL },
   { outil: o('telephone'), parle: /\b(?:whatsapp|sms|textos?|messages?|telephone|portable|appli)\b/ },
   { outil: o('transmettre_document', { sauf: ['liste'] }), parle: /\b(?:pdf|documents?|fichiers?|lettres?|courriers?|factures?|notes?|fiches?|contrats?|telegram)\b/ },
   { outil: o('appli_telephone'), parle: /\b(?:appli|application|apk|version|telegram)\b/ },
@@ -604,10 +608,11 @@ const unSucces = (regles, actes) => !!regles && actes.some(a => reussi(a) && reg
 // (b) les outils qui LISENT un contenu : apres eux, un passif ou un constat raconte ce qui a ete lu
 const LECTEURS_DE_CONTENU = [o('lire_page'), o('lire_pdf'), o('videos_youtube'), o('wikipedia'), o('wikipedia-api'), o('enquete_osint'), o('navigateur'),
   o('vision_video'), o('oeil'), o('recolte_youtube'), o('indicateur_polymarket'), o('memoire'), o('retro'),
-  o('ranger_mails', { seulement: ['chercher', 'dossiers', 'journal'] }), o('curateur', { seulement: ['examiner', 'propositions'] }),
+  o('ranger_mails', { seulement: ['chercher', 'dossiers', 'journal'] }), o('mails', { seulement: LIRE_LES_MAILS }),
+  o('curateur', { seulement: ['examiner', 'propositions'] }),
   o('mecanicien', { seulement: ['etat', 'voir'] })];
 // (a) pour l'envoi : chercher dans les mails, relire la memoire
-const LECTURES_D_ENVOI = [o('ranger_mails', { seulement: ['chercher', 'dossiers', 'journal'] }), o('memoire')];
+const LECTURES_D_ENVOI = [o('ranger_mails', { seulement: ['chercher', 'dossiers', 'journal'] }), o('mails', { seulement: LIRE_LES_MAILS }), o('memoire')];
 
 // « le document a ete transmis au notaire par ton pere, selon le courrier » : le geste d'un autre, ou ce que dit une
 // source. Seulement quand la phrase ne dit pas « j'ai… » : « j'ai eteint la prise par l'appli » reste une affirmation.
@@ -673,7 +678,7 @@ function promessesEnLAir(reponse, steps) {
     const contexte = { lecture: unSucces(LECTURES_D_ENVOI, actes), contenuLu, recit: lu.recit };
     const envois = lues.filter(p => !DE_L_IMPRIMANTE.test(p.net) && ENVOIS.some(x => dit(x, p, contexte)));
     const nonCouverts = envois.filter(p => {
-      if (UN_MAIL.test(p.net)) return true;
+      if (UN_MAIL.test(p.net)) return !unSucces([MAIL_PARTI], actes);
       if (doute) return false;
       const nue = !OBJET_D_ENVOI.test(p.net) && !PORTEURS.some(x => x.parle.test(p.net));     // « C'est envoye ! »
       return !PORTEURS.some(x => unSucces([x.outil], actes) && (nue || x.parle.test(p.net)));

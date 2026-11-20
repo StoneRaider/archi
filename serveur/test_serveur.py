@@ -51,5 +51,38 @@ verif("envoyer sans apercu refuse", refuse())
 json.dump({"a": ["camille@example.com"], "sujet": "x", "corps": "y", "boite": "gmail",
            "cree_le": (datetime.now() - timedelta(hours=3)).isoformat()}, open(M.EN_ATTENTE, "w"))
 verif("apercu de plus de 2 h refuse", refuse())
+# ... et c'est bien son age qui le fait refuser, meme quand l'envoi nomme la bonne empreinte
+json.dump({"a": ["camille@example.com"], "sujet": "x", "corps": "y", "boite": "gmail", "empreinte": "e" * 32,
+           "cree_le": (datetime.now() - timedelta(hours=2, minutes=1)).isoformat()}, open(M.EN_ATTENTE, "w"))
+try:
+    M.envoyer("e" * 32); verif("apercu de 2 h 01 refuse pour son age", False)
+except ValueError as e:
+    verif("apercu de 2 h 01 refuse pour son age", "plus de deux heures" in str(e) and not os.path.exists(M.EN_ATTENTE), e)
+# l'empreinte de l'apercu (19/11) : elle couvre la boite, les destinataires, l'objet et le texte, sans confusion de frontiere
+E0 = M.empreinte_de("gmail", ["camille@example.com"], "Objet", "Texte")
+verif("empreinte : stable", E0 == M.empreinte_de("gmail", ["camille@example.com"], "Objet", "Texte") and len(E0) == 32)
+verif("empreinte : la boite compte", E0 != M.empreinte_de("outlook", ["camille@example.com"], "Objet", "Texte"))
+verif("empreinte : le destinataire compte", E0 != M.empreinte_de("gmail", ["pirate@example.org"], "Objet", "Texte"))
+verif("empreinte : un destinataire de plus compte", E0 != M.empreinte_de("gmail", ["camille@example.com", "pirate@example.org"], "Objet", "Texte"))
+verif("empreinte : l'objet compte", E0 != M.empreinte_de("gmail", ["camille@example.com"], "Objet 2", "Texte"))
+verif("empreinte : le texte compte", E0 != M.empreinte_de("gmail", ["camille@example.com"], "Objet", "Texte."))
+verif("empreinte : pas de confusion entre l'objet et le texte", M.empreinte_de("gmail", ["a@example.com"], "ab", "c") != M.empreinte_de("gmail", ["a@example.com"], "a", "bc"))
+# l'envoi doit nommer l'apercu : sans empreinte, avec une autre, ou si le brouillon en attente n'en a pas (ancienne version)
+def attente(**plus):
+    json.dump(dict({"a": ["camille@example.com"], "sujet": "x", "corps": "y", "boite": "gmail", "id_brouillon": "b1",
+                    "cree_le": datetime.now().isoformat()}, **plus), open(M.EN_ATTENTE, "w"))
+def refuse_avec(empreinte):
+    try:
+        M.envoyer(empreinte)
+        return False
+    except ValueError as e:
+        return "apercu a change" in str(e)
+attente(empreinte=E0)
+verif("envoi sans empreinte refuse", refuse_avec(None) and refuse_avec(""))
+verif("envoi avec une autre empreinte refuse", refuse_avec("0" * 32))
+verif("apres ces refus, le brouillon attend toujours", os.path.exists(M.EN_ATTENTE))
+attente()
+verif("brouillon en attente sans empreinte : jamais envoye", refuse_avec(None) and refuse_avec(E0))
+os.remove(M.EN_ATTENTE)
 print(f"{ok} OK, {ko} ECHEC")
 sys.exit(1 if ko else 0)

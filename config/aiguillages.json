@@ -20,7 +20,7 @@
  {
   "si": "\\b(mail|courriel|lettre)s?\\b",
   "et": "([eé]cri|r[eé]dig|pr[eé]par|envoi|envoy)",
-  "dire": "Un mail : tu prepares un BROUILLON et tu le montres. Tu n'envoies qu'apres « envoie ». Tu n'ajoutes aucune idee que l'utilisateur n'a pas donnee."
+  "dire": "Un mail : outil mails. action=preparer (a, sujet, texte) cree le BROUILLON ; l'apercu s'affiche tout seul a la place de ta reponse. Tu n'appelles action=envoyer que dans le message suivant, si l'utilisateur repond « envoie ». Il ne veut plus : action=annuler. Pas d'adresse : action=contact, ou demande-la. Si l'outil dit que la messagerie n'est pas reliee, montre le brouillon en texte. Une lettre a imprimer n'est pas un mail : ecris-la simplement. Tu n'ajoutes aucune idee que l'utilisateur n'a pas donnee."
  },
  {
   "si": "\\b(oublie|oublier|efface de ta m[eé]moire|retire de ta m[eé]moire)\\b",

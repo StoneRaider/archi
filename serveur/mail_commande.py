@@ -1,6 +1,7 @@
 # mail_commande.py — mails sur commande d'Archi : chercher, lire, contacts, preparer, envoyer
 # Regle : un mail n'est envoye qu'apres un apercu valide par J (deux appels distincts).
 import base64
+import hashlib
 import html
 import json
 import os
@@ -246,6 +247,14 @@ def _jeter_ancien_apercu():
         pass
 
 
+def empreinte_de(boite, dest, sujet, corps):
+    """Ce qui identifie UN apercu : sa boite d'envoi, ses destinataires, son objet, son texte. L'envoi doit la presenter.
+    Chaque champ est precede de sa longueur (en caracteres) : deux apercus differents n'ont jamais la meme ecriture.
+    Le meme calcul est refait dans outils/mails/mails.py et dans core/apercu_mail.js."""
+    champs = (str(boite), ",".join(dest), str(sujet), str(corps))
+    return hashlib.sha256("".join("%d:%s" % (len(x), x) for x in champs).encode("utf-8")).hexdigest()[:32]
+
+
 def preparer(a, sujet, corps, boite="gmail"):
     dest = _destinataires(a)
     b = _boites(boite or "gmail")
@@ -273,7 +282,8 @@ def preparer(a, sujet, corps, boite="gmail"):
         id_brouillon = m["id"]
 
     _jeter_ancien_apercu()
-    attente = {"boite": b, "id_brouillon": id_brouillon, "a": dest, "sujet": sujet,
+    empreinte = empreinte_de(b, dest, sujet, corps)
+    attente = {"boite": b, "id_brouillon": id_brouillon, "a": dest, "sujet": sujet, "empreinte": empreinte,
                "corps": corps, "cree_le": datetime.now().isoformat(timespec="seconds")}
     with open(EN_ATTENTE, "w", encoding="utf-8") as f:
         json.dump(attente, f, ensure_ascii=False, indent=2)
@@ -287,11 +297,11 @@ def preparer(a, sujet, corps, boite="gmail"):
                   + " ; ".join(_epeler(x) for x in inconnues) + ".")
     phrase = (f"Voici le mail prêt{_qui()}, depuis ta boîte {nom_boite}, pour {', '.join(dest)}.{alerte} "
               f"Objet : {sujet}. Texte : {corps} Je l'envoie ?")
-    return {"ok": True, "statut": "APERCU", "boite": b, "a": dest, "sujet": sujet,
+    return {"ok": True, "statut": "APERCU", "boite": b, "a": dest, "sujet": sujet, "corps": corps, "empreinte": empreinte,
             "adresses_inconnues": inconnues, "phrase_pour_utilisateur": phrase}
 
 
-def envoyer():
+def envoyer(empreinte=None):
     if not os.path.exists(EN_ATTENTE):
         raise ValueError("aucun mail en attente : prepare d'abord le mail et montre l'apercu")
     with open(EN_ATTENTE, encoding="utf-8") as f:
@@ -299,13 +309,19 @@ def envoyer():
     if datetime.now() - datetime.fromisoformat(att["cree_le"]) > DUREE_VALIDITE:
         os.remove(EN_ATTENTE)
         raise ValueError("l'apercu a plus de deux heures : prepare-le a nouveau")
+    # l'envoi nomme l'apercu qu'il envoie : si un autre brouillon a ete prepare entre-temps, rien ne part
+    if not att.get("empreinte") or empreinte != att["empreinte"]:
+        raise ValueError("l'apercu a change : montre le nouvel apercu avant d'envoyer")
 
     if att["boite"] == "gmail":
         get_service().users().drafts().send(userId="me", body={"id": att["id_brouillon"]}).execute()
     else:
         _call("POST", f"{GRAPH}/me/messages/{att['id_brouillon']}/send")
 
-    os.remove(EN_ATTENTE)
+    try:                      # le mail est parti : une erreur de fichier ne doit pas faire dire le contraire
+        os.remove(EN_ATTENTE)
+    except OSError:
+        pass
     nom_boite = "Gmail" if att["boite"] == "gmail" else "Outlook"
     return {"ok": True, "statut": "ENVOYE", "boite": att["boite"], "a": att["a"], "sujet": att["sujet"],
             "phrase_pour_utilisateur": f"C'est envoyé{_qui()}, depuis ta boîte {nom_boite}, à {', '.join(att['a'])}."}

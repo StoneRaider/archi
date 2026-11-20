@@ -42,6 +42,10 @@ jobs:
         run: cd outils/curateur && python test_curateur.py
       - name: Tests du mecanicien et de son moteur de recettes (aucun reseau)
         run: cd outils/mecanicien && python test_mecanicien.py
+      - name: Tests de l'outil mails (faux serveur, rien ne part)
+        run: cd outils/mails && python test_mails.py
+      - name: L'outil mails branche sur le vrai serveur (fausse messagerie)
+        run: pip install fastapi uvicorn && cd outils/mails && python test_liaison.py
       - name: Tests du rangement de mails (boite simulee)
         run: cd outils/ranger_mails && python test_chercher.py
       - name: Protection SSRF de la lecture de pages
