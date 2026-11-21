@@ -125,11 +125,15 @@ def appeler(*args):
     try:
         r = subprocess.run([l["python"], l["script"]] + list(args), capture_output=True, timeout=DELAI_S, cwd=os.path.dirname(l["script"]),
                            stdin=subprocess.DEVNULL, env=dict(os.environ, PYTHONIOENCODING="utf-8"), creationflags=SANS_FENETRE)
-        lignes = r.stdout.decode("utf-8-sig", "replace").strip().splitlines()
-        d = json.loads(lignes[-1]) if lignes else None
-        if not isinstance(d, dict):
-            raise ValueError("vide")
-        return d
+        # la derniere ligne qui est un objet JSON : un avertissement de Python imprime apres la reponse ne la cache pas
+        for ligne in reversed(r.stdout.decode("utf-8-sig", "replace").strip().splitlines()):
+            try:
+                d = json.loads(ligne)
+            except ValueError:
+                continue
+            if isinstance(d, dict):
+                return d
+        raise ValueError("vide")
     except (OSError, ValueError, subprocess.SubprocessError):
         raise Erreur("Le monteur ne répond pas. Je n'ai rien lancé.")
 
@@ -261,7 +265,7 @@ def combien(m):
         except OSError:
             pass
     n = r.get("nombre")
-    return n if r.get("ok") is True and isinstance(n, int) and not isinstance(n, bool) and n >= 0 else None
+    return n if r.get("ok") is True and isinstance(n, int) and not isinstance(n, bool) and 0 <= n <= 100000 else None
 
 
 def demande_de(d):
@@ -271,8 +275,12 @@ def demande_de(d):
     m = {"mode": "souvenirs" if "souv" in mode else "event"}
     date = str(d.get("date") or "").strip()[:10]
     if date:
-        if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
-            raise Erreur("La date doit s'écrire AAAA-MM-JJ (le jour des vidéos à monter).")
+        try:
+            if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
+                raise ValueError(date)
+            datetime.strptime(date, "%Y-%m-%d")                      # le 30 fevrier n'existe pas
+        except ValueError:
+            raise Erreur("Je n'ai pas compris le jour des vidéos à monter : il me faut une vraie date, écrite comme 2026-11-14.")
         m["date"] = date
     if d.get("duree_min") not in (None, ""):
         try:
@@ -306,12 +314,16 @@ def a_monter(d):
     # DEMANDE ce qu'il prendrait (« choisir », sans rien lancer). Rien a monter : on le dit tout de suite, sans proposer
     # un montage a confirmer (essai reel du 21/11 : dossier vide, et l'essai a blanc annoncait quand meme un montage).
     n = combien(m)
+    if n is None:
+        # on ne sait pas ce qu'il y a a monter (montage.py n'a pas su le dire) : dans le doute, rien n'est propose
+        oublier_essai()
+        return repondre(False, "Je n'arrive pas à savoir ce qu'il y a à monter : je ne propose rien et je n'ai rien lancé.", incertain=True)
     if n == 0:
         oublier_essai()
         if m.get("date"):
             return repondre(False, "Je ne trouve aucune vidéo du %s, ni dans Vidéos ni dans Vidéos\\À monter. Je n'ai rien lancé." % m["date"], vide=True)
         return repondre(False, "Le dossier Vidéos\\À monter est vide : mets-y les vidéos de la soirée, puis redemande-moi le montage. Je n'ai rien lancé.", vide=True)
-    combien_dit = ("%d fichier%s" % (n, "s" if n > 1 else "")) if n else "les fichiers"
+    combien_dit = "%d fichier%s" % (n, "s" if n > 1 else "")
     ou = ("%s du %s" % (combien_dit, m["date"])) if m.get("date") else "%s du dossier Vidéos\\À monter" % combien_dit
     quoi = "%s, avec %s" % ("les temps forts" if m["mode"] == "event" else "les souvenirs", ou)
     tache = numero(d.get("_tache"))

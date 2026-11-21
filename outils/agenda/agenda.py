@@ -203,8 +203,7 @@ def jour_de(texte):
     if t in JOURS or (t.startswith("ce ") and t[3:] in JOURS):
         j = JOURS.index(t[3:] if t.startswith("ce ") else t)
         return now + timedelta(days=(j - now.weekday()) % 7)        # « samedi » dit un samedi : aujourd'hui
-    raise Erreur("Je n'ai pas compris quel jour regarder. Donne : aujourd'hui, demain, un jour de la semaine, ou une date (26/11). "
-                 "Pour plusieurs jours : jour = le premier jour, jours = combien de jours.")
+    raise Erreur("Je n'ai pas compris quel jour regarder. Dis-moi : aujourd'hui, demain, un jour de la semaine, ou une date comme le 26/11.")
 
 
 # ---------------------------------------------------------------- le serveur d'Archi (serveur/agenda.py)

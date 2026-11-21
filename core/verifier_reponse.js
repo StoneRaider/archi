@@ -223,15 +223,18 @@ function main() {
   }
   // Un etat qui change ne se reprend pas de la conversation (core/reverifier.js, essai reel du 21/11) : le message demandait
   // un outil d'etat (monteur, agenda, recherche, image), le tour ne contient AUCUN appel d'outil, et la reponse affirme
-  // quand meme quelque chose. Reglage ARCHI_REVERIF : « dit » (defaut), « journal », « eteint ». Pose APRES le bloc
-  // « if (alertes.length) », comme les promesses.
-  const reverif = String(process.env.ARCHI_REVERIF || 'dit').trim().toLowerCase();
+  // quand meme quelque chose. EN JOURNAL SEULEMENT par defaut : la relecture independante du 21/11 a compte 58
+  // avertissements a tort sur 77 echanges honnetes (« c'est quoi le monteur video ? », « mon frere est monteur video »,
+  // « bien sur, quel jour ? ») et 52 reponses de memoire manquees sur 58. Le dire a l'utilisateur ferait plus de bruit
+  // que de bien ; la ligne « [journal] outil non interroge » se lit dans les executions de n8n. Reglage ARCHI_REVERIF :
+  // « journal » (defaut), « dit » (l'avertissement sous la reponse, a ses risques), « eteint ».
+  const reverif = String(process.env.ARCHI_REVERIF || 'journal').trim().toLowerCase();
   if (reverif !== 'eteint') {
     try {
       const R = require('./reverifier');
       const oublies = R.outilsNonInterroges(typeof inp.msg === 'string' ? inp.msg : '', steps, reponse);
       for (const o of oublies) alertes.push('[journal] outil non interroge : ' + o.outil);
-      const phrase = reverif !== 'journal' && oublies.length ? R.avertissement(oublies) : '';
+      const phrase = reverif === 'dit' && oublies.length ? R.avertissement(oublies) : '';
       if (phrase && !sortie.includes('⚠️ À vérifier : je n\'ai pas interrogé')) sortie += '\n\n' + phrase;
     } catch (e) { /* jamais d'obstacle a la reponse */ }
   }

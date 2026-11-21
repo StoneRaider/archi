@@ -68,9 +68,20 @@ test('reverifier : les noms d\'outils suivent les aiguillages du depot', () => {
   for (const o of R.OUTILS) assert.ok(brut.some(a => a.dire.startsWith(o.consigne)), 'aucun aiguillage ne commence par : ' + o.consigne);
 });
 
-test('verificateur : l\'avertissement vient sous la reponse, qui reste intacte ; avec l\'outil appele, pas un caractere de plus', () => {
+test('verificateur : EN JOURNAL par defaut, la reponse ne change pas d\'un caractere ; « dit » ajoute l\'avertissement dessous', () => {
   const msg = recu('Où en est le montage ?');
-  const r = verifier({ reponse: MEMOIRE, steps: [], msg });
+  // par defaut : rien n'est dit (58 avertissements a tort sur 77 a la relecture du 21/11), la ligne part au journal
+  const j = verifier({ reponse: MEMOIRE, steps: [], msg });
+  assert.strictEqual(j.reponse, MEMOIRE);
+  assert.deepStrictEqual(j.alertes, ['[journal] outil non interroge : monteur']);
+  // les echanges honnetes que la relecture a vus avertis a tort : par defaut, pas un caractere de plus
+  for (const [message, reponse] of [
+    ['C\'est quoi le monteur vidéo ?', 'Le monteur vidéo est un outil qui assemble les temps forts de tes vidéos en un seul film.'],
+    ['Mon frère est monteur vidéo à Paris', 'C\'est un beau métier, il doit avoir beaucoup de travail.'],
+    ['Ajoute dentiste à mon agenda', 'D\'accord, il me faut la date. C\'est quel jour et à quelle heure ?'],
+    ['Ne fais pas de recherche web, réponds de tête : c\'est quoi la capitale de l\'Australie ?', 'La capitale de l\'Australie est Canberra.'],
+  ]) assert.strictEqual(verifier({ reponse, steps: [], msg: recu(message) }).reponse, reponse, message);
+  const r = verifier({ reponse: MEMOIRE, steps: [], msg }, { ARCHI_REVERIF: 'dit' });
   assert.ok(r.reponse.startsWith(MEMOIRE));
   assert.ok(r.reponse.includes("⚠️ À vérifier : je n'ai pas interrogé le monteur vidéo à l'instant."));
   assert.ok(r.alertes.includes('[journal] outil non interroge : monteur'));
@@ -82,7 +93,10 @@ test('verificateur : l\'avertissement vient sous la reponse, qui reste intacte ;
   assert.strictEqual(sans.reponse, 'La capitale de l\'Australie est Canberra.');
 });
 
-test('verificateur : ARCHI_REVERIF=journal ne dit rien, =eteint ne note meme rien', () => {
+test('verificateur : ARCHI_REVERIF=journal ne dit rien, =eteint ne note meme rien, une valeur inconnue ne dit rien', () => {
+  for (const v of ['off', 'non', '0', 'oui']) {
+    assert.strictEqual(verifier({ reponse: MEMOIRE, steps: [], msg: recu('Où en est le montage ?') }, { ARCHI_REVERIF: v }).reponse, MEMOIRE, v);
+  }
   const o = { reponse: MEMOIRE, steps: [], msg: recu('Où en est le montage ?') };
   const j = verifier(o, { ARCHI_REVERIF: 'journal' });
   assert.strictEqual(j.reponse, MEMOIRE);

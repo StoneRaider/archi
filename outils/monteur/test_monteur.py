@@ -43,6 +43,8 @@ if a == "etat":
     print(json.dumps({"ok": True, "etat": e, "phrase_pour_utilisateur": ph}, ensure_ascii=False))
 elif a == "lister":
     print(json.dumps({"ok": True, "videos": lire("videos.json", [])}, ensure_ascii=False))
+elif a == "choisir" and os.path.exists(os.path.join(D, "choix_brut.txt")):
+    print(open(os.path.join(D, "choix_brut.txt"), encoding="utf-8").read())
 elif a == "choisir" and lire("choix.json", 2) != "inconnu":
     json.load(open(sys.argv[2], encoding="utf-8"))
     n = lire("choix.json", 2)
@@ -225,7 +227,19 @@ r = lancer(action="monter", _tache="vid0006")
 verifie("un seul fichier : accord au singulier", "avec 1 fichier du dossier" in r["phrase_pour_utilisateur"], r)
 ecrire(os.path.join(D, "choix.json"), json.dumps("inconnu"))           # un montage.py d'avant, sans « choisir » : on ne sait pas compter
 r = lancer(action="monter", _tache="vid0007")
-verifie("montage.py sans « choisir » : essai a blanc sans compte, pas de plantage", r.get("essai") is True and "avec les fichiers du dossier" in r["phrase_pour_utilisateur"], r)
+verifie("montage.py ne sait pas dire ce qu'il prendrait : dans le doute rien n'est propose (relecture du 21/11)",
+        r["ok"] is False and r.get("incertain") is True and "essai" not in r and "je ne propose rien" in r["phrase_pour_utilisateur"] and not os.path.exists(M.ESSAI), r)
+for brut in ('{"ok": true, "nombre": "0"}', '{"ok": true, "nombre": 0.0}', '{"ok": true}', '{"ok": "true", "nombre": 0}', '{"ok": true, "nombre": -1}',
+             '{"ok": true, "nombre": 100000000000000000000}', '[]', ''):
+    ecrire(os.path.join(D, "choix_brut.txt"), brut)
+    r = lancer(action="monter", _tache="vid0008")
+    verifie("« choisir » repond %r : rien n'est propose" % brut, r["ok"] is False and "essai" not in r, r)
+ecrire(os.path.join(D, "choix_brut.txt"), '{"ok": true, "nombre": 0}\nattention : un avertissement de Python apres la reponse')
+r = lancer(action="monter", _tache="vid0009")
+verifie("dossier vide, avec une ligne d'avertissement APRES la reponse : vide quand meme", r["ok"] is False and r.get("vide") is True, r)
+os.remove(os.path.join(D, "choix_brut.txt"))
+r = lancer(action="monter", date="2026-02-30", _tache="vid0010")
+verifie("le 30 fevrier : refuse, aucun montage propose", r["ok"] is False and "essai" not in r and "vraie date" in r["phrase_pour_utilisateur"], r)
 ecrire(os.path.join(D, "choix.json"), 2)
 M.oublier_essai()
 for faux in ("non", "", None, "plus tard", ["oui"], {"a": 1}, "oui oui", "ouiii", 1.0):
@@ -315,7 +329,7 @@ for brut in ({"en_cours": "false"}, {"en_cours": "true"}, {"en_cours": 1}, "en_c
 menage()
 
 r = lancer(action="monter", date="samedi dernier")
-verifie("date mal ecrite : refusee, pas devinee", r["ok"] is False and "AAAA-MM-JJ" in r["phrase_pour_utilisateur"], r)
+verifie("date mal ecrite : refusee, pas devinee", r["ok"] is False and "vraie date" in r["phrase_pour_utilisateur"], r)
 for duree in ("longtemps", "nan"):
     r = lancer(action="monter", duree_min=duree)
     verifie("duree %r : refusee" % duree, r["ok"] is False and "nombre de minutes" in r["phrase_pour_utilisateur"], r)

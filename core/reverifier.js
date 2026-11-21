@@ -9,6 +9,12 @@
 // d'un outil « d'etat » s'est declenche (le message demande bien cet outil) et que le tour ne contient AUCUN appel
 // d'outil, la reponse ne peut venir que de la conversation ou de l'imagination. On le signale.
 //
+// LIMITE MESUREE (relecture independante du 21/11) : ce filet ne sait pas distinguer « le message demande l'outil » de
+// « le message contient le mot ». 58 signalements a tort sur 77 echanges honnetes, 52 reponses de memoire manquees sur
+// 58 (reponses de moins de cinq mots, messages sans aiguillage). Il reste donc EN JOURNAL (core/verifier_reponse.js) :
+// un signal a lire apres coup, pas une phrase dite a l'utilisateur. Le vrai remede est dans le prompt (REGLE REVERIFIER)
+// et dans les consignes d'aiguillage.
+//
 // Regles : fonction pure, jamais d'exception, et dans le doute rien n'est signale :
 //   - un seul appel d'outil dans le tour, quel qu'il soit, et on se tait (le modele a cherche, meme maladroitement) ;
 //   - une reponse qui pose une question (« a quelle heure ? ») n'affirme rien : on se tait ;
