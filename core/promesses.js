@@ -685,7 +685,17 @@ function promessesEnLAir(reponse, steps) {
     });
     if (nonCouverts.length) {
       const parles = PORTEURS.filter(x => nonCouverts.some(p => !UN_MAIL.test(p.net) && x.parle.test(p.net))).map(x => x.outil);
-      manques.push({ famille: ENVOI, raison: parles.length ? raisonPour(parles, actes.filter(a => !joker(a))) : 'aucun_outil' });
+      let raison = parles.length ? raisonPour(parles, actes.filter(a => !joker(a))) : 'aucun_outil';
+      // « Le mail est parti », « C'est envoye. » alors que l'outil d'envoi a ete appele dans ce tour et n'a PAS envoye
+      // (echec, accord manquant) : la raison le dit, au lieu de « aucun outil » (sonde du 21/11).
+      if (raison === 'aucun_outil') {
+        const nue = p => !OBJET_D_ENVOI.test(p.net) && !PORTEURS.some(x => x.parle.test(p.net));
+        const candidats = [];
+        if (nonCouverts.some(p => UN_MAIL.test(p.net) || nue(p))) candidats.push(MAIL_PARTI);
+        if (nonCouverts.some(nue)) for (const x of PORTEURS) if (x.outil !== MAIL_PARTI) candidats.push(x.outil);
+        if (candidats.length) raison = raisonPour(candidats, actes.filter(a => !joker(a)));
+      }
+      manques.push({ famille: ENVOI, raison });
     }
     return manques;
   } catch (e) {
@@ -724,8 +734,41 @@ function avertissement(manques) {
   }
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// 6. Ce qui peut etre DIT a l'utilisateur (le reste va au journal)
+// ---------------------------------------------------------------------------------------------------------------
+
+// Seules deux raisons sont dites : l'outil de CETTE action a ete appele dans CE tour et il a echoue, ou il attend
+// encore l'accord (essai a blanc compris), et la reponse annonce pourtant l'action comme faite. La contradiction est
+// prouvee par le tour lui-meme. « aucun_outil » reste au journal : une phrase generale (« le chauffage est allume de
+// novembre a mars ») ou une replique de theatre la declenchent encore (sondes du 19/11 et du 21/11).
+const RAISONS_DITES = ['outil_en_erreur', 'outil_refuse'];
+
+/** La reponse sans les phrases qu'Archi recopie d'un outil du tour : ce n'est pas lui qui affirme, c'est l'outil. */
+function sansLesPhrasesDesOutils(reponse, steps) {
+  const pas = Array.isArray(steps) ? steps.slice(-PAS_MAX) : [];
+  // (les codes de caracteres sont ecrits en nombres : 10 = retour a la ligne, 92 = barre oblique inverse ; une
+  // observation JSON garde ses retours a la ligne sous la forme « barre oblique inverse + n »)
+  const LIGNE = String.fromCharCode(10), LIGNE_JSON = String.fromCharCode(92) + 'n';
+  const dites = net(pas.map(s => (estObjet(s) ? enTexte(s.observation) : '')).join(' ').split(LIGNE_JSON).join(' '));
+  if (!dites.trim()) return chaine(reponse);
+  return borner(chaine(reponse), REPONSE_MAX, REPONSE_QUEUE).split(new RegExp('(?<=[.!?' + LIGNE + '])')).filter(bout => {
+    const n = net(bout).replace(/[ .!?:;,]+$/, '').replace(/^[ *_>-]+/, '').trim();
+    return !(n.length >= 12 && dites.includes(n));
+  }).join('');
+}
+
+/** Les manques a dire a l'utilisateur : [{famille, raison}], raison parmi RAISONS_DITES. Jamais d'exception. */
+function promessesADire(reponse, steps) {
+  try {
+    return promessesEnLAir(sansLesPhrasesDesOutils(reponse, steps), steps).filter(m => RAISONS_DITES.includes(m.raison));
+  } catch (e) {
+    return [];
+  }
+}
+
 module.exports = {
-  actesDesSteps, promessesEnLAir, avertissement,
+  actesDesSteps, promessesEnLAir, avertissement, promessesADire, RAISONS_DITES,
   ENVOI, NOMS_DES_FAMILLES: FAMILLES.map(f => f.famille).concat([ENVOI]),
   _interne: { phrases, statutDe, entreeDe, parametresDe, FAMILLES },
 };

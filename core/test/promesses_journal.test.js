@@ -27,8 +27,16 @@ test('journal : « j\'ai éteint la prise » sans outil est noté, la réponse n
 test('journal : outil en attente d\'accord, outil en échec', () => {
   const attente = lancer({ reponse: "J'ai allumé la prise du radiateur.", msg: 'allume le radiateur',
     steps: [pas('prises_shelly', { action: 'allumer', prise: 'radiateur' }, { ok: false, accord_requis: true, phrase_pour_utilisateur: 'accord' })] });
-  assert.strictEqual(attente.reponse, "J'ai allumé la prise du radiateur.");
-  assert.deepStrictEqual(journal(attente), ['[journal] promesse en l air : une prise allumée ou éteinte (outil_refuse)']);
+  // depuis le 21/11, ces deux raisons sont DITES (core/test/promesses_dites.test.js) : la reponse du modele reste en tete,
+  // intacte, et l'avertissement vient dessous ; avec ARCHI_PROMESSES=journal, rien ne change, comme avant
+  assert.ok(attente.reponse.startsWith("J'ai allumé la prise du radiateur."));
+  assert.ok(attente.reponse.includes("l'outil attend encore ton accord"));
+  const enJournal = JSON.parse(cp.execFileSync('node', [V], { input: JSON.stringify({ reponse: "J'ai allumé la prise du radiateur.", msg: 'allume le radiateur',
+    steps: [pas('prises_shelly', { action: 'allumer', prise: 'radiateur' }, { ok: false, accord_requis: true, phrase_pour_utilisateur: 'accord' })] }),
+    env: Object.assign({}, process.env, { ARCHI_BASE: BASE, ARCHI_PROMESSES: 'journal' }) }).toString());
+  assert.strictEqual(enJournal.reponse, "J'ai allumé la prise du radiateur.");
+  assert.strictEqual(journal(enJournal).length, 1);
+  assert.deepStrictEqual(journal(attente),['[journal] promesse en l air : une prise allumée ou éteinte (outil_refuse)']);
   const echec = lancer({ reponse: "J'ai lancé l'impression.", msg: 'lance l impression',
     steps: [pas('imprimante_3d', { action: 'lancer' }, { ok: false, erreur: 'injoignable', phrase_pour_utilisateur: 'echec' })] });
   assert.strictEqual(journal(echec).length, 1);

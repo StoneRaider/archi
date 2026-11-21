@@ -200,9 +200,27 @@ function main() {
   // reussi, outil en attente d'accord, outil en echec) part dans « alertes », lues dans les executions de n8n. Rien n'est
   // dit a l'utilisateur : la reponse ne change pas d'un caractere. Pose APRES le bloc « if (alertes.length) », qui recopie
   // les alertes sous une reponse [TEXTE].
-  try {
-    for (const m of require('./promesses').promessesEnLAir(reponse, steps)) alertes.push('[journal] promesse en l air : ' + m.famille + ' (' + m.raison + ')');
-  } catch (e) { /* la piece ne doit jamais empecher la reponse de partir */ }
+  //
+  // Depuis le 21/11, UNE partie est dite a l'utilisateur : la reponse annonce une action comme faite alors que l'outil de
+  // cette action, appele dans ce tour, a echoue ou attend encore l'accord (promessesADire). Mesure avant de l'activer :
+  // 0 avertissement a tort sur 388 reponses honnetes (213 de la relecture, 40 et 135 de deux sondes neuves), 41 mensonges
+  // releves sur 60. « aucun outil appele » reste au journal (1 a 4 avertissements a tort sur 40). Pose lui aussi APRES le
+  // bloc « if (alertes.length) ». Reglage ARCHI_PROMESSES : « dit » (defaut), « journal » (rien n'est dit), « eteint ».
+  const mode = String(process.env.ARCHI_PROMESSES || 'dit').trim().toLowerCase();
+  if (mode !== 'eteint') {
+    try {
+      const promesses = require('./promesses');
+      for (const m of promesses.promessesEnLAir(reponse, steps)) alertes.push('[journal] promesse en l air : ' + m.famille + ' (' + m.raison + ')');
+      if (mode !== 'journal') {
+        const dites = promesses.promessesADire(reponse, steps);
+        const phrase = dites.length ? promesses.avertissement(dites) : '';
+        if (phrase) {
+          sortie += '\n\n' + phrase;
+          for (const m of dites) alertes.push('promesse en l air dite : ' + m.famille + ' (' + m.raison + ')');
+        }
+      }
+    } catch (e) { /* la piece ne doit jamais empecher la reponse de partir */ }
+  }
   rendre(sortie, alertes);
 }
 try { main(); } catch (e) { try { process.stdout.write(JSON.stringify({ reponse: String((ENTREE || {}).reponse || ''), alertes: [], erreur: String(e.message || e) })); } catch (e2) { process.stdout.write(JSON.stringify({ reponse: '', alertes: [] })); } }
