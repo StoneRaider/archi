@@ -5,6 +5,8 @@
 // premiere tournee sera celle du prochain creneau.
 // Les tournees partent en arriere-plan (python ... --tournee) ; elles previennent l'utilisateur par une annonce.
 // Fichier : <base>\atelier\tournees.json. ARCHI_TOURNEES=non les coupe.
+// Depuis le 21/11 : le tour du trader (simulation), chaque jour a 18 h. ARCHI_TRADER_AUTO=non coupe ce tour-la seulement ;
+// « trader, arrete » le coupe aussi (le trader a l'arret ne fait pas de tour, et n'annonce rien).
 'use strict';
 const cp = require('child_process');
 const fs = require('fs');
@@ -13,8 +15,10 @@ const path = require('path');
 require('./env').charger();
 
 // [jour (0 = dimanche, 3 = mercredi), heure, minute]
-const CRENEAUX = { curateur: [[0, 10, 0]], mecanicien: [[3, 10, 30], [0, 10, 30]] };
-const SCRIPTS = { curateur: ['curateur', 'curateur.py'], mecanicien: ['mecanicien', 'mecanicien.py'] };
+const CRENEAUX = { curateur: [[0, 10, 0]], mecanicien: [[3, 10, 30], [0, 10, 30]], trader: [0, 1, 2, 3, 4, 5, 6].map(j => [j, 18, 0]) };
+const SCRIPTS = { curateur: ['curateur', 'curateur.py'], mecanicien: ['mecanicien', 'mecanicien.py'], trader: ['trader', 'trader.py'] };
+// une tournee qu'un reglage du .env peut couper seule
+const COUPEES = { trader: () => String(process.env.ARCHI_TRADER_AUTO || 'oui').trim().toLowerCase() === 'non' };
 const EVEILLE_MIN = 5 * 60000;     // Archi doit tourner depuis 5 minutes
 const ABSENCE = 3 * 60000;         // plus de 3 minutes sans reveil : Archi etait arrete
 
@@ -83,9 +87,13 @@ function reveillerSousVerrou(f, base, maintenant, lancer) {
   const vu = date(e.vu);
   if (!vu || maintenant - vu > ABSENCE || !date(e.depuis)) e.depuis = iso;     // Archi vient de (re)demarrer
   e.vu = iso;
+  // une tournee ajoutee par une nouvelle version d'Archi (le trader, 21/11) : comme a la toute premiere fois, rien tout
+  // de suite, la premiere sera celle du prochain creneau
+  for (const nom of Object.keys(CRENEAUX)) if (!(nom in e)) e[nom] = iso;
   const aLancer = [];
   if (maintenant - date(e.depuis) >= EVEILLE_MIN) {
     for (const nom of Object.keys(CRENEAUX)) {
+      if (COUPEES[nom] && COUPEES[nom]()) continue;      // coupee : son creneau n'est pas consomme, elle reprendra au reglage suivant
       const creneau = dernierCreneau(CRENEAUX[nom], maintenant);
       if (!creneau || date(e[nom]) >= creneau.getTime()) continue;
       e[nom] = iso;

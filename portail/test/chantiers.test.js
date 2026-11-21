@@ -22,7 +22,6 @@ const lire = f => fs.readFileSync(path.join(DEPOT, f), 'utf8');
 const PREUVES = {
   'Pilotage de drone': { noeuds: ['drone', 'pilotage_drone'], registre: ['drone'] },
   'Appel à l\'expert': { noeuds: ['expert', 'appel_expert'], registre: ['expert', 'appel_expert'] },
-  'Trader : le tour automatique': { code: [['core/tournees.js', /trader/i]] },
   'Concevoir une pièce 3D': { noeuds: ['impression_3d', 'conception_3d', 'catalogues_3d', 'piece_3d'], registre: ['conception_3d', 'piece_3d'] },
   'Monteur vidéo': { noeuds: ['monteur', 'monteur_video'], workflows: ['ArchiMonteur0001'], registre: ['monteur'] },
   'Agenda à la voix': { noeuds: ['agenda'], registre: ['agenda'], code: [['n8n/fabriquer_workflow.py', /\/agenda\b/]] },

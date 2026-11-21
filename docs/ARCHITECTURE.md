@@ -73,6 +73,8 @@ ses consignes. Exemple avec `prises_shelly` et `planificateur` :
 - **Les tournées.** Le réveil « Chaque minute » de n8n lance `core/tournees.js`. Celui-ci lit `atelier/tournees.json` et
   lance `curateur.py --tournee` le dimanche à 10 h, `mecanicien.py --tournee` le lundi à 10 h 30 (et le dimanche à 10 h 30).
   Un créneau manqué (PC éteint) est rattrapé 5 minutes après le démarrage. `ARCHI_TOURNEES=non` coupe les tournées.
+  Le trader fait aussi son tour seul, chaque jour à 18 h (`trader.py --tournee`, toujours en simulation) :
+  `ARCHI_TRADER_AUTO=non` ou « trader, arrête » le coupent, et un tour qui n'a pas eu lieu n'est jamais annoncé.
   Le résultat arrive comme un rappel : `planificateur.py --annoncer` le pose dans les annonces, que la page, l'appli et
   Telegram reçoivent déjà.
 - **Le curateur** (`outils/curateur`) écrit `curateur/propositions.json`. « appliquer » prend le verrou de la mémoire,

@@ -682,10 +682,64 @@ SYNONYMES = {"": "etat", "rapport": "etat", "bilan": "etat", "resume": "etat", "
              "remise": "remise_a_zero", "reset": "remise_a_zero", "recommencer": "remise_a_zero", "repartir_de_zero": "remise_a_zero"}
 
 
+# ---------------------------------------------------------------- le tour du jour (lance par core/tournees.js)
+def annoncer(texte):
+    """l'annonce part comme un rappel du planificateur : Telegram, l'appli et la page du PC"""
+    import subprocess
+    script = os.path.join(BASE, "outils", "planificateur", "planificateur.py")
+    if not os.path.exists(script):
+        return False
+    f = os.path.join(DOS, "annonce_%d.json" % int(time.time() * 1000))
+    try:
+        os.makedirs(DOS, exist_ok=True)
+        with open(f, "w", encoding="utf-8") as h:
+            json.dump({"texte": texte, "de": "trader"}, h, ensure_ascii=False)
+        r = subprocess.run([sys.executable, script, "--annoncer", "--fichier", f], capture_output=True, timeout=40,
+                           env=dict(os.environ, PYTHONIOENCODING="utf-8"), creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        return r.returncode == 0 and '"ok": true' in r.stdout.decode("utf-8", "replace")
+    except (OSError, subprocess.SubprocessError):
+        return False
+    finally:
+        try:
+            os.remove(f)
+        except OSError:
+            pass
+
+
+def tournee(annonce=None):
+    """UN tour, comme « action=tour », puis une annonce courte. Trader a l'arret, tour trop rapproche, prix ou modele
+    absents : aucun tour, AUCUNE annonce (on n'annonce que ce qui a ete fait). Les garde-fous sont ceux de a_tour."""
+    import contextlib
+    import io
+    tampon = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(tampon):
+            a_tour({})
+        r = json.loads(tampon.getvalue().strip().splitlines()[-1])
+    except Erreur as e:
+        return repondre(False, str(e), tournee=True, annonce=False)
+    except Exception as e:
+        return repondre(False, "Le trader a eu un souci : " + str(e)[:150], tournee=True, annonce=False)
+    if not (isinstance(r, dict) and r.get("ok") is True):
+        return repondre(False, str((r or {}).get("phrase_pour_utilisateur") or "Pas de tour."), tournee=True, annonce=False)
+    prenom = (os.environ.get("ARCHI_UTILISATEUR") or "").strip()[:30]
+    n = len(r.get("ordres") or [])
+    texte = "%sle trader a fait son tour du jour, en simulation : %s, portefeuille fictif à %s. Dis « trader, où en es-tu » pour le détail. %s" % (
+        (prenom + ", ") if prenom else "", ("%d ordre(s) fictif(s)" % n) if n else "aucun ordre", _dollars(float(r.get("valeur_usd") or 0)), RAPPEL)
+    fait = (annonce or annoncer)(texte)
+    extra = {k: v for k, v in r.items() if k not in ("ok", "phrase_pour_utilisateur", "simulation")}
+    return repondre(True, r["phrase_pour_utilisateur"], tournee=True, annonce=bool(fait), **extra)
+
+
 def main():
     pa = argparse.ArgumentParser()
-    pa.add_argument("--fichier", required=True)
+    pa.add_argument("--fichier")
+    pa.add_argument("--tournee", action="store_true")
     a = pa.parse_args()
+    if a.tournee:
+        return tournee()
+    if not a.fichier:
+        return repondre(False, "Il manque --fichier.")
     try:
         with open(a.fichier, encoding="utf-8-sig") as h:
             d = json.load(h)

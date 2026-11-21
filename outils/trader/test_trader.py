@@ -343,5 +343,41 @@ fiche = json.load(open(os.path.join(ICI, "outil.json"), encoding="utf-8"))
 verifie("outil.json : la fiche dit simulation et jamais de conseil", fiche["nom"] == "trader" and fiche["script"] == "trader.py"
         and "SIMULATION" in fiche["description"] and "JAMAIS un conseil" in fiche["description"])
 
+# ---------------------------------------------------------------- 16. le tour du jour (--tournee, lance par core/tournees.js)
+def tournee():
+    annonces = []
+    tampon = io.StringIO()
+    with contextlib.redirect_stdout(tampon):
+        T.tournee(annonce=lambda texte: annonces.append(texte) or True)
+    return json.loads(tampon.getvalue().strip().splitlines()[-1]), annonces
+
+
+chateau_neuf()
+TENDANCE.clear()
+HORLOGE[0] = datetime(2026, 11, 12, 18, 0, 0)
+REPONSE[0] = {"analyse": "Le marché monte, j'attends.", "decisions": []}
+os.environ["ARCHI_UTILISATEUR"] = "Camille"
+r, annonces = tournee()
+verifie("tournee : un tour est fait et annonce", r["ok"] and r["tournee"] and r["annonce"] and len(annonces) == 1, r)
+verifie("tournee : l'annonce dit simulation, le prenom, et jamais un conseil",
+        annonces and annonces[0].startswith("Camille, le trader a fait son tour du jour, en simulation") and "aucun ordre" in annonces[0]
+        and "portefeuille fictif à 1 000,00 $" in annonces[0] and T.RAPPEL in annonces[0], annonces)
+verifie("tournee : le tour est au journal", [l.get("type") for l in T.lignes_journal()].count("tour") == 1)
+r, annonces = tournee()                       # tout de suite apres : le delai entre deux tours tient
+verifie("tournee : trop tot, pas de tour, AUCUNE annonce", r["ok"] is False and r["annonce"] is False and annonces == [], r)
+HORLOGE[0] = datetime(2026, 11, 13, 18, 0, 0)
+lancer(action="stop")
+r, annonces = tournee()
+verifie("tournee : trader a l'arret, pas de tour, aucune annonce", r["ok"] is False and annonces == [] and "arrêt" in r["phrase_pour_utilisateur"], r)
+lancer(action="reprendre")
+REPONSE[0] = RuntimeError("LM Studio eteint")
+r, annonces = tournee()
+verifie("tournee : modele absent, pas de tour, aucune annonce", r["ok"] is False and annonces == [], r)
+REPONSE[0] = {"analyse": "Le marché monte, j'attends.", "decisions": []}
+del os.environ["ARCHI_UTILISATEUR"]
+pr = subprocess.run([sys.executable, os.path.join(ICI, "trader.py")], capture_output=True,
+                    env=dict(os.environ, ARCHI_BASE=neuf, ARCHI_SANS_ENV="1", PYTHONIOENCODING="utf-8"))
+verifie("ligne de commande : sans --fichier ni --tournee, une phrase claire", pr.returncode == 0 and '"ok": false' in pr.stdout.decode("utf-8"), pr.stdout)
+
 print(("%d tests OK" % ok) if not ko else ("%d ECHEC(S) sur %d" % (ko, ok + ko)))
 sys.exit(1 if ko else 0)

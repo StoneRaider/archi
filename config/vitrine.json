@@ -19,7 +19,7 @@
   {"nom": "cameras", "titre": "Caméras", "quoi": "Les caméras de ton réseau local, sans cloud : photo et vidéo.", "besoin": "une caméra du réseau"},
   {"nom": "imprimante_3d", "titre": "Imprimante 3D", "quoi": "État, envoi d'un fichier, lancement, pause : Klipper, OctoPrint ou PrusaLink.", "besoin": "une imprimante 3D"},
   {"nom": "camera_imprimante", "titre": "Voir l'impression", "quoi": "La vidéo en direct de l'imprimante 3D.", "besoin": "une imprimante avec caméra"},
-  {"nom": "trader", "titre": "Trader (simulation)", "quoi": "Un portefeuille fictif de 1 000 $ qu'il gère seul, avec les vrais prix. Aucun ordre réel, jamais de conseil."},
+  {"nom": "trader", "titre": "Trader (simulation)", "quoi": "Un portefeuille fictif de 1 000 $ qu'il gère seul, un tour par jour, avec les vrais prix. Aucun ordre réel, jamais de conseil."},
   {"nom": "indicateur_polymarket", "titre": "Baromètre Polymarket", "quoi": "Ce que les marchés de prédiction estiment sur un sujet d'actualité. Lecture seule, jamais de pari."},
   {"nom": "musique", "titre": "Musique", "quoi": "Te propose des morceaux selon tes goûts, tirés de ta bibliothèque."},
   {"nom": "vision_video", "titre": "Regarder une vidéo", "quoi": "Il regarde et écoute une vidéo en entier, en local, et en range une fiche."},
@@ -34,7 +34,6 @@
  "en_developpement": [
   {"titre": "Pilotage de drone", "quoi": "Piloter un drone depuis Archi (ArduPilot, MAVLink), avec ton accord avant chaque décollage."},
   {"titre": "Appel à l'expert", "quoi": "Pour une question trop dure : demander à un modèle plus puissant en ligne, seulement après ton accord."},
-  {"titre": "Trader : le tour automatique", "quoi": "Aujourd'hui il décide quand tu le lui demandes. Bientôt : un tour par jour, tout seul, et d'autres marchés que les cryptos."},
   {"titre": "Concevoir une pièce 3D", "quoi": "Décrire une pièce simple : il en fait un fichier prêt à imprimer, ou la trouve dans un catalogue."},
   {"titre": "Monteur vidéo", "quoi": "Monter les temps forts d'une soirée, avec sous-titres."},
   {"titre": "Agenda à la voix", "quoi": "Voir son agenda et y ajouter un rendez-vous."},
