@@ -31,11 +31,15 @@ def get_calendar_service():
                 creds.refresh(Request())
             except RefreshError:
                 # Jeton expire ou revoque : on redemande la connexion Google
-                print("[Google] Jeton expire, nouvelle connexion dans le navigateur...")
                 creds = None
         if not creds or not creds.valid:
             if not os.path.exists(GOOGLE_CLIENT):
                 raise RuntimeError("Agenda non branche : il manque le fichier OAuth Google (voir serveur/LISEZMOI.md)")
+            # Appele par l'outil maison (outils/agenda) : jamais de fenetre de connexion ouverte dans le dos de
+            # l'utilisateur. La connexion se refait a la main, une fois : python serveur/agenda.py
+            if os.environ.get("ARCHI_AGENDA_SANS_NAVIGATEUR") == "1":
+                raise RuntimeError("la connexion Google a expire. Pour la refaire, lance une fois « python serveur/agenda.py » sur le PC")
+            print("[Google] Connexion dans le navigateur...")
             flow = InstalledAppFlow.from_client_secrets_file(GOOGLE_CLIENT, SCOPES)
             creds = flow.run_local_server(port=0)
 

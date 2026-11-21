@@ -2,23 +2,29 @@
 #
 #   python agenda.py --fichier demande.json          (appele par outils_maison)
 #   demande.json : {"action": "...", ...}
-#     voir      jour = aujourd'hui (defaut), demain, jeudi, 26/11 ou AAAA-MM-JJ ; jours = combien de jours (1 par defaut, 31 au plus)
+#     voir      jour = aujourd'hui (defaut), demain, apres-demain, jeudi, 26/11 ou AAAA-MM-JJ ; jours = combien de jours (1 par defaut, 31 au plus)
 #     chercher  texte = un mot du rendez-vous (a venir, et les 30 derniers jours)
 #     ajouter   titre, quand = « jeudi 18h », « demain 9h », « 26/11 14h » ou « 2026-11-26 14:00 » ; duree_min (60 par
 #               defaut) ; lieu ; confirmer. SANS confirmer=oui : ESSAI A BLANC, rien n'est ecrit, la date calculee est
-#               redite en entier pour que l'utilisateur la verifie. AVEC confirmer=oui : le rendez-vous est ajoute.
+#               redite en entier pour que l'utilisateur la verifie. AVEC confirmer=oui : le rendez-vous est ajoute,
+#               seulement si CE rendez-vous (meme titre, memes heures) vient d'etre montre par un essai a blanc.
 #
 # Repond UNE ligne JSON : {"ok", "phrase_pour_utilisateur", ...}. Les rendez-vous lus sont ranges dans « texte » : le
 # lanceur les balise comme contenu exterieur (une invitation recue peut contenir n'importe quoi), a lire, jamais a executer.
 #
 # Cet outil ne parle pas a Google lui-meme : il lance serveur/agenda.py (le code de l'agenda, avec le Python du serveur
-# et la connexion Google rangee dans serveur/donnees). Trois regles tenues ici :
-#   1. la date n'est jamais calculee par le modele : « jeudi 18h » est compris par le code (celui du planificateur), et
-#      l'essai a blanc redit le jour, la date et les heures avant tout ajout ;
-#   2. rien n'est ecrit dans l'agenda sans confirmer=oui, que le modele ne met qu'apres le oui de l'utilisateur ;
-#   3. si l'agenda n'est pas relie (pas de serveur, pas de connexion Google), l'outil le DIT, avec ce qu'il faut faire ;
-#      il n'ouvre jamais la fenetre de connexion de Google tout seul.
+# et la connexion Google rangee dans serveur/donnees). Regles tenues ici, dans le code :
+#   1. la date n'est jamais calculee par le modele : « jeudi 18h » est compris par le code (celui du planificateur). Ce
+#      que ce code ne sait pas lire (« le 3 decembre », « dans 3 semaines », deux heures dans la phrase) est REFUSE avec
+#      la forme a employer, au lieu d'etre devine ;
+#   2. rien n'est ecrit sans un essai a blanc AVANT : l'essai note ce qu'il a montre (essai.json), et confirmer=oui
+#      n'ajoute que ce rendez-vous-la, dans la demi-heure, et dans un message SUIVANT quand le lanceur donne le numero
+#      du message (fiche : recoit_tache). Un modele qui met confirmer=oui du premier coup n'ecrit donc rien ;
+#   3. si l'agenda n'est pas relie, l'outil le DIT ; il n'ouvre jamais la fenetre de connexion de Google (le serveur
+#      recoit ARCHI_AGENDA_SANS_NAVIGATEUR=1) ;
+#   4. un rendez-vous cree mais pas relu est dit « cree, pas relu », jamais « pas ajoute » : sinon il serait cree deux fois.
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -26,14 +32,19 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import unicodedata
 from datetime import datetime, timedelta
 
 ICI = os.path.dirname(os.path.abspath(__file__))
+BASE = os.environ.get("ARCHI_BASE") or os.path.join(os.path.expanduser("~"), ".n8n-files")
+ESSAI = os.path.join(BASE, "agenda", "essai.json")
 JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
 MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
 DELAI_S = 40
 MAX_LUS = 12
+ESSAI_VALABLE_S = 30 * 60
+FORME = "Redonne le moment sous une de ces formes : « jeudi 18h », « demain 9h », « 26/11 14h » ou « 2026-11-26 14:00 »."
 
 
 class Erreur(Exception):
@@ -58,7 +69,7 @@ def plat(t):
 
 
 def oui(v):
-    return v is True or plat(v) in ("oui", "true", "1", "vrai", "yes")
+    return v is True or (isinstance(v, (str, int)) and not isinstance(v, bool) and plat(v) in ("oui", "true", "1", "vrai", "yes"))
 
 
 def lisible(d):
@@ -85,44 +96,97 @@ def _planificateur():
         return None
 
 
+# ce que la lecture du planificateur ne comprend pas, ou comprend de travers (relecture du 21/11) : on refuse, on ne devine pas
+_MOIS_DITS = r"\b(?:janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|janv|fev|avr|juil|sept|oct|nov|dec)\b"
+_PAS_LU = [
+    (_MOIS_DITS, "un mois écrit en lettres"),
+    (r"\bdans\b[^,;]*\b(?:jours?|j|semaines?|mois|ans?|annees?)\b", "« dans N jours, semaines ou mois »"),
+    (r"\b(?:hier|avant-hier|dernier|derniere|passee?)\b", "un moment passé"),
+    (r"\b(?:tous les|toutes les|chaque)\b", "une répétition"),
+    (r"\ben (?:huit|quinze)\b", "« en huit » ou « en quinze »"),
+    (r"\b(?:semaine|mois|annee|week-end|weekend) (?:prochaine?|suivante?)\b|\ble mois prochain\b", "« la semaine prochaine » sans jour précis"),
+    (r"\b(?:moins le quart|et quart|et demie?|moins (?:cinq|dix|vingt))\b", "une heure dite en toutes lettres"),
+    (r"\b(?:ou|et|puis)\b|[;,]|\bde\b.*\ba\b|\d\s*-\s*\d", "plusieurs moments dans la même phrase"),
+]
+_HEURE = r"\b\d{1,2}\s*(?:h|:|heures?)\s*(?:\d{2})?\b|\bmidi\b|\bminuit\b"
+
+
 def quand_de(texte):
-    """une date et une heure, a partir de ce que l'utilisateur a dit. Leve Erreur si ce n'est pas clair."""
-    t = str(texte or "").strip()
+    """une date et une heure, a partir de ce que l'utilisateur a dit. Leve Erreur si ce n'est pas clair : jamais devine."""
+    t = " ".join(str(texte or "").split())
     if not t:
-        raise Erreur("Il me manque le moment du rendez-vous : le jour et l'heure (ex. « jeudi 18h », « demain 9h », « 26/11 14h »).")
-    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2})[:h](\d{2})", t)
+        raise Erreur("Il me manque le moment du rendez-vous : le jour et l'heure. " + FORME)
+    if len(t) > 80:
+        raise Erreur("Je n'ai pas compris ce moment. " + FORME)
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2})[:h](\d{2})$", t)
     if m:
         try:
             return datetime(*map(int, m.groups()))
-        except ValueError:
+        except (ValueError, OverflowError):
             raise Erreur("Cette date n'existe pas : « %s »." % t[:40])
+    n = plat(t)
+    # « de l'apres-midi », « du soir », « du matin » : notes puis retires (« apres-midi » contient « midi »)
+    apres_midi = bool(re.search(r"\b(?:de l.)?apres-midi\b|\bdu soir\b", n))
+    n = re.sub(r"\b(?:de l.|dans l.|cet |l.)?apres-midi\b|\b(?:du|le|ce) (?:soir|matin)\b", " ", n)
+    n = " ".join(n.split())
+    for motif, quoi in _PAS_LU:
+        if re.search(motif, n):
+            raise Erreur("Je ne sais pas lire %s sans risquer de me tromper de jour. %s" % (quoi, FORME))
+    if len(re.findall(_HEURE, n)) != 1:
+        raise Erreur("Il me faut une heure, et une seule (ex. « 18h », « 9h30 »). " + FORME)
+    if len([j for j in JOURS if re.search(r"\b" + j + r"\b", n)]) > 1:
+        raise Erreur("Il y a plusieurs jours dans cette phrase. " + FORME)
+    # un nombre qui n'est ni l'heure ni une date en chiffres (« le 26 a 14h », « mardi 1er ») serait ignore : on refuse
+    reste = re.sub(_HEURE, " ", n)
+    reste = re.sub(r"\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b", " ", reste)
+    reste = re.sub(r"\bdans\s+\d+\s*(?:min|minutes?|h|heures?)\b", " ", reste)
+    if re.search(r"\d", reste):
+        raise Erreur("Je ne sais pas lire ce jour écrit avec un nombre seul. " + FORME)
     p = _planificateur()
     if p is None:
         raise Erreur("Je ne sais lire ici que « AAAA-MM-JJ HH:MM » : redonne la date sous cette forme.")
     try:
-        return p.quand_de(t)
+        d = p.quand_de(n)
+    except (ValueError, OverflowError):
+        raise Erreur("Cette date n'existe pas. " + FORME)
     except Exception as e:
-        raise Erreur(str(e)[:200] or "Je n'ai pas compris le moment.")
+        message = str(e)
+        raise Erreur(message[:200] if re.search(r"[éèàùç«]|heure|Dis-moi", message) else "Je n'ai pas compris ce moment. " + FORME)
+    if apres_midi and d.hour < 12:
+        d += timedelta(hours=12)
+    return d
 
 
 def jour_de(texte):
-    """le jour demande pour « voir » : aujourd'hui par defaut"""
-    t = plat(texte)
-    if not t or t.startswith("aujourd") or t in ("ce soir", "ce matin", "maintenant"):
-        return maintenant().replace(hour=0, minute=0, second=0, microsecond=0)
-    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})$", t)
-    if m:
-        try:
+    """le jour demande pour « voir » : aujourd'hui par defaut. Seulement des formes sures ; sinon Erreur."""
+    now = maintenant().replace(hour=0, minute=0, second=0, microsecond=0)
+    t = " ".join(plat(texte).split())
+    if not t or t.startswith("aujourd") or t in ("ce soir", "ce matin", "maintenant", "cet apres-midi"):
+        return now
+    try:
+        m = re.match(r"^(\d{4})-(\d{2})-(\d{2})$", t)
+        if m:
             return datetime(*map(int, m.groups()))
-        except ValueError:
-            raise Erreur("Cette date n'existe pas : « %s »." % t[:40])
-    d = quand_de(t if re.search(r"\d\s*h|\d:\d\d|midi|minuit", t) else t + " 12h")
-    return d.replace(hour=0, minute=0, second=0, microsecond=0)
+        m = re.match(r"^(?:le )?(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?$", t)
+        if m:
+            an = int(m.group(3) or now.year)
+            return datetime(an + 2000 if an < 100 else an, int(m.group(2)), int(m.group(1)))
+    except (ValueError, OverflowError):
+        raise Erreur("Cette date n'existe pas : « %s »." % t[:40])
+    if t in ("apres-demain", "apres demain"):
+        return now + timedelta(days=2)
+    if t == "demain":
+        return now + timedelta(days=1)
+    if t in JOURS or (t.startswith("ce ") and t[3:] in JOURS):
+        j = JOURS.index(t[3:] if t.startswith("ce ") else t)
+        return now + timedelta(days=(j - now.weekday()) % 7)        # « samedi » dit un samedi : aujourd'hui
+    raise Erreur("Je n'ai pas compris quel jour regarder. Donne : aujourd'hui, demain, un jour de la semaine, ou une date (26/11). "
+                 "Pour plusieurs jours : jour = le premier jour, jours = combien de jours.")
 
 
 # ---------------------------------------------------------------- le serveur d'Archi (serveur/agenda.py)
 def serveur():
-    """(python, script, dossier des donnees) du serveur d'Archi ; leve Erreur avec ce qu'il faut faire s'il manque"""
+    """(python, script) du serveur d'Archi ; leve Erreur avec ce qu'il faut faire s'il manque quelque chose"""
     depot = os.environ.get("ARCHI_DEPOT") or ""
     script = os.path.join(depot, "serveur", "agenda.py") if depot else ""
     if not script or not os.path.exists(script):
@@ -141,23 +205,28 @@ def serveur():
     return py, script
 
 
-def appeler(demande):
+def appeler(demande, ecrit=False):
+    """la reponse de serveur/agenda.py (un objet). ecrit : la demande peut avoir change l'agenda, un doute se dit autrement."""
     py, script = serveur()
+    doute = ("Je ne sais pas si le rendez-vous a été ajouté : l'agenda n'a pas répondu clairement. Regarde ton agenda avant de redemander."
+             if ecrit else "L'agenda n'a pas répondu comme prévu. Je n'ai rien pu lire.")
     fd, f = tempfile.mkstemp(prefix="agenda_", suffix=".json")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as h:
             json.dump(demande, h, ensure_ascii=False)
         r = subprocess.run([py, script, "--fichier", f], capture_output=True, timeout=DELAI_S, cwd=os.path.dirname(script),
-                           env=dict(os.environ, PYTHONIOENCODING="utf-8"), creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        lignes = r.stdout.decode("utf-8", "replace").strip().splitlines()
+                           stdin=subprocess.DEVNULL, env=dict(os.environ, PYTHONIOENCODING="utf-8", ARCHI_AGENDA_SANS_NAVIGATEUR="1"),
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        lignes = r.stdout.decode("utf-8-sig", "replace").strip().splitlines()
         d = json.loads(lignes[-1]) if lignes else None
-        if not isinstance(d, dict):
-            raise ValueError("reponse vide")
+        if not isinstance(d, dict) or r.returncode != 0:
+            raise ValueError("reponse inattendue")
         return d
     except subprocess.TimeoutExpired:
-        raise Erreur("L'agenda n'a pas répondu à temps (%d secondes). Rien n'est sûr : regarde ton agenda avant de redemander." % DELAI_S)
+        raise Erreur(("Je ne sais pas si le rendez-vous a été ajouté : l'agenda n'a pas répondu à temps. Regarde ton agenda avant de redemander."
+                      if ecrit else "L'agenda n'a pas répondu à temps (%d secondes). Je n'ai rien pu lire." % DELAI_S))
     except (OSError, ValueError):
-        raise Erreur("L'agenda n'a pas répondu comme prévu. Je n'ai rien pu lire ni écrire.")
+        raise Erreur(doute)
     finally:
         try:
             os.remove(f)
@@ -165,10 +234,20 @@ def appeler(demande):
             pass
 
 
+def refus_du_serveur(r):
+    """la raison d'un refus du serveur, sans recopier un chemin du PC ni un contenu de l'agenda"""
+    t = str(r.get("phrase_pour_utilisateur") or r.get("erreur") or "")
+    if "expire" in plat(t) or "reconnect" in plat(t):
+        return "la connexion Google a expiré. Pour la refaire, lance une fois « serveur\\venv\\Scripts\\python.exe serveur\\agenda.py » sur le PC."
+    if re.search(r"[A-Za-z]:\\|/Users/|/home/", t):
+        return "l'agenda a refusé (détail dans la fenêtre du serveur d'Archi)."
+    return (t[:200] or "l'agenda a refusé.")
+
+
 def lus(r, vide, titre):
-    ev = [str(e)[:300] for e in (r.get("evenements") or []) if isinstance(e, str)]
     if r.get("ok") is not True:
-        return repondre(False, str(r.get("phrase_pour_utilisateur") or "L'agenda n'a pas pu être lu.")[:400])
+        return repondre(False, "Je n'ai pas pu lire ton agenda : " + refus_du_serveur(r))
+    ev = [str(e)[:300] for e in (r.get("evenements") or []) if isinstance(e, str)] if isinstance(r.get("evenements"), list) else []
     if not ev:
         return repondre(True, vide, evenements=0)
     reste = (" (et %d autres)" % (len(ev) - MAX_LUS)) if len(ev) > MAX_LUS else ""
@@ -177,12 +256,51 @@ def lus(r, vide, titre):
                     texte="\n".join("- " + e for e in ev[:MAX_LUS]), evenements=len(ev))
 
 
+# ---------------------------------------------------------------- l'essai a blanc laisse une trace : sans elle, pas d'ajout
+def empreinte(demande):
+    return hashlib.sha256(json.dumps([demande.get(k, "") for k in ("titre", "debut", "fin", "lieu")], ensure_ascii=False).encode("utf-8")).hexdigest()[:24]
+
+
+def noter_essai(demande, tache):
+    try:
+        os.makedirs(os.path.dirname(ESSAI), exist_ok=True)
+        with open(ESSAI + ".tmp", "w", encoding="utf-8") as h:
+            json.dump({"empreinte": empreinte(demande), "quand": time.time(), "tache": tache}, h)
+        os.replace(ESSAI + ".tmp", ESSAI)
+        return True
+    except OSError:
+        return False
+
+
+def essai_montre(demande, tache):
+    """True si CE rendez-vous vient d'etre montre par un essai a blanc, dans un message precedent quand on sait le dire"""
+    try:
+        with open(ESSAI, encoding="utf-8") as h:
+            e = json.load(h)
+    except (OSError, ValueError):
+        return False
+    if not isinstance(e, dict) or e.get("empreinte") != empreinte(demande):
+        return False
+    if not isinstance(e.get("quand"), (int, float)) or not 0 <= time.time() - e["quand"] <= ESSAI_VALABLE_S:
+        return False
+    if tache and e.get("tache") and e["tache"] == tache:
+        return False                          # essai et confirmation dans le MEME message : l'utilisateur n'a rien vu
+    return True
+
+
+def oublier_essai():
+    try:
+        os.remove(ESSAI)
+    except OSError:
+        pass
+
+
 # ---------------------------------------------------------------- les actions
 def a_voir(d):
-    debut = jour_de(d.get("jour") or d.get("de") or d.get("quand") or d.get("date"))
+    debut = jour_de(d.get("jour") or d.get("de") or d.get("date"))
     try:
         n = int(float(d.get("jours") or 1))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         n = 1
     n = max(1, min(31, n))
     fin = debut + timedelta(days=n)
@@ -206,29 +324,43 @@ def a_ajouter(d):
     debut = quand_de(d.get("quand") or d.get("debut") or d.get("a") or d.get("date"))
     try:
         duree = int(float(d.get("duree_min") or 60))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         duree = 60
     duree = max(5, min(24 * 60, duree))
-    fin = debut + timedelta(minutes=duree)
+    try:
+        fin = debut + timedelta(minutes=duree)
+    except OverflowError:
+        raise Erreur("Cette date n'existe pas. " + FORME)
     if debut < maintenant() - timedelta(minutes=5):
-        raise Erreur("Le %s à %s est déjà passé : je n'ajoute rien. Redonne-moi le jour et l'heure." % (lisible(debut), heure(debut)))
+        raise Erreur("Le %s à %s est déjà passé : je n'ajoute rien. Redonne-moi le jour et l'heure (avec l'année si c'est l'an prochain : 2027-01-02 10:00)."
+                     % (lisible(debut), heure(debut)))
     lieu = " ".join(str(d.get("lieu") or "").split())[:200]
     dit = "« %s » le %s, de %s à %s%s" % (titre, lisible(debut), heure(debut), heure(fin), (" (" + lieu + ")") if lieu else "")
-    serveur()                                # agenda pas relie : on le dit AVANT de demander une confirmation inutile
-    if not oui(d.get("confirmer")):
-        return repondre(True, "PAS ENCORE FAIT : j'ajouterais à ton agenda %s. Redis cette date à l'utilisateur et demande-lui s'il confirme ; "
-                        "s'il dit oui, rappelle-moi avec les mêmes paramètres et confirmer=oui." % dit,
-                        essai=True, debut=debut.strftime("%Y-%m-%dT%H:%M"), fin=fin.strftime("%Y-%m-%dT%H:%M"))
     demande = {"action": "ajouter", "titre": titre, "debut": debut.strftime("%Y-%m-%dT%H:%M"), "fin": fin.strftime("%Y-%m-%dT%H:%M")}
     if lieu:
         demande["lieu"] = lieu
-    r = appeler(demande)
-    if r.get("ok") is not True or r.get("verifie") is not True:
-        return repondre(False, "PAS AJOUTÉ : " + str(r.get("phrase_pour_utilisateur") or "l'agenda n'a pas confirmé l'ajout.")[:400])
-    # le serveur a relu le rendez-vous dans l'agenda (« verifie ») : on peut le dire. Sa phrase (conflits compris) peut
-    # reprendre le titre d'un AUTRE rendez-vous : elle va dans « texte », balisee.
-    return repondre(True, "C'est dans ton agenda : %s." % dit, texte=str(r.get("phrase_pour_utilisateur") or "")[:600],
-                    ajoute=True, debut=demande["debut"], fin=demande["fin"])
+    tache = d.get("_tache") if isinstance(d.get("_tache"), str) else ""
+    serveur()                                # agenda pas relie : on le dit AVANT de demander une confirmation inutile
+    essai = "PAS ENCORE FAIT : j'ajouterais à ton agenda %s. Redis cette date à l'utilisateur et demande-lui s'il confirme ; " \
+            "s'il dit oui, rappelle-moi avec les mêmes paramètres et confirmer=oui." % dit
+    if not oui(d.get("confirmer")) or not essai_montre(demande, tache):
+        # confirmer=oui sans essai a blanc montre avant (ou pour un autre rendez-vous) : c'est l'essai qui se fait
+        if not noter_essai(demande, tache):
+            raise Erreur("Je n'ai pas pu préparer l'ajout (dossier de l'agenda inaccessible). Rien n'est ajouté.")
+        return repondre(True, essai, essai=True, debut=demande["debut"], fin=demande["fin"])
+    oublier_essai()                          # un essai ne sert qu'une fois : pas de doublon sur un second « oui »
+    r = appeler(demande, ecrit=True)
+    if r.get("ok") is True and r.get("verifie") is True:
+        # le serveur a relu le rendez-vous dans l'agenda : on peut le dire. Sa phrase (conflits compris) peut reprendre
+        # le titre d'un AUTRE rendez-vous : elle va dans « texte », balisee.
+        return repondre(True, "C'est dans ton agenda : %s." % dit, texte=str(r.get("phrase_pour_utilisateur") or "")[:600],
+                        ajoute=True, debut=demande["debut"], fin=demande["fin"])
+    if r.get("ok") is True and r.get("ajoute") is True:
+        return repondre(True, "Le rendez-vous a été créé (%s), mais je n'ai pas pu le relire dans l'agenda. Dis-le à l'utilisateur tel quel : "
+                        "qu'il regarde son agenda, et ne redemande pas l'ajout." % dit, ajoute=True, relu=False, debut=demande["debut"], fin=demande["fin"])
+    if r.get("ok") is True:
+        return repondre(False, "Je ne sais pas si le rendez-vous a été ajouté : l'agenda ne l'a pas confirmé. Regarde ton agenda avant de redemander.", incertain=True)
+    return repondre(False, "PAS AJOUTÉ : " + refus_du_serveur(r))
 
 
 ACTIONS = {"voir": a_voir, "chercher": a_chercher, "ajouter": a_ajouter}
@@ -242,8 +374,11 @@ def main():
     pa.add_argument("--fichier", required=True)
     a = pa.parse_args()
     try:
-        with open(a.fichier, encoding="utf-8-sig") as h:
-            d = json.load(h)
+        try:
+            with open(a.fichier, encoding="utf-8-sig") as h:
+                d = json.load(h)
+        except (OSError, ValueError):
+            raise Erreur("La demande est illisible.")
         if not isinstance(d, dict):
             raise Erreur("La demande est illisible.")
         action = re.sub(r"[^a-z_]", "_", plat(d.get("action"))).strip("_")
@@ -253,8 +388,8 @@ def main():
         ACTIONS[action](d)
     except Erreur as e:
         repondre(False, str(e))
-    except Exception as e:
-        repondre(False, "L'agenda a eu un souci : " + str(e)[:150])
+    except Exception:
+        repondre(False, "L'agenda a eu un souci. Je n'ai rien pu lire ni écrire.")
 
 
 if __name__ == "__main__":

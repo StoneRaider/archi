@@ -57,6 +57,42 @@ test('tour du trader : ARCHI_TRADER_AUTO=non le coupe, sans couper le curateur',
   } finally { delete process.env.ARCHI_TRADER_AUTO; }
 });
 
+test('tour du trader : « 0 », « false », « Non », « non # coupe » le coupent aussi ; remis en route, pas de tour de rattrapage', () => {
+  for (const valeur of ['0', 'false', 'False', ' Non ', 'no', 'off', 'faux', 'non # coupe', 'non;']) {
+    const { lancees, r } = chateau();
+    process.env.ARCHI_TRADER_AUTO = valeur;
+    try {
+      r(2026, 11, 16, 17, 0);
+      for (let m = 1; m <= 10; m++) r(2026, 11, 16, 17, m);
+      for (let m = 0; m <= 10; m++) r(2026, 11, 16, 18, m);
+      assert.deepStrictEqual(lancees, [], valeur);
+    } finally { delete process.env.ARCHI_TRADER_AUTO; }
+  }
+  const { lancees, r } = chateau();
+  process.env.ARCHI_TRADER_AUTO = 'non';
+  try {
+    r(2026, 11, 16, 9, 0);                                                    // lundi : coupe trois jours
+    for (const j of [16, 17, 18]) for (let h = 9; h <= 20; h++) for (let m = 0; m < 60; m += 2) r(2026, 11, j, h, m);
+  } finally { delete process.env.ARCHI_TRADER_AUTO; }
+  for (let m = 0; m <= 30; m++) r(2026, 11, 19, 10, m);                       // jeudi 10 h : remis a « oui »
+  assert.deepStrictEqual(lancees.filter(x => x === 'trader.py'), [], 'pas de tour de rattrapage a 10 h');
+  for (let m = 0; m <= 10; m++) r(2026, 11, 19, 18, m);
+  assert.deepStrictEqual(lancees.filter(x => x === 'trader.py'), ['trader.py'], 'le tour reprend au creneau suivant');
+});
+
+test('tour du trader : Python introuvable, le reveil ne plante pas', async () => {
+  const B = fs.mkdtempSync(path.join(os.tmpdir(), 'archi-tour-py-'));
+  fs.mkdirSync(path.join(B, 'outils', 'trader'), { recursive: true });
+  fs.writeFileSync(path.join(B, 'outils', 'trader', 'trader.py'), '');
+  process.env.ARCHI_PY = path.join(B, 'python_absent.exe');
+  try {
+    tournees.reveiller({ base: B, maintenant: new Date(2026, 10, 16, 17, 0) });
+    for (let m = 1; m <= 10; m++) tournees.reveiller({ base: B, maintenant: new Date(2026, 10, 16, 17, m) });
+    assert.doesNotThrow(() => tournees.reveiller({ base: B, maintenant: new Date(2026, 10, 16, 18, 0) }));
+    await new Promise(ok => setTimeout(ok, 300));      // l'erreur de lancement arrive apres coup : elle ne doit rien casser
+  } finally { delete process.env.ARCHI_PY; }
+});
+
 test('tour du trader : sans l\'outil trader dans le chateau, rien ne part', () => {
   const { B, lancees, r } = chateau();
   fs.rmSync(path.join(B, 'outils', 'trader'), { recursive: true });

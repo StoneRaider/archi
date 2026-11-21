@@ -111,9 +111,9 @@ lancer(action="voir", jour="2026-12-24", jours=400)
 verifie("voir : 31 jours au plus", recu()[-1] == {"action": "lister", "de": "2026-12-24", "a": "2027-01-24"}, recu())
 lancer(action="liste", jour="26/11")
 verifie("voir : synonyme et date en chiffres", recu()[-1]["de"] == "2026-11-26", recu())
-repondra(ok=False, phrase_pour_utilisateur="Je n'ai PAS pu toucher à ton agenda : jeton expiré")
+repondra(ok=False, phrase_pour_utilisateur="Je n'ai PAS pu toucher à ton agenda : quota dépassé")
 r = lancer(action="voir")
-verifie("voir : l'echec du serveur est redit, pas maquille", r["ok"] is False and "jeton expiré" in r["phrase_pour_utilisateur"], r)
+verifie("voir : l'echec du serveur est redit, pas maquille", r["ok"] is False and "quota dépassé" in r["phrase_pour_utilisateur"], r)
 repondra(ok=True, evenements=["x %d" % i for i in range(30)])
 r = lancer(action="voir")
 verifie("voir : 12 rendez-vous lus au plus, le reste est compte", r["texte"].count("\n") == 11 and "30 rendez-vous (et 18 autres)" in r["phrase_pour_utilisateur"], r)
@@ -138,17 +138,110 @@ verifie("l'essai a blanc rend la date calculee", r["debut"] == "2026-11-26T18:00
 for faux in ("non", "", "peut-etre", "0", None, False):
     r = lancer(action="ajouter", titre="Dentiste", quand="jeudi 18h", confirmer=faux)
     verifie("confirmer=%r n'ajoute rien" % (faux,), r.get("essai") is True and recu() == [], r)
+for bizarre in (["oui"], {"a": 1}, "oui oui", "non, oui", "ouiii", "ok", 1.0):
+    r = lancer(action="ajouter", titre="Dentiste", quand="jeudi 18h", confirmer=bizarre)
+    verifie("confirmer=%r n'ajoute rien" % (bizarre,), r.get("essai") is True and recu() == [], r)
+
+# confirmer=oui SANS essai a blanc avant (un modele presse) : c'est l'essai qui se fait, rien n'est ecrit
+A.oublier_essai()
 r = lancer(action="ajouter", titre="Dentiste", quand="jeudi 18h", duree_min=30, lieu="Dijon", confirmer="oui")
-verifie("ajouter avec confirmer=oui : le serveur recoit la date calculee par le code",
+verifie("confirmer=oui du premier coup : essai a blanc, rien n'est ecrit", r["ok"] and r.get("essai") is True and recu() == [], r)
+r = lancer(action="ajouter", titre="Dentiste", quand="vendredi 18h", duree_min=30, lieu="Dijon", confirmer="oui")
+verifie("confirmer=oui pour un AUTRE rendez-vous que celui montre : nouvel essai, rien n'est ecrit", r.get("essai") is True and recu() == [], r)
+lancer(action="ajouter", titre="Dentiste", quand="jeudi 18h", duree_min=30, lieu="Dijon")
+r = lancer(action="ajouter", titre="Dentiste", quand="jeudi 18h", duree_min=30, lieu="Dijon", confirmer="oui")
+verifie("essai puis confirmer=oui : le serveur recoit la date calculee par le code",
         recu() == [{"action": "ajouter", "titre": "Dentiste", "debut": "2026-11-26T18:00", "fin": "2026-11-26T18:30", "lieu": "Dijon"}], recu())
 verifie("ajouter : dit seulement quand le serveur a relu le rendez-vous",
         r["ok"] and r["ajoute"] is True and r["phrase_pour_utilisateur"] == "C'est dans ton agenda : « Dentiste » le jeudi 26 novembre 2026, de 18 h à 18 h 30 (Dijon).", r)
-repondra(ok=True, id="e2", phrase_pour_utilisateur="C'est dans ton agenda")          # pas de « verifie »
+r = lancer(action="ajouter", titre="Dentiste", quand="jeudi 18h", duree_min=30, lieu="Dijon", confirmer="oui")
+verifie("un second oui ne cree pas un doublon : l'essai ne sert qu'une fois", r.get("essai") is True and len(recu()) == 1, recu())
+
+
+def essai_puis_oui(tache_essai=None, tache_oui=None, **d):
+    A.oublier_essai()
+    if os.path.exists(RECU):
+        os.remove(RECU)
+    lancer(**dict(d, **({"_tache": tache_essai} if tache_essai else {})))
+    return lancer(**dict(d, confirmer="oui", **({"_tache": tache_oui} if tache_oui else {})))
+
+
+# le numero du message (donne par le lanceur) : l'essai et le oui doivent etre dans deux messages differents
+r = essai_puis_oui("msg0001", "msg0001", action="ajouter", titre="Dentiste", quand="jeudi 18h")
+verifie("essai et confirmer=oui dans le MEME message : rien n'est ecrit", r.get("essai") is True and recu() == [], r)
+r = essai_puis_oui("msg0001", "msg0002", action="ajouter", titre="Dentiste", quand="jeudi 18h")
+verifie("essai, puis oui au message suivant : ajoute", r.get("ajoute") is True and len(recu()) == 1, r)
+A.oublier_essai()
+lancer(action="ajouter", titre="Dentiste", quand="jeudi 18h")
+vieux = json.load(open(A.ESSAI, encoding="utf-8"))
+vieux["quand"] -= 31 * 60
+json.dump(vieux, open(A.ESSAI, "w", encoding="utf-8"))
+os.remove(RECU) if os.path.exists(RECU) else None
 r = lancer(action="ajouter", titre="Dentiste", quand="jeudi 18h", confirmer="oui")
-verifie("ajout non relu par le serveur : PAS AJOUTE", r["ok"] is False and r["phrase_pour_utilisateur"].startswith("PAS AJOUTÉ"), r)
+verifie("essai vieux de plus de 30 minutes : il faut le remontrer", r.get("essai") is True and recu() == [], r)
+
+repondra(ok=True, id="e2", phrase_pour_utilisateur="C'est dans ton agenda")          # ni « verifie » ni « ajoute »
+r = essai_puis_oui(action="ajouter", titre="Dentiste", quand="jeudi 18h")
+verifie("reponse sans confirmation du serveur : « je ne sais pas », jamais « c'est dans ton agenda »",
+        r["ok"] is False and r.get("incertain") is True and "Je ne sais pas si" in r["phrase_pour_utilisateur"], r)
+for faux in ({"ok": "true", "verifie": True}, {"ok": True, "verifie": "true"}, {"ok": 1, "verifie": 1}):
+    repondra(**faux)
+    r = essai_puis_oui(action="ajouter", titre="Dentiste", quand="jeudi 18h")
+    verifie("serveur qui repond %r : pas « c'est dans ton agenda »" % (faux,), "C'est dans ton agenda" not in r["phrase_pour_utilisateur"], r)
+repondra(ok=True, verifie=False, ajoute=True, id="e3", phrase_pour_utilisateur="créé, pas relu")
+r = essai_puis_oui(action="ajouter", titre="Dentiste", quand="jeudi 18h")
+verifie("cree mais pas relu : dit « cree, pas relu », jamais « pas ajoute »",
+        r["ok"] and r["ajoute"] is True and r["relu"] is False and "a été créé" in r["phrase_pour_utilisateur"] and "ne redemande pas" in r["phrase_pour_utilisateur"], r)
 repondra(ok=False, phrase_pour_utilisateur="Je n'ai PAS pu toucher à ton agenda : quota")
-r = lancer(action="ajouter", titre="Dentiste", quand="jeudi 18h", confirmer="oui")
+r = essai_puis_oui(action="ajouter", titre="Dentiste", quand="jeudi 18h")
 verifie("ajout en echec : PAS AJOUTE, avec la raison", r["ok"] is False and "PAS AJOUTÉ" in r["phrase_pour_utilisateur"] and "quota" in r["phrase_pour_utilisateur"], r)
+repondra(ok=False, phrase_pour_utilisateur="Je n'ai PAS pu toucher à ton agenda : [Errno 2] C:\\Users\\Camille\\serveur\\donnees\\google_client.json")
+r = essai_puis_oui(action="ajouter", titre="Dentiste", quand="jeudi 18h")
+verifie("un chemin du PC n'est pas recopie dans la phrase", r["ok"] is False and "Camille" not in r["phrase_pour_utilisateur"] and "C:\\" not in r["phrase_pour_utilisateur"], r)
+repondra(ok=False, erreur="la connexion Google a expire. Pour la refaire, lance une fois...", phrase_pour_utilisateur="Je n'ai PAS pu toucher à ton agenda : la connexion Google a expire")
+r = lancer(action="voir")
+verifie("connexion Google expiree : dit, avec quoi faire", r["ok"] is False and "a expiré" in r["phrase_pour_utilisateur"] and "serveur\\agenda.py" in r["phrase_pour_utilisateur"], r)
+with open(os.path.join(DEPOT, "serveur", "agenda.py"), encoding="utf-8") as h:
+    FAUX_SERVEUR = h.read()
+with open(os.path.join(DEPOT, "serveur", "agenda.py"), "w", encoding="utf-8") as h:
+    h.write(FAUX_SERVEUR + "open(%r, 'w').write(__import__('os').environ.get('ARCHI_AGENDA_SANS_NAVIGATEUR', 'absent'))\n" % os.path.join(D, "navigateur.txt"))
+repondra(ok=True, evenements=[])
+lancer(action="voir")
+verifie("le serveur recoit l'ordre de ne jamais ouvrir le navigateur", open(os.path.join(D, "navigateur.txt")).read() == "1")
+with open(os.path.join(DEPOT, "serveur", "agenda.py"), "w", encoding="utf-8") as h:
+    h.write(FAUX_SERVEUR + "sys.exit(1)\n")
+repondra(ok=True, verifie=True, ajoute=True)
+r = essai_puis_oui(action="ajouter", titre="Dentiste", quand="jeudi 18h")
+verifie("code de sortie non nul : « je ne sais pas si », jamais « c'est dans ton agenda »", r["ok"] is False and "Je ne sais pas si" in r["phrase_pour_utilisateur"], r)
+with open(os.path.join(DEPOT, "serveur", "agenda.py"), "w", encoding="utf-8") as h:
+    h.write(FAUX_SERVEUR)
+
+# ---------------------------------------------------------------- 4 bis. les moments que le code ne sait pas lire sont REFUSES, pas devines
+repondra(ok=True, verifie=True, ajoute=True)
+for quand in ("le 26 à 14h", "26 novembre 14h", "le 3 décembre à 10h", "1er décembre 10h", "mardi 1er à 9h", "dans 3 semaines", "dans 2 semaines à 10h",
+              "dans 1 mois", "dans 2 jours à 18h", "jeudi après-midi", "hier 18h", "avant-hier 10h", "lundi dernier 10h", "tous les jeudis 18h",
+              "mardi en quinze 10h", "lundi en huit 9h", "jeudi 18h ou vendredi", "lundi 9h, mardi 10h", "jeudi et vendredi 18h", "jeudi 18h-20h",
+              "jeudi de 18h à 20h", "midi et demi demain", "18h moins le quart jeudi", "jeudi 18h\n2026-12-01 10:00", "31/02 14h", "32/13 10h",
+              "dans 99999999999 jours", "9999-12-31 23:59", "jeudi", "demain", "demain matin", "la semaine prochaine 10h", "x" * 500):
+    A.oublier_essai()
+    r = lancer(action="ajouter", titre="Dentiste", quand=quand, confirmer="oui")
+    verifie("moment refuse : %r" % quand[:40], r["ok"] is False and "essai" not in r and recu() == [] and not os.path.exists(A.ESSAI)
+            and not __import__("re").search(r"\b(must be|range|convert|too large|out of)\b", r["phrase_pour_utilisateur"]), r)
+for quand, attendu in (("jeudi 18h", "2026-11-26T18:00"), ("demain 9h", "2026-11-22T09:00"), ("demain à 9h30", "2026-11-22T09:30"), ("26/11 14h", "2026-11-26T14:00"),
+                       ("demain après-midi 15h", "2026-11-22T15:00"), ("jeudi 3h de l'après-midi", "2026-11-26T15:00"), ("lundi prochain 9h", "2026-11-23T09:00"),
+                       ("ce soir 20h", "2026-11-21T20:00"), ("dans 2 heures", "2026-11-21T17:00"), ("jeudi midi", "2026-11-26T12:00"), ("2026-12-03 14:30", "2026-12-03T14:30")):
+    r = lancer(action="ajouter", titre="Dentiste", quand=quand)
+    verifie("moment lu : %r" % quand, r.get("essai") is True and r.get("debut") == attendu, r)
+for jour in ("hier", "cette semaine", "la semaine prochaine", "le mois prochain", "ce week-end", "26", "noel", "lundi dernier"):
+    r = lancer(action="voir", jour=jour)
+    verifie("voir : jour refuse, pas devine : %r" % jour, r["ok"] is False and "quel jour regarder" in r["phrase_pour_utilisateur"], r)
+repondra(ok=True, evenements=[])
+lancer(action="voir", jour="samedi")
+verifie("voir « samedi » dit un samedi : aujourd'hui", recu()[-1]["de"] == "2026-11-21", recu())
+lancer(action="voir", jour="après-demain")
+verifie("voir apres-demain", recu()[-1]["de"] == "2026-11-23", recu())
+lancer(action="voir", jour="31/02")
+repondra(ok=True, verifie=True, ajoute=True)
 
 repondra(ok=True, verifie=True)
 r = lancer(action="ajouter", quand="jeudi 18h")

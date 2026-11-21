@@ -14,21 +14,32 @@
 # Cet outil ne monte rien lui-meme : il lance serveur/montage.py avec le Python du serveur d'Archi. Regles tenues ici :
 #   1. AVANT tout, il verifie que le monteur est installe (voir pret()). S'il manque quelque chose, il dit QUOI et ne
 #      lance rien : jamais de « c'est parti » pour un montage qui ne peut pas tourner ;
-#   2. un montage occupe la carte graphique pendant une heure : il ne part qu'apres un essai a blanc et confirmer=oui ;
-#   3. apres le lancement, il regarde si le montage a vraiment demarre. S'il s'est arrete tout de suite, il le dit ;
+#   2. un montage occupe la carte graphique pendant une heure : il ne part qu'apres un essai a blanc MONTRE AVANT
+#      (trace dans essai_outil.json : meme demande, moins de 30 minutes, et dans un message precedent quand le lanceur
+#      donne le numero du message), puis confirmer=oui. Un confirmer=oui du premier coup ne lance rien ;
+#   3. apres le lancement, il regarde si le montage a vraiment demarre, en ne croyant qu'un etat ecrit APRES le
+#      lancement. S'il s'est arrete tout de suite, il le dit ; s'il ne voit rien, il dit qu'il ne sait pas ;
 #   4. il n'installe rien et ne telecharge rien.
+# Limite connue : deux demandes confirmees a la meme seconde peuvent lancer deux montages (pas de verrou).
 import argparse
+import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
 import time
 import unicodedata
+from datetime import datetime
 
+BASE = os.environ.get("ARCHI_BASE") or os.path.join(os.path.expanduser("~"), ".n8n-files")
+ESSAI = os.path.join(BASE, "montage", "essai_outil.json")
+ESSAI_VALABLE_S = 30 * 60
+ETAT_FIGE_S = 6 * 3600
 DELAI_S = 60
-ATTENTE_DEMARRAGE_S = 6
+ATTENTE_DEMARRAGE_S = 8
 SANS_FENETRE = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
@@ -50,7 +61,7 @@ def plat(t):
 
 
 def oui(v):
-    return v is True or plat(v) in ("oui", "true", "1", "vrai", "yes")
+    return v is True or (isinstance(v, (str, int)) and not isinstance(v, bool) and plat(v) in ("oui", "true", "1", "vrai", "yes"))
 
 
 # ---------------------------------------------------------------- le monteur est-il installe ?
@@ -58,7 +69,6 @@ def lieux():
     depot = os.environ.get("ARCHI_DEPOT") or ""
     whisper = os.environ.get("ARCHI_WHISPER_DIR") or os.path.join(os.path.expanduser("~"), "whisper")
     # la MEME recherche que serveur/montage.py (ses lignes FFMPEG, WHISPER, WHISPER_MODELE) : garder les deux d'accord
-    import shutil
     ffmpeg = os.path.join(whisper, "ffmpeg.exe")
     if not os.path.exists(ffmpeg):
         ffmpeg = os.environ.get("ARCHI_FFMPEG") or shutil.which("ffmpeg") or ffmpeg
@@ -88,11 +98,11 @@ def pret():
     try:
         r = subprocess.run([l["python"], "-c", "import numpy"], capture_output=True, timeout=30, creationflags=SANS_FENETRE)
         if r.returncode != 0:
-            manque.append("le module Python numpy dans serveur\\venv")
+            manque.append("le module Python numpy dans le Python du serveur")
     except (OSError, subprocess.SubprocessError):
-        manque.append("le module Python numpy dans serveur\\venv")
+        manque.append("le module Python numpy dans le Python du serveur")
     if not os.path.exists(l["ffmpeg"]):
-        manque.append("ffmpeg.exe (dans le dossier ARCHI_WHISPER_DIR)")
+        manque.append("ffmpeg.exe (ni dans le dossier ARCHI_WHISPER_DIR, ni dans les programmes d'Archi)")
     if not os.path.exists(l["whisper"]):
         manque.append("whisper-cli.exe (whisper.cpp, pour les sous-titres)")
     if not os.path.exists(l["modele_whisper"]):
@@ -111,8 +121,8 @@ def appeler(*args):
     l = lieux()
     try:
         r = subprocess.run([l["python"], l["script"]] + list(args), capture_output=True, timeout=DELAI_S, cwd=os.path.dirname(l["script"]),
-                           env=dict(os.environ, PYTHONIOENCODING="utf-8"), creationflags=SANS_FENETRE)
-        lignes = r.stdout.decode("utf-8", "replace").strip().splitlines()
+                           stdin=subprocess.DEVNULL, env=dict(os.environ, PYTHONIOENCODING="utf-8"), creationflags=SANS_FENETRE)
+        lignes = r.stdout.decode("utf-8-sig", "replace").strip().splitlines()
         d = json.loads(lignes[-1]) if lignes else None
         if not isinstance(d, dict):
             raise ValueError("vide")
@@ -121,19 +131,88 @@ def appeler(*args):
         raise Erreur("Le monteur ne répond pas. Je n'ai rien lancé.")
 
 
+# ---------------------------------------------------------------- l'etat du montage, lu avec prudence
+def etat_du_montage():
+    """l'etat ecrit par montage.py : {} s'il est illisible"""
+    e = appeler("etat").get("etat")
+    return e if isinstance(e, dict) else {}
+
+
+def tourne(e):
+    return e.get("en_cours") is True          # « true » en toutes lettres, 1, "en cours" ne comptent pas
+
+
+def age_s(e):
+    """depuis combien de secondes l'etat n'a pas bouge (None si on ne sait pas)"""
+    try:
+        return (datetime.now() - datetime.fromisoformat(str(e.get("maj")))).total_seconds()
+    except (TypeError, ValueError):
+        return None
+
+
+def bloque(e):
+    """« en cours », mais plus aucune nouvelle depuis six heures : le montage a ete tue (PC eteint), son etat est reste"""
+    a = age_s(e)
+    return tourne(e) and a is not None and a > ETAT_FIGE_S
+
+
+def sans_chemin(t):
+    """une phrase du montage, sans chemin du PC (le nom du fichier suffit)"""
+    return re.sub(r"(?:[A-Za-z]:)?[\\/](?:[^\\/:*?\"<>|\r\n]+[\\/])+", "", str(t or ""))[:200]
+
+
+# ---------------------------------------------------------------- l'essai a blanc laisse une trace : sans elle, pas de montage
+def empreinte(m):
+    return hashlib.sha256(json.dumps(m, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:24]
+
+
+def noter_essai(m, tache):
+    try:
+        os.makedirs(os.path.dirname(ESSAI), exist_ok=True)
+        with open(ESSAI + ".tmp", "w", encoding="utf-8") as h:
+            json.dump({"empreinte": empreinte(m), "quand": time.time(), "tache": tache}, h)
+        os.replace(ESSAI + ".tmp", ESSAI)
+        return True
+    except OSError:
+        return False
+
+
+def essai_montre(m, tache):
+    """True si CE montage vient d'etre montre par un essai a blanc, dans un message precedent quand on sait le dire"""
+    try:
+        with open(ESSAI, encoding="utf-8") as h:
+            e = json.load(h)
+    except (OSError, ValueError):
+        return False
+    if not isinstance(e, dict) or e.get("empreinte") != empreinte(m):
+        return False
+    if not isinstance(e.get("quand"), (int, float)) or not 0 <= time.time() - e["quand"] <= ESSAI_VALABLE_S:
+        return False
+    return not (tache and e.get("tache") and e["tache"] == tache)
+
+
+def oublier_essai():
+    try:
+        os.remove(ESSAI)
+    except OSError:
+        pass
+
+
 # ---------------------------------------------------------------- les actions
 def a_etat(d):
     exiger_pret()
     r = appeler("etat")
     e = r.get("etat") if isinstance(r.get("etat"), dict) else {}
-    return repondre(True, str(r.get("phrase_pour_utilisateur") or "Aucun montage en cours.")[:500], en_cours=bool(e.get("en_cours")))
+    if bloque(e):
+        return repondre(True, "Un montage est noté « en cours », mais il ne donne plus de nouvelles depuis plus de six heures : il a sans doute été "
+                        "interrompu (PC éteint). Tu peux en relancer un.", en_cours=False, bloque=True)
+    return repondre(True, sans_chemin(r.get("phrase_pour_utilisateur")) or "Aucun montage en cours.", en_cours=tourne(e))
 
 
-def videos(date=""):
-    """les lignes « date  taille  chemin » que montage.py connait ; avec une date : celles de ce jour ; sinon le dossier « À monter »"""
-    L = [str(x) for x in (appeler("lister").get("videos") or []) if isinstance(x, str)]
-    if date:
-        return [x for x in L if x.startswith(date)]
+def videos():
+    """les videos du dossier « À monter » que montage.py connait (lignes « date  taille  chemin »)"""
+    L = appeler("lister").get("videos")
+    L = [str(x) for x in L if isinstance(x, str)] if isinstance(L, list) else []
     return [x for x in L if plat(x.split("  ")[-1]).replace("\\", "/").startswith("a monter/")]
 
 
@@ -141,7 +220,7 @@ def a_lister(d):
     exiger_pret()
     L = videos()
     if not L:
-        return repondre(True, "Aucune vidéo à monter : dépose tes vidéos dans le dossier Vidéos\\À monter.", videos=0)
+        return repondre(True, "Je ne vois aucune vidéo directement dans le dossier Vidéos\\À monter (les photos et les sous-dossiers ne sont pas listés ici).", videos=0)
     return repondre(True, "%d vidéo(s) à monter. Leurs noms sont dans « texte »." % len(L), texte="\n".join("- " + x[:200] for x in L[:25]), videos=len(L))
 
 
@@ -154,9 +233,12 @@ def demande_de(d):
         m["date"] = date
     if d.get("duree_min") not in (None, ""):
         try:
-            m["duree_min"] = max(1.0, min(60.0, float(d["duree_min"])))
+            duree = float(d["duree_min"])
         except (TypeError, ValueError):
             raise Erreur("La durée doit être un nombre de minutes.")
+        if duree != duree:
+            raise Erreur("La durée doit être un nombre de minutes.")
+        m["duree_min"] = max(1.0, min(60.0, duree))
     if d.get("titre"):
         m["titre"] = " ".join(str(d["titre"]).split())[:40]
     if d.get("ambiance"):
@@ -174,19 +256,24 @@ def demande_de(d):
 def a_monter(d):
     exiger_pret()
     m = demande_de(d)
-    e = appeler("etat").get("etat")
-    if isinstance(e, dict) and e.get("en_cours"):
-        raise Erreur("Un montage est déjà en cours : %s. Je n'en lance pas un second." % str(e.get("etape") or "en cours")[:100])
-    L = videos(m.get("date", ""))
-    ou = ("du %s" % m["date"]) if m.get("date") else "du dossier Vidéos\\À monter"
-    if not L:
-        raise Erreur("Je ne trouve aucune vidéo %s : je n'ai rien lancé." % ou)
-    quoi = "%s, %d vidéo(s) %s" % ("les temps forts" if m["mode"] == "event" else "les souvenirs", len(L), ou)
-    if not oui(d.get("confirmer")):
+    e = etat_du_montage()
+    if tourne(e) and not bloque(e):
+        raise Erreur("Un montage est déjà en cours : %s. Je n'en lance pas un second." % (sans_chemin(e.get("etape")) or "en cours")[:100])
+    # C'est montage.py qui choisit les fichiers (une soiree court jusqu'au lendemain matin, les photos comptent) : cet
+    # outil ne les compte pas a sa place. S'il n'y a rien a monter, montage.py le dit, et la verification plus bas le rapporte.
+    ou = ("les vidéos du %s (la soirée, jusqu'au lendemain matin)" % m["date"]) if m.get("date") else "le contenu du dossier Vidéos\\À monter"
+    quoi = "%s, avec %s" % ("les temps forts" if m["mode"] == "event" else "les souvenirs", ou)
+    tache = d.get("_tache") if isinstance(d.get("_tache"), str) else ""
+    if not oui(d.get("confirmer")) or not essai_montre(m, tache):
+        # confirmer=oui sans essai a blanc montre avant (ou pour un autre montage) : c'est l'essai qui se fait
+        if not noter_essai(m, tache):
+            raise Erreur("Je n'ai pas pu préparer le montage (dossier inaccessible). Rien n'est lancé.")
         return repondre(True, "PAS ENCORE FAIT : je monterais %s. Le montage prend environ une heure et occupe la carte graphique. "
                         "Demande à l'utilisateur s'il confirme ; s'il dit oui, rappelle-moi avec les mêmes paramètres et confirmer=oui." % quoi,
-                        essai=True, videos=len(L), demande=m)
+                        essai=True, demande=m)
+    oublier_essai()                          # un essai ne sert qu'une fois
     l = lieux()
+    depart = datetime.now().replace(microsecond=0)
     fd, f = tempfile.mkstemp(prefix="montage_", suffix=".json")
     with os.fdopen(fd, "w", encoding="utf-8") as h:
         json.dump(m, h, ensure_ascii=False)
@@ -197,33 +284,39 @@ def a_monter(d):
                          creationflags=SANS_FENETRE | getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
     except OSError:
         raise Erreur("Le montage n'a pas pu démarrer. Rien n'est lancé.")
-    # a-t-il vraiment demarre ? montage.py ecrit son etat des les premieres secondes
+    # A-t-il vraiment demarre ? On ne croit qu'un etat ECRIT APRES le lancement (« maj ») : l'erreur ou le « en cours »
+    # d'un montage precedent, restes dans le fichier, ne disent rien de celui-ci.
     fin = time.time() + ATTENTE_DEMARRAGE_S
     e = {}
     while time.time() < fin:
         time.sleep(0.5)
         try:
-            e = appeler("etat").get("etat") or {}
+            vu = etat_du_montage()
         except Erreur:
-            e = {}
-        if e.get("en_cours") or e.get("erreur"):
+            vu = {}
+        try:
+            frais = datetime.fromisoformat(str(vu.get("maj"))) >= depart
+        except (TypeError, ValueError):
+            frais = False
+        if frais and (tourne(vu) or vu.get("erreur")):
+            e = vu
             break
-    if e.get("erreur") and not e.get("en_cours"):
-        return repondre(False, "Le montage s'est arrêté tout de suite : %s. Rien n'est monté." % str(e["erreur"])[:200])
-    if not e.get("en_cours"):
-        return repondre(False, "J'ai lancé le montage mais je ne le vois pas tourner. Demande-moi « où en est le montage » dans une minute ; "
-                        "pour l'instant je ne peux pas dire qu'il est parti.", incertain=True)
+    if e.get("erreur") and not tourne(e):
+        return repondre(False, "Le montage s'est arrêté tout de suite : %s. Rien n'est monté." % sans_chemin(e["erreur"]))
+    if not tourne(e):
+        return repondre(False, "J'ai lancé le montage mais je ne le vois pas encore tourner. Je ne peux pas dire qu'il est parti : "
+                        "demande-moi « où en est le montage » dans une minute, et ne le relance pas avant.", incertain=True)
     return repondre(True, "Le montage est lancé : %s. Compte environ une heure. Demande-moi « où en est le montage » quand tu veux ; "
-                    "la vidéo arrivera dans Vidéos\\Montages." % quoi, lance=True, videos=len(L), demande=m)
+                    "la vidéo arrivera dans Vidéos\\Montages." % quoi, lance=True, demande=m)
 
 
 def a_stop(d):
     exiger_pret()
-    e = appeler("etat").get("etat")
-    if not (isinstance(e, dict) and e.get("en_cours")):
+    e = etat_du_montage()
+    if not tourne(e):
         return repondre(True, "Aucun montage n'est en cours : il n'y a rien à arrêter.", en_cours=False)
     r = appeler("stop")
-    return repondre(r.get("ok") is True, str(r.get("phrase_pour_utilisateur") or "Arrêt demandé.")[:300], arret_demande=r.get("ok") is True)
+    return repondre(r.get("ok") is True, sans_chemin(r.get("phrase_pour_utilisateur")) or "Arrêt demandé.", arret_demande=r.get("ok") is True)
 
 
 ACTIONS = {"etat": a_etat, "lister": a_lister, "monter": a_monter, "stop": a_stop}
@@ -236,8 +329,11 @@ def main():
     pa.add_argument("--fichier", required=True)
     a = pa.parse_args()
     try:
-        with open(a.fichier, encoding="utf-8-sig") as h:
-            d = json.load(h)
+        try:
+            with open(a.fichier, encoding="utf-8-sig") as h:
+                d = json.load(h)
+        except (OSError, ValueError):
+            raise Erreur("La demande est illisible.")
         if not isinstance(d, dict):
             raise Erreur("La demande est illisible.")
         action = re.sub(r"[^a-z_]", "_", plat(d.get("action"))).strip("_")
@@ -247,8 +343,8 @@ def main():
         ACTIONS[action](d)
     except Erreur as e:
         repondre(False, str(e))
-    except Exception as e:
-        repondre(False, "Le monteur a eu un souci : " + str(e)[:150])
+    except Exception:
+        repondre(False, "Le monteur a eu un souci. Je ne peux pas dire qu'un montage est lancé : demande-moi « où en est le montage ».")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 [
  {
-  "si": "^(?![\\s\\S]*\\b(?:agenda|calendrier)\\b)[\\s\\S]*?\\b(rappel\\w*|plus tard|demain (?:(?:a|à) )?\\d\\w*|demain (?:matin|midi|apr[eè]s-midi|soir)|(?:pr[eé]vien|pense|programme|note)\\w*[^.?!]{0,60}\\bdemain|dans \\d+ ?(min|h|heure|jour)\\w*|tous les (jours|lundis?|mardis?|mercredis?|jeudis?|vendredis?|samedis?|dimanches?|mois|matins?|soirs?)|quand j.arrive)\\b",
+  "si": "^(?!(?![\\s\\S]*\\b(?:rappel\\w*|pr[eé]viens|pense[sz]?|pdf|mails?|imprime\\w*)\\b)(?=[\\s\\S]*\\b(?:mon|ton|notre|cet|l['’]|dans le|sur le|[aà] l['’]|au) ?(?:agenda|calendrier)\\b)(?=[\\s\\S]*\\b(?:ajoute\\w*|mets|inscris|cr[eé]e\\w*|note[sz]?|qu.est-ce que j.ai|j.ai quoi|ai-je|est-ce que j.ai|quoi de pr[eé]vu|regarde\\w*|montre\\w*|dis-moi|consulte\\w*|v[eé]rifie\\w*|lis|rendez-vous|rdv|libre|dispo\\w*|semaine|demain|aujourd.hui|ce soir)\\b))[\\s\\S]*?\\b(rappel\\w*|plus tard|demain (?:(?:a|à) )?\\d\\w*|demain (?:matin|midi|apr[eè]s-midi|soir)|(?:pr[eé]vien|pense|programme|note)\\w*[^.?!]{0,60}\\bdemain|dans \\d+ ?(min|h|heure|jour)\\w*|tous les (jours|lundis?|mardis?|mercredis?|jeudis?|vendredis?|samedis?|dimanches?|mois|matins?|soirs?)|quand j.arrive)\\b",
   "dire": "Rappel ou tache PLUS TARD (ou a l'arrivee sur un lieu) : appelle TOUT DE SUITE l'outil planificateur (action=ajouter, texte, et UN moment : a, tous_les ou lieu). Un simple rappel ne demande AUCUN accord : ne pose pas de question, appelle l'outil. Tu ne dis « C'est programme » que si l'outil vient de le repondre."
  },
  {
@@ -61,19 +61,20 @@
   "dire": "Le mecanicien : outil mecanicien. « fabrique-moi un outil qui... » -> action=construire, texte = ce que l'outil doit faire avec les mots de l'utilisateur, accord=oui (il vient de le demander). « construis la 2 » -> action=construire, numero=2, accord=oui. « valide la 2 » -> action=valider, numero=2, accord=oui. « ou en est l'atelier » -> action=etat. « montre la 2 » -> action=voir, numero=2. « note l'idee... » -> action=idee, texte. « abandonne la 2 » -> action=abandonner, numero=2. « retire l'outil X » -> action=retirer, nom=X, accord=oui. Repete sa phrase_pour_utilisateur TELLE QUELLE."
  },
  {
-  "si": "\\b(agenda|calendrier)\\b",
+  "si": "^(?![\\s\\S]*\\b(?:rappel\\w*|pr[eé]viens|pense[sz]?|pdf|mails?|imprime\\w*)\\b)(?=[\\s\\S]*\\b(?:mon|ton|notre|cet|l['’]|dans le|sur le|[aà] l['’]|au) ?(?:agenda|calendrier)\\b)(?=[\\s\\S]*\\b(?:ajoute\\w*|mets|inscris|cr[eé]e\\w*|note[sz]?|qu.est-ce que j.ai|j.ai quoi|ai-je|est-ce que j.ai|quoi de pr[eé]vu|regarde\\w*|montre\\w*|dis-moi|consulte\\w*|v[eé]rifie\\w*|lis|rendez-vous|rdv|libre|dispo\\w*|semaine|demain|aujourd.hui|ce soir)\\b)",
   "dire": "L'agenda : outil agenda. Voir : action=voir, jour = le mot de l'utilisateur (aujourd'hui, demain, jeudi). Ajouter : action=ajouter, titre, quand = ses mots tels quels (« jeudi 18h ») : l'outil fait un ESSAI A BLANC et redit la date ; repete-la et demande s'il confirme. Apres son oui : le MEME appel avec confirmer=oui. Ne calcule jamais la date toi-meme. S'il dit que l'agenda n'est pas relie, repete-le."
  },
  {
-  "si": "\\b(cherche|recherche|trouve|regarde)\\w*[^.?!]{0,40}\\b(sur (le |l.)?(web|net|internet)|en ligne)\\b|\\b(actualit[eé]s?|derni[eè]res nouvelles)\\b",
-  "dire": "Une information recente : outil recherche_web, texte = quelques mots precis. Reponds a partir des resultats seulement, avec l'adresse de la source ; si les resultats ne repondent pas, dis-le. S'il dit que la recherche n'est pas branchee, repete-le, sans rien inventer."
+  "si": "(?:^|[.;:!?]\\s+|\\barchi[, ]+)(?:cherche|recherche|trouve|regarde)[sz]?(?:[- ](?:moi|nous))?(?![,\\w])(?!\\s+dans\\b)[^.?!]{0,60}\\b(?:sur (?:le |l['’])?(?:web|net|internet|google)|en ligne)\\b|\\b(?:fais|lance)\\w* une recherche (?:web|internet|sur (?:le |l['’])?(?:web|net|internet|google))\\b|\\brecherche (?:web|internet)\\b",
+  "dire": "Une information recente : outil recherche_web, texte = quelques mots precis. Reponds a partir des resultats seulement, avec l'adresse de la source ; si les resultats ne repondent pas, dis-le. S'il dit que la recherche n'est pas branchee, repete-le, sans rien inventer. Jamais les coordonnees ni la vie privee d'un particulier : la, refuse."
  },
  {
-  "si": "https?://\\S+\\.(?:jpe?g|png|webp|gif)(?:[?#]\\S*)?(?=\\s|$)",
-  "dire": "Un lien vers une image : outil image_lien (pas lire_page), lien = le lien complet, question = ce que l'utilisateur veut savoir. Reponds a partir de la description rendue, sans rien ajouter."
+  "si": "https?://\\S+\\.(?:jpe?g|png|webp|gif)(?:[?#]\\S*?)?(?=[\\s.,;:!?)\"»]*(?:\\s|$))",
+  "dire": "Un lien vers une image : outil image_lien (pas lire_page), lien = le lien complet, question = ce que l'utilisateur veut savoir. Reponds a partir de la description rendue, sans rien ajouter.",
+  "et": "\\b(?:regarde\\w*|d[eé]cri\\w*|analyse\\w*|vois|voit|c.est quoi|qu.est-ce|montre|repr[eé]sente|qu.y a-t-il|lis|que dit|image|photo)\\b|^\\s*https?://\\S+\\s*$"
  },
  {
-  "si": "\\b(monteur|montage)\\b|\\bmonte[sz]?[- ](moi|nous|la|le|les|une?)\\b[^.?!]{0,40}\\b(vid[eé]os?|soir[eé]e|souvenirs?|temps forts)\\b",
+  "si": "\\b(?:monteur|montage) vid[eé]o\\b|\\b(?:o[uù] en est|arr[eê]te[sz]?|lance[sz]?|stoppe[sz]?|annule[sz]?)\\b[^.?!]{0,20}\\b(?:le|un|mon|du) (?:montage|monteur)\\b(?! (?:du|de la|de l|des|financier)\\b)|\\bmonte[sz]?[- ](?:moi|nous)\\b[^.?!]{0,30}\\b(?:vid[eé]os?|temps forts|souvenirs)\\b|\\bmonte[sz]? (?:la|les|une|des|mes|ma) (?:vid[eé]os?|temps forts|souvenirs)\\b(?! dans\\b)",
   "dire": "Le monteur video : outil monteur. « ou en est le montage » -> action=etat. « monte... » -> action=monter (mode = event ou souvenirs) : ESSAI A BLANC d'abord, puis le MEME appel avec confirmer=oui apres le oui de l'utilisateur. S'il dit que le monteur n'est pas installe, repete ce qui manque. Tu ne dis « c'est lance » que si l'outil le dit."
  },
  {

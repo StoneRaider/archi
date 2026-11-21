@@ -29,6 +29,7 @@
   }
  ],
  "timeout_s": 150,
+ "recoit_tache": true,
  "touche": [
   "videos du PC (lecture), dossier Videos\\Montages (ecriture)",
   "carte graphique pendant environ une heure",

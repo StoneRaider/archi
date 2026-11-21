@@ -374,6 +374,24 @@ REPONSE[0] = RuntimeError("LM Studio eteint")
 r, annonces = tournee()
 verifie("tournee : modele absent, pas de tour, aucune annonce", r["ok"] is False and annonces == [], r)
 REPONSE[0] = {"analyse": "Le marché monte, j'attends.", "decisions": []}
+# coupe-circuit : aucun tour n'a lieu ; l'arret est annonce UNE fois, jamais « a fait son tour » (relecture du 21/11)
+p = json.load(open(T.PORTEFEUILLE, encoding="utf-8"))
+p["valeur_debut_semaine"] = 5000.0
+p["semaine"] = HORLOGE[0].strftime("%G-%V")
+json.dump(p, open(T.PORTEFEUILLE, "w", encoding="utf-8"))
+avant = len(DEMANDES)
+HORLOGE[0] = datetime(2026, 11, 13, 19, 0, 0)
+r, annonces = tournee()
+if r.get("arrete"):
+    verifie("coupe-circuit : pas de tour, l'arret est annonce une fois, sans « a fait son tour »",
+            r["ok"] is False and len(annonces) == 1 and "s'est arrêté tout seul" in annonces[0] and "a fait son tour" not in annonces[0] and len(DEMANDES) == avant, (r, annonces))
+    for jour in (14, 15):
+        HORLOGE[0] = datetime(2026, 11, jour, 18, 0, 0)
+        r, annonces = tournee()
+        verifie("coupe-circuit, le %d : aucune annonce" % jour, r["ok"] is False and annonces == [] and len(DEMANDES) == avant, (r, annonces))
+else:
+    verifie("le test n'a pas su declencher le coupe-circuit", False, r)
+lancer(action="reprendre")
 del os.environ["ARCHI_UTILISATEUR"]
 pr = subprocess.run([sys.executable, os.path.join(ICI, "trader.py")], capture_output=True,
                     env=dict(os.environ, ARCHI_BASE=neuf, ARCHI_SANS_ENV="1", PYTHONIOENCODING="utf-8"))

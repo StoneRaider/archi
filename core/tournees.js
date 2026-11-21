@@ -18,7 +18,8 @@ require('./env').charger();
 const CRENEAUX = { curateur: [[0, 10, 0]], mecanicien: [[3, 10, 30], [0, 10, 30]], trader: [0, 1, 2, 3, 4, 5, 6].map(j => [j, 18, 0]) };
 const SCRIPTS = { curateur: ['curateur', 'curateur.py'], mecanicien: ['mecanicien', 'mecanicien.py'], trader: ['trader', 'trader.py'] };
 // une tournee qu'un reglage du .env peut couper seule
-const COUPEES = { trader: () => String(process.env.ARCHI_TRADER_AUTO || 'oui').trim().toLowerCase() === 'non' };
+const NON = /^(?:non|no|n|0|false|faux|off)\b/;      // « non », « Non », « 0 », « false », « non # coupe »…
+const COUPEES = { trader: () => NON.test(String(process.env.ARCHI_TRADER_AUTO || 'oui').trim().toLowerCase()) };
 const EVEILLE_MIN = 5 * 60000;     // Archi doit tourner depuis 5 minutes
 const ABSENCE = 3 * 60000;         // plus de 3 minutes sans reveil : Archi etait arrete
 
@@ -47,8 +48,10 @@ function ecrire(f, x) {
 }
 
 function lancerPython(script) {
-  cp.spawn(process.env.ARCHI_PY || (process.platform === 'win32' ? 'python' : 'python3'), [script, '--tournee'],
-    { cwd: path.dirname(script), detached: true, stdio: 'ignore', windowsHide: true }).unref();
+  const p = cp.spawn(process.env.ARCHI_PY || (process.platform === 'win32' ? 'python' : 'python3'), [script, '--tournee'],
+    { cwd: path.dirname(script), detached: true, stdio: 'ignore', windowsHide: true });
+  p.on('error', () => { /* Python introuvable : la tournee attendra le prochain creneau, le reveil ne plante pas */ });
+  p.unref();
 }
 
 /** options = {base, maintenant, lancer} (pour les tests) ; rend {lancees: [noms], raison} */
@@ -90,10 +93,13 @@ function reveillerSousVerrou(f, base, maintenant, lancer) {
   // une tournee ajoutee par une nouvelle version d'Archi (le trader, 21/11) : comme a la toute premiere fois, rien tout
   // de suite, la premiere sera celle du prochain creneau
   for (const nom of Object.keys(CRENEAUX)) if (!(nom in e)) e[nom] = iso;
+  // une tournee coupee : ses creneaux passent sans elle (notes comme vus). Remise en route, elle repart au PROCHAIN
+  // creneau, jamais par un tour de rattrapage hors horaire (relecture du 21/11).
+  for (const nom of Object.keys(COUPEES)) if (COUPEES[nom]()) e[nom] = iso;
   const aLancer = [];
   if (maintenant - date(e.depuis) >= EVEILLE_MIN) {
     for (const nom of Object.keys(CRENEAUX)) {
-      if (COUPEES[nom] && COUPEES[nom]()) continue;      // coupee : son creneau n'est pas consomme, elle reprendra au reglage suivant
+      if (COUPEES[nom] && COUPEES[nom]()) continue;
       const creneau = dernierCreneau(CRENEAUX[nom], maintenant);
       if (!creneau || date(e[nom]) >= creneau.getTime()) continue;
       e[nom] = iso;

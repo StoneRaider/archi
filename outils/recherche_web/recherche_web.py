@@ -16,6 +16,7 @@
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -39,12 +40,18 @@ def propre(t, n):
     return " ".join(str(t or "").split())[:n]
 
 
+class _SansRedirection(urllib.request.HTTPRedirectHandler):
+    """le moteur ne doit jamais nous envoyer ailleurs : la cle partirait vers une autre adresse (relecture du 21/11)"""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(req.full_url, code, "redirection refusee", headers, fp)
+
+
 def interroger(cle, requete, nombre):
-    """la reponse du moteur (un objet). Sans proxy : la cle ne passe par aucun intermediaire regle ailleurs sur le PC."""
+    """la reponse du moteur (un objet). Sans proxy ni redirection : la cle ne va qu'a l'adresse ecrite ci-dessus."""
     corps = json.dumps({"query": requete, "max_results": nombre, "search_depth": "basic", "include_answer": False}).encode("utf-8")
     req = urllib.request.Request(MOTEUR, data=corps, method="POST",
                                  headers={"Content-Type": "application/json", "Authorization": "Bearer " + cle})
-    ouvreur = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    ouvreur = urllib.request.build_opener(urllib.request.ProxyHandler({}), _SansRedirection)
     with ouvreur.open(req, timeout=DELAI_S) as r:
         return json.loads(r.read(2000000).decode("utf-8", "replace"))
 
@@ -74,12 +81,16 @@ def chercher(d):
     except Exception:
         return repondre(False, "Le moteur de recherche ne répond pas (Internet coupé ?). Je n'ai aucun résultat.")
     resultats = r.get("results") if isinstance(r, dict) else None
+    if not isinstance(resultats, list):
+        # ni liste de resultats, ni erreur HTTP : on ne transforme pas une reponse incomprise en « aucun resultat »
+        return repondre(False, "Le moteur de recherche a répondu quelque chose que je ne sais pas lire. Je n'ai aucun résultat, et je ne peux pas dire qu'il n'y en a pas.")
     lignes, sources = [], []
-    for x in (resultats if isinstance(resultats, list) else [])[:nombre]:
+    for x in resultats[:nombre]:
         if not isinstance(x, dict):
             continue
-        url = propre(x.get("url"), 300)
-        if not url.startswith(("http://", "https://")):
+        url = str(x.get("url") or "").strip()
+        # une adresse, et rien d'autre : pas d'espace, de crochet ni de guillemet (elle sort dans « sources », hors balises)
+        if not re.match(r"^https?://[^\s\[\]<>\"'«»]{3,300}$", url):
             continue
         sources.append(url)
         lignes.append("%d. %s\n   %s\n   %s" % (len(sources), propre(x.get("title"), 160) or "(sans titre)", url, propre(x.get("content"), MAX_EXTRAIT)))

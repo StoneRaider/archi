@@ -856,6 +856,7 @@
    }
   ],
   "timeout_s": 60,
+  "recoit_tache": true,
   "touche": [
    "agenda Google (lecture ; ajout apres essai a blanc et confirmation)",
    "internet"
@@ -931,6 +932,7 @@
    }
   ],
   "timeout_s": 150,
+  "recoit_tache": true,
   "touche": [
    "videos du PC (lecture), dossier Videos\\Montages (ecriture)",
    "carte graphique pendant environ une heure",

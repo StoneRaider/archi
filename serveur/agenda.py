@@ -109,12 +109,17 @@ def ajouter(d):
     if rappel not in (None, ""):
         corps["reminders"] = {"useDefault": False, "overrides": [{"method": "popup", "minutes": int(float(rappel))}]}
     e = service.events().insert(calendarId="primary", body=corps).execute()
-    # verification : on relit l'evenement dans l'agenda
-    verif = service.events().get(calendarId="primary", eventId=e["id"]).execute()
+    # verification : on relit l'evenement dans l'agenda. Si la relecture echoue, l'evenement EXISTE quand meme : on le dit
+    # (« ajoute » sans « verifie »), pour que personne ne le cree une seconde fois.
+    try:
+        verif = service.events().get(calendarId="primary", eventId=e["id"]).execute()
+    except Exception:
+        return {"ok": True, "verifie": False, "ajoute": True, "id": e.get("id"),
+                "phrase_pour_utilisateur": f"Le rendez-vous « {titre} » {quand} a été créé, mais je n'ai pas pu le relire dans l'agenda. Regarde-le avant de le redemander."}
     phrase = f"C'est dans ton agenda{_qui()} : « {verif.get('summary')} » {quand}."
     if conflits:
         phrase += " Attention, ça tombe en même temps que : " + " ; ".join(decrire(c) for c in conflits[:3]) + "."
-    return {"ok": True, "verifie": True, "id": e["id"], "lien": e.get("htmlLink"), "phrase_pour_utilisateur": phrase}
+    return {"ok": True, "verifie": True, "ajoute": True, "id": e["id"], "lien": e.get("htmlLink"), "phrase_pour_utilisateur": phrase}
 
 
 def lister(d):
@@ -123,7 +128,13 @@ def lister(d):
     if b <= a:
         b = a + timedelta(days=1)
     L = evenements(get_calendar_service(), a - timedelta(hours=1), b + timedelta(hours=1))
-    L = [e for e in L if a <= datetime.fromisoformat((e["start"].get("dateTime") or e["start"]["date"])[:19]) < b]
+    # tout ce qui TOUCHE la periode : un voyage commence la veille, une soiree qui finit apres minuit comptent aussi
+    def borne(x, defaut):
+        try:
+            return datetime.fromisoformat((x.get("dateTime") or x["date"])[:19])
+        except Exception:
+            return defaut
+    L = [e for e in L if borne(e.get("start") or {}, a) < b and borne(e.get("end") or {}, b) > a]
     return {"ok": True, "evenements": [decrire(e) for e in L],
             "phrase_pour_utilisateur": ("Rien dans ton agenda sur cette période." if not L else f"{len(L)} événement(s) : " + " ; ".join(decrire(e) for e in L[:8]))}
 

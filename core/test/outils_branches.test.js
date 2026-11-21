@@ -21,6 +21,7 @@ const PYTHON = process.env.ARCHI_PY || (process.platform === 'win32' ? 'python' 
 // une installation neuve : aucun reglage de ces outils
 for (const k of ['TAVILY_API_KEY', 'ARCHI_DEPOT', 'ARCHI_SERVEUR_PY', 'ARCHI_SERVEUR_DONNEES', 'ARCHI_GOOGLE_CLIENT', 'ARCHI_WHISPER', 'ARCHI_WHISPER_DIR', 'ARCHI_WHISPER_EXE', 'ARCHI_WHISPER_MODELE', 'ARCHI_FFMPEG']) delete process.env[k];
 process.env.ARCHI_WHISPER_DIR = path.join(B, 'pas_de_whisper');
+process.env.ARCHI_BASE = B;      // les outils lances ici n'ecrivent jamais dans le vrai chateau
 const appel = (outil, parametres, accord) => lancer({ action: 'utiliser', outil, parametres, accord }, { base: B, python: PYTHON });
 
 test('outils branches : la liste des outils les annonce', () => {
@@ -59,6 +60,48 @@ test('monteur pas installe : dit ce qui manque, ne lance rien, meme avec confirm
     assert.strictEqual(r.ok, false);
     assert.match(r.phrase_pour_utilisateur, /n'est pas installé|Je n'ai rien lancé/);
     assert.ok(!r.lance);
+  }
+});
+
+test('agenda relie, par le lanceur : confirmer=oui du premier coup n\'ecrit rien ; il faut l\'essai, puis le oui au message suivant', () => {
+  // un faux serveur d'agenda : il note chaque demande recue et repond « ajoute et relu »
+  const depot = fs.mkdtempSync(path.join(os.tmpdir(), 'archi-agenda-depot-'));
+  const recu = path.join(depot, 'recu.jsonl');
+  fs.mkdirSync(path.join(depot, 'serveur', 'donnees'), { recursive: true });
+  fs.writeFileSync(path.join(depot, 'serveur', 'donnees', 'google_agenda.pickle'), 'x');
+  fs.writeFileSync(path.join(depot, 'serveur', 'agenda.py'), [
+    'import json, sys',
+    'd = json.load(open(sys.argv[2], encoding="utf-8"))',
+    'open(' + JSON.stringify(recu) + ', "a", encoding="utf-8").write(json.dumps(d) + chr(10))',
+    'print(json.dumps({"ok": True, "verifie": True, "ajoute": True, "id": "e1", "phrase_pour_utilisateur": "ok"}))', ''].join('\n'));
+  const lus = () => { try { return fs.readFileSync(recu, 'utf8').trim().split('\n').filter(Boolean).length; } catch (e) { return 0; } };
+  const trouve = require('child_process').execFileSync(PYTHON, ['-c', 'import sys; print(sys.executable)']).toString().trim();
+  Object.assign(process.env, { ARCHI_DEPOT: depot, ARCHI_SERVEUR_PY: trouve, ARCHI_BASE: B });
+  try {
+    const p = { action: 'ajouter', titre: 'Dentiste', quand: '2031-05-06 10:00', confirmer: 'oui' };
+    const dans = (tache, parametres) => lancer({ action: 'utiliser', outil: 'agenda', parametres }, { base: B, python: PYTHON, tache });
+    // message 1 : le modele met confirmer=oui tout de suite, et meme deux fois de suite
+    let r = dans('msg00001', p);
+    assert.strictEqual(r.essai, true);
+    assert.match(r.phrase_pour_utilisateur, /^PAS ENCORE FAIT/);
+    r = dans('msg00001', p);
+    assert.strictEqual(r.essai, true, 'le second appel du meme message reste un essai');
+    assert.strictEqual(lus(), 0, 'rien n\'est parti vers l\'agenda');
+    // le modele ne peut pas se donner un autre numero de message
+    r = dans('msg00001', Object.assign({ _tache: 'msg99999' }, p));
+    assert.strictEqual(lus(), 0, '« _tache » ecrit par le modele est retire par le lanceur');
+    // message 2 : l'utilisateur a dit oui
+    r = dans('msg00002', p);
+    assert.strictEqual(r.ok, true);
+    assert.strictEqual(r.ajoute, true);
+    assert.match(r.phrase_pour_utilisateur, /^C'est dans ton agenda : « Dentiste » le mardi 6 mai 2031, de 10 h à 11 h\.$/);
+    assert.strictEqual(lus(), 1);
+    // message 3 : un « oui » de plus ne cree pas un doublon
+    r = dans('msg00003', p);
+    assert.strictEqual(r.essai, true);
+    assert.strictEqual(lus(), 1);
+  } finally {
+    for (const k of ['ARCHI_DEPOT', 'ARCHI_SERVEUR_PY']) delete process.env[k];
   }
 });
 

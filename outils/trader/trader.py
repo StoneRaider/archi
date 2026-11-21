@@ -723,11 +723,21 @@ def tournee(annonce=None):
     if not (isinstance(r, dict) and r.get("ok") is True):
         return repondre(False, str((r or {}).get("phrase_pour_utilisateur") or "Pas de tour."), tournee=True, annonce=False)
     prenom = (os.environ.get("ARCHI_UTILISATEUR") or "").strip()[:30]
+    extra = {k: v for k, v in r.items() if k not in ("ok", "phrase_pour_utilisateur", "simulation")}
+    if r.get("arrete"):
+        # coupe-circuit : AUCUN tour n'a eu lieu (relecture du 21/11 : l'annonce disait « a fait son tour » chaque jour).
+        # L'arret est annonce UNE fois, le jour ou il se declenche ; les jours suivants, rien.
+        types = [l.get("type") for l in lignes_journal()]
+        premier_jour = len(types) < 2 or types[-2] != "pause"
+        fait = False
+        if premier_jour:
+            fait = (annonce or annoncer)("%sle trader s'est arrêté tout seul : le portefeuille fictif a trop perdu cette semaine (coupe-circuit). "
+                                         "Aucun tour aujourd'hui. Dis « trader, où en es-tu » pour le détail. %s" % ((prenom + ", ") if prenom else "", RAPPEL))
+        return repondre(False, r["phrase_pour_utilisateur"], tournee=True, annonce=bool(fait), **extra)
     n = len(r.get("ordres") or [])
     texte = "%sle trader a fait son tour du jour, en simulation : %s, portefeuille fictif à %s. Dis « trader, où en es-tu » pour le détail. %s" % (
         (prenom + ", ") if prenom else "", ("%d ordre(s) fictif(s)" % n) if n else "aucun ordre", _dollars(float(r.get("valeur_usd") or 0)), RAPPEL)
     fait = (annonce or annoncer)(texte)
-    extra = {k: v for k, v in r.items() if k not in ("ok", "phrase_pour_utilisateur", "simulation")}
     return repondre(True, r["phrase_pour_utilisateur"], tournee=True, annonce=bool(fait), **extra)
 
 
