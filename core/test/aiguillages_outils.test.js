@@ -21,7 +21,7 @@ test('aiguillages : les fichiers se chargent, et aucun motif n\'est invalide', (
 
 test('aiguillages : l\'agenda de l\'utilisateur', () => {
   for (const m of ['Qu\'est-ce que j\'ai dans mon agenda demain ?', 'Ajoute dentiste jeudi 18h à mon agenda', 'Mets un rendez-vous dans le calendrier demain 9h',
-    'mon AGENDA de la semaine', 'Regarde mon agenda', 'Est-ce que j\'ai quelque chose à l\'agenda ce soir ?', 'Note dans mon agenda : coiffeur vendredi 10h']) {
+    'mon AGENDA de la semaine', 'Regarde mon agenda', 'ajoute un rendez-vous jeudi 18h chez le dentiste', 'Mets-moi un rdv demain 9h avec Paul', 'Est-ce que j\'ai quelque chose à l\'agenda ce soir ?', 'Note dans mon agenda : coiffeur vendredi 10h']) {
     assert.ok(a(m, AGENDA), m);
     assert.ok(!a(m, RAPPEL), 'pas la consigne du rappel pour : ' + m);
   }

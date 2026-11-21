@@ -177,8 +177,17 @@ def noter_essai(m, tache):
         return False
 
 
+def numero(x):
+    """le numero du message en cours, tel que le lanceur le donne (core/outils_maison.js) ; '' si absent ou bizarre"""
+    return x if isinstance(x, str) and re.fullmatch(r"[a-z0-9]{6,20}", x) else ""
+
+
 def essai_montre(m, tache):
-    """True si CE montage vient d'etre montre par un essai a blanc, dans un message precedent quand on sait le dire"""
+    """True si CE montage a ete montre par un essai a blanc dans un message PRECEDENT : il faut un numero de message
+    connu des deux cotes, et different. L'essai est retire du disque ici : il ne sert qu'une fois, meme a trois appels
+    simultanes (relecture du 21/11 : trois montages lances)."""
+    if not tache:
+        return False
     try:
         with open(ESSAI, encoding="utf-8") as h:
             e = json.load(h)
@@ -186,9 +195,17 @@ def essai_montre(m, tache):
         return False
     if not isinstance(e, dict) or e.get("empreinte") != empreinte(m):
         return False
-    if not isinstance(e.get("quand"), (int, float)) or not 0 <= time.time() - e["quand"] <= ESSAI_VALABLE_S:
+    if not isinstance(e.get("quand"), (int, float)) or isinstance(e.get("quand"), bool) or not 0 <= time.time() - e["quand"] <= ESSAI_VALABLE_S:
         return False
-    return not (tache and e.get("tache") and e["tache"] == tache)
+    if not numero(e.get("tache")) or e["tache"] == tache:
+        return False
+    pris = "%s.%d.pris" % (ESSAI, os.getpid())
+    try:
+        os.replace(ESSAI, pris)               # un seul appel gagne
+        os.remove(pris)
+    except OSError:
+        return False
+    return True
 
 
 def oublier_essai():
@@ -225,7 +242,10 @@ def a_lister(d):
 
 
 def demande_de(d):
-    m = {"mode": "souvenirs" if "souv" in plat(d.get("mode")) else "event"}
+    mode = plat(d.get("mode"))
+    if mode and "souv" not in mode and not re.search(r"event|soiree|temps|fort", mode):
+        raise Erreur("Mode inconnu : choisis event (les temps forts d'une soirée) ou souvenirs.")
+    m = {"mode": "souvenirs" if "souv" in mode else "event"}
     date = str(d.get("date") or "").strip()[:10]
     if date:
         if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
@@ -263,15 +283,15 @@ def a_monter(d):
     # outil ne les compte pas a sa place. S'il n'y a rien a monter, montage.py le dit, et la verification plus bas le rapporte.
     ou = ("les vidéos du %s (la soirée, jusqu'au lendemain matin)" % m["date"]) if m.get("date") else "le contenu du dossier Vidéos\\À monter"
     quoi = "%s, avec %s" % ("les temps forts" if m["mode"] == "event" else "les souvenirs", ou)
-    tache = d.get("_tache") if isinstance(d.get("_tache"), str) else ""
+    tache = numero(d.get("_tache"))
     if not oui(d.get("confirmer")) or not essai_montre(m, tache):
-        # confirmer=oui sans essai a blanc montre avant (ou pour un autre montage) : c'est l'essai qui se fait
+        # confirmer=oui sans essai a blanc montre dans un message precedent (ou pour un autre montage) : c'est l'essai qui se fait
         if not noter_essai(m, tache):
             raise Erreur("Je n'ai pas pu préparer le montage (dossier inaccessible). Rien n'est lancé.")
+        suite = ("s'il dit oui, rappelle-moi avec les mêmes paramètres et confirmer=oui." if tache else
+                 "Ici je ne peux pas vérifier qu'il a vu cet essai (pas de numéro de message) : je ne lancerai rien.")
         return repondre(True, "PAS ENCORE FAIT : je monterais %s. Le montage prend environ une heure et occupe la carte graphique. "
-                        "Demande à l'utilisateur s'il confirme ; s'il dit oui, rappelle-moi avec les mêmes paramètres et confirmer=oui." % quoi,
-                        essai=True, demande=m)
-    oublier_essai()                          # un essai ne sert qu'une fois
+                        "Demande à l'utilisateur s'il confirme ; %s" % (quoi, suite), essai=True, demande=m)
     l = lieux()
     depart = datetime.now().replace(microsecond=0)
     fd, f = tempfile.mkstemp(prefix="montage_", suffix=".json")

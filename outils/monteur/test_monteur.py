@@ -122,7 +122,8 @@ def menage():
     M.oublier_essai()
 
 
-def essai_puis_oui(tache_essai=None, tache_oui=None, **d):
+def essai_puis_oui(tache_essai="tst0001", tache_oui="tst0002", **d):
+    """l'essai dans un message, le oui dans le suivant (numeros donnes par le lanceur) ; None : pas de numero"""
     M.oublier_essai()
     lancer(**dict(d, action="monter", **({"_tache": tache_essai} if tache_essai else {})))
     return lancer(**dict(d, action="monter", confirmer="oui", **({"_tache": tache_oui} if tache_oui else {})))
@@ -199,6 +200,15 @@ r = lancer(action="monter", confirmer="oui", mode="souvenirs", date="2026-10-02"
 verifie("confirmer=oui du premier coup : essai a blanc, rien n'est lance", r.get("essai") is True and recu() == [], r)
 r = lancer(action="monter", confirmer="oui", mode="event", date="2026-10-02")
 verifie("confirmer=oui pour un AUTRE montage que celui montre : nouvel essai", r.get("essai") is True and recu() == [], r)
+r = essai_puis_oui(None, None, mode="souvenirs")
+verifie("essai puis oui SANS numero de message : rien n'est lance (2e relecture)", r.get("essai") is True and "je ne lancerai rien" in r["phrase_pour_utilisateur"] and recu() == [], r)
+for bizarre in (5, ["msg0001"], "", "MSG0001", "T-2026-11-21", "ab12c"):
+    M.oublier_essai()
+    lancer(action="monter", mode="souvenirs", _tache="msg0001")
+    r = lancer(action="monter", mode="souvenirs", confirmer="oui", _tache=bizarre)
+    verifie("oui avec un numero de message %r : rien n'est lance" % (bizarre,), r.get("essai") is True and recu() == [], r)
+r = lancer(action="monter", mode="film")
+verifie("mode inconnu : refuse, pas pris pour « event »", r["ok"] is False and "Mode inconnu" in r["phrase_pour_utilisateur"], r)
 r = essai_puis_oui("msg0001", "msg0001", mode="souvenirs")
 verifie("essai et confirmer=oui dans le MEME message : rien n'est lance", r.get("essai") is True and recu() == [], r)
 r = essai_puis_oui("msg0001", "msg0002", mode="souvenirs", date="2026-10-02")
@@ -238,6 +248,18 @@ menage()
 ecrire(ETAT, {"en_cours": False, "erreur": "vieille erreur", "maj": (datetime.now() - timedelta(days=1)).isoformat(timespec="seconds")})
 r = essai_puis_oui()
 verifie("montage muet avec une vieille erreur : « je ne sais pas », pas l'erreur d'hier", r["ok"] is False and r.get("incertain") is True and "vieille" not in r["phrase_pour_utilisateur"], r)
+
+# trois « oui » en meme temps : un seul montage part
+menage()
+ecrire(COMPORTEMENT, "demarre")
+lancer(action="monter", mode="souvenirs", _tache="par0001")
+f3 = os.path.join(D, "oui.json")
+ecrire(f3, {"action": "monter", "mode": "souvenirs", "confirmer": "oui", "_tache": "par0002"})
+procs = [subprocess.Popen([sys.executable, os.path.join(ICI, "monteur.py"), "--fichier", f3], stdout=subprocess.PIPE, env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+         for _ in range(3)]
+sorties = [json.loads(q.communicate()[0].decode("utf-8").strip().splitlines()[-1]) for q in procs]
+verifie("trois oui en meme temps : un seul montage lance", len(recu()) == 1 and sum(1 for x in sorties if x.get("lance")) <= 1, sorties)
+time.sleep(3.5)
 
 # un etat « en cours » fige depuis trois jours (montage tue) ne bloque pas le monteur pour toujours
 menage()

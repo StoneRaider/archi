@@ -88,7 +88,14 @@ test('tour du trader : Python introuvable, le reveil ne plante pas', async () =>
   try {
     tournees.reveiller({ base: B, maintenant: new Date(2026, 10, 16, 17, 0) });
     for (let m = 1; m <= 10; m++) tournees.reveiller({ base: B, maintenant: new Date(2026, 10, 16, 17, m) });
-    assert.doesNotThrow(() => tournees.reveiller({ base: B, maintenant: new Date(2026, 10, 16, 18, 0) }));
+    let r;
+    assert.doesNotThrow(() => { r = tournees.reveiller({ base: B, maintenant: new Date(2026, 10, 16, 18, 0) }); });
+    assert.deepStrictEqual(r.lancees, [], 'une tournee qui n\'a pas pu partir n\'est pas dite lancee');
+    for (const v of [' non ', '0', 'false']) {
+      process.env.ARCHI_TOURNEES = v;
+      assert.strictEqual(tournees.reveiller({ base: B }).raison, 'coupees', v);
+    }
+    delete process.env.ARCHI_TOURNEES;
     await new Promise(ok => setTimeout(ok, 300));      // l'erreur de lancement arrive apres coup : elle ne doit rien casser
   } finally { delete process.env.ARCHI_PY; }
 });

@@ -48,6 +48,8 @@ function ecrire(f, x) {
 }
 
 function lancerPython(script) {
+  // un Python regle mais absent : on le dit tout de suite (la tournee n'est pas comptee comme lancee)
+  if (process.env.ARCHI_PY && path.isAbsolute(process.env.ARCHI_PY) && !fs.existsSync(process.env.ARCHI_PY)) throw new Error('Python introuvable');
   const p = cp.spawn(process.env.ARCHI_PY || (process.platform === 'win32' ? 'python' : 'python3'), [script, '--tournee'],
     { cwd: path.dirname(script), detached: true, stdio: 'ignore', windowsHide: true });
   p.on('error', () => { /* Python introuvable : la tournee attendra le prochain creneau, le reveil ne plante pas */ });
@@ -56,7 +58,7 @@ function lancerPython(script) {
 
 /** options = {base, maintenant, lancer} (pour les tests) ; rend {lancees: [noms], raison} */
 function reveiller(options = {}) {
-  if (String(process.env.ARCHI_TOURNEES || 'oui').toLowerCase() === 'non') return { lancees: [], raison: 'coupees' };
+  if (NON.test(String(process.env.ARCHI_TOURNEES || 'oui').trim().toLowerCase())) return { lancees: [], raison: 'coupees' };
   const base = options.base || process.env.ARCHI_BASE || path.join(os.homedir(), '.n8n-files');
   const maintenant = options.maintenant || new Date();
   const lancer = options.lancer || lancerPython;
