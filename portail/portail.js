@@ -331,7 +331,17 @@ function prochains(r, maintenant) {
 /** Menu > Outils en construction (et en bas de Ses outils) : les projets pas encore aboutis (config/vitrine.json, « en_developpement »). */
 function chantiers(r) {
   const L = vitrine(r).en_developpement;
-  return (Array.isArray(L) ? L : []).filter(c => c && court(c.titre, 80)).slice(0, 30).map(c => ({ titre: court(c.titre, 80), quoi: court(c.quoi, 240) }));
+  // Une installation ou un de ces projets est deja branche (les workflows de son proprietaire, par exemple) le dit dans
+  // <chateau>/outils/en_service.json : une liste de titres, ["Monteur vidéo", "Appel à l'expert"]. Ils sortent de la liste
+  // ICI seulement : la vitrine du depot continue de dire vrai pour une installation neuve. Fichier absent ou abime : rien ne change.
+  const simple = t => String(t).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  let servis = new Set();
+  try {
+    const x = JSON.parse(fs.readFileSync(path.join(r.base, 'outils', 'en_service.json'), 'utf8'));
+    if (Array.isArray(x)) servis = new Set(x.filter(t => typeof t === 'string' && t.trim()).slice(0, 60).map(simple));
+  } catch (e) { servis = new Set(); }
+  return (Array.isArray(L) ? L : []).filter(c => c && court(c.titre, 80) && !servis.has(simple(court(c.titre, 80)))).slice(0, 30)
+    .map(c => ({ titre: court(c.titre, 80), quoi: court(c.quoi, 240) }));
 }
 
 /** Menu > L'atelier : les propositions du curateur et les idees du mecanicien. Lecture seule : on agit en parlant a Archi. */
