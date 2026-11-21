@@ -1,0 +1,19 @@
+{
+ "nom": "recherche_web",
+ "description": "MODE D EMPLOI : chercher une information RECENTE sur Internet (actualite, prix, horaires, sortie d'un produit). texte = quelques mots precis. Rend des resultats (titre, adresse, extrait) dans « texte » : reponds a partir d'eux seulement et cite la source. Sans cle de recherche, l'outil le dit : repete-le. Jamais l'adresse, le telephone ni la vie privee d'un particulier. Pour lire une page dont tu as le lien : lire_page.",
+ "script": "recherche_web.py",
+ "parametres": [
+  {
+   "nom": "texte",
+   "description": "les mots a chercher, courts et precis (10 mots au plus)"
+  },
+  {
+   "nom": "nombre",
+   "description": "nombre de resultats (5 par defaut, 8 au plus)"
+  }
+ ],
+ "timeout_s": 40,
+ "touche": [
+  "internet (moteur de recherche Tavily : seuls les mots cherches partent)"
+ ]
+}
