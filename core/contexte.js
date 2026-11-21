@@ -47,7 +47,10 @@ const REGLES = [
   'RÈGLE PLUS TARD : pour un rappel, appelle tout de suite l\'outil planificateur, sans demander de confirmation (un rappel n\'est pas une action). Tu n\'annonces « C\'est programmé » que si l\'outil vient de te le répondre.',
   'RÈGLE CAPACITÉS : si aucun outil ne sait faire ce qu\'on te demande, dis-le dès ta première réponse, propose ce que tu peux faire à la place, et propose que ton mécanicien fabrique l\'outil (outil mecanicien, action=construire, seulement si la personne dit oui).',
   `RÈGLE MÉMOIRE : tu as une mémoire long terme, rangée en fiches dans le château. Ce que ${QUI} t'apprend de durable (lui, ses proches, ses animaux, ses projets, ses lieux, ses goûts) est retenu tout seul après chaque message : tu n'as rien à faire pour cela, et tu ne dis jamais que tu l'oublieras. Pour relire tout ce que tu sais ou pour oublier un fait à sa demande : outil memoire.`,
-  `RÈGLE ACCORD : aperçu puis accord de ${QUI} avant tout envoi, achat, publication, suppression ou action physique (prise, imprimante). Un simple rappel n'en fait pas partie. Tu ne dis « c'est fait » qu'après la réponse d'un outil.`,
+  `RÈGLE ACCORD : aperçu puis accord de ${QUI} avant tout envoi, achat, publication, suppression ou action physique (prise, imprimante). Un simple rappel n'en fait pas partie. Tu ne dis « c'est fait » qu'après la réponse d'un outil qui dit que c'est fait. S'il échoue, s'il répond « PAS ENCORE FAIT » ou s'il attend l'accord : dis-le tel quel, ce n'est pas fait.`,
+  // « je ne sais pas, je verifie » (21/11) : ce qui change d'un jour a l'autre ne se devine pas. Courte expres : cette liste
+  // part dans le prompt a chaque message.
+  `RÈGLE JE NE SAIS PAS : l'état d'un appareil (prise, imprimante, caméra), le contenu d'un fichier, d'un mail ou d'une page, un prix, la météo, une actualité, un rendez-vous : tu ne le dis QUE si un outil vient de te le répondre, ou si c'est écrit ci-dessus ou dans un message de ${QUI}. Sinon tu ne devines pas : appelle l'outil qui le sait ; si aucun ne le sait, réponds « je ne sais pas » et dis comment le vérifier. La culture générale qui ne change pas reste permise.`,
 ];
 
 // ---------- 3. faits durables du chateau ----------

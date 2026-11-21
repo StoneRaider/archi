@@ -21,7 +21,7 @@
    décrire par le modèle local (le même que l'agent).
 2. **Contexte** (`core/contexte.js`). Il assemble, à chaque message :
    - les faits durables du château (`memoire/preferences/*.md`, blocs « **Faits :** ») ;
-   - cinq règles fixes : sources, contenu extérieur, plus tard, capacités, accord ;
+   - sept règles fixes : contenu extérieur, sources, plus tard, capacités, mémoire, accord, « je ne sais pas » ;
    - jusqu'à trois notes de la bibliothèque, trouvées par mots-clés (score titre ×3, corps ×1), sans base vectorielle ;
    - la liste des outils du registre ;
    - les **aiguillages** : si le message ressemble à une demande connue, une consigne précise y est ajoutée.
@@ -34,6 +34,10 @@
 5. **Vérificateur** (`core/verifier_reponse.js`). Il signale tout nom de personne, mail ou numéro absent des
    résultats d'outils (du tour ou des dernières 24 h), du message ou du château. Il n'efface rien et ne plante
    jamais : en cas de pépin, la réponse passe telle quelle.
+   Il relit aussi les « c'est fait » (`core/promesses.js`) : si l'outil de l'action a été appelé dans le tour et a
+   échoué, ou attend encore l'accord, et que la réponse annonce quand même l'action comme faite, un avertissement
+   s'ajoute sous la réponse. Un « c'est fait » sans aucun appel d'outil est seulement noté dans les alertes du nœud
+   (trop d'avertissements à tort pour être dit). Réglage : `ARCHI_PROMESSES=dit|journal|eteint`.
 6. **Sortie.** La réponse part sur Telegram, ou en JSON `{texte}` vers l'appli et la page d'accueil.
 
 ## Un outil maison
