@@ -1,0 +1,5 @@
+{
+ "ok": true,
+ "date": "2026-11-21",
+ "resume": "34 controles hors ligne (test_image_lien.py) : faux site et faux modele de vision sur 127.0.0.1, fausse table de noms. 16 adresses refusees (PC, reseau local, IP deguisees), redirections, faux type, taille, pannes du modele. Aucun essai avec une vraie image en ligne ni avec un vrai modele."
+}

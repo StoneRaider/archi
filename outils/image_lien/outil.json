@@ -1,0 +1,20 @@
+{
+ "nom": "image_lien",
+ "description": "MODE D EMPLOI : regarder une IMAGE donnee par son adresse web (https://... qui finit souvent par .jpg ou .png), avec le modele local. lien = l'adresse complete de l'image ; question = ce que l'utilisateur veut savoir. La description revient dans « texte » : reponds a partir d'elle seulement. Une photo JOINTE au message est deja decrite : n'appelle pas cet outil pour elle. Une page web : lire_page.",
+ "script": "image_lien.py",
+ "parametres": [
+  {
+   "nom": "lien",
+   "description": "l'adresse complete de l'image, commencant par https://"
+  },
+  {
+   "nom": "question",
+   "description": "ce qu'on veut savoir sur l'image (facultatif)"
+  }
+ ],
+ "timeout_s": 200,
+ "touche": [
+  "internet (telecharge l'image, adresse publique seulement)",
+  "modele local de vision"
+ ]
+}
