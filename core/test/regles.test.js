@@ -27,8 +27,8 @@ test('regles : « c\'est fait » seulement si l\'outil le dit ; un echec ou un e
   assert.match(r, /ce n'est pas fait/);
 });
 
-test('regles : sept regles, et un prompt qui reste court (reactivite)', () => {
-  assert.strictEqual(regles.length, 7);
+test('regles : huit regles, et un prompt qui reste court (reactivite)', () => {
+  assert.strictEqual(regles.length, 8);
   // 2 178 caracteres le 21/11 (environ 620 de plus qu'avant la regle « je ne sais pas ») ;chaque caractere ici est relu par le modele a CHAQUE message
   assert.ok(regles.join('\n').length < 2600, String(regles.join('\n').length));
 });

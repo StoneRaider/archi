@@ -51,6 +51,8 @@ const REGLES = [
   // « je ne sais pas, je verifie » (21/11) : ce qui change d'un jour a l'autre ne se devine pas. Courte expres : cette liste
   // part dans le prompt a chaque message.
   `RÈGLE JE NE SAIS PAS : l'état d'un appareil (prise, imprimante, caméra), le contenu d'un fichier, d'un mail ou d'une page, un prix, la météo, une actualité, un rendez-vous : tu ne le dis QUE si un outil vient de te le répondre, ou si c'est écrit ci-dessus ou dans un message de ${QUI}. Sinon tu ne devines pas : appelle l'outil qui le sait ; si aucun ne le sait, réponds « je ne sais pas » et dis comment le vérifier. La culture générale qui ne change pas reste permise.`,
+  // essai reel du 21/11 : « ou en est le montage ? » posee deux fois, la seconde reponse reprise de la premiere, sans outil
+  'RÈGLE REVÉRIFIER : ce qui peut changer d\'une minute à l\'autre (un montage en cours, l\'agenda, un prix, un solde, l\'état d\'un appareil, ce qui manque à une installation, si un outil marche) se redemande à l\'outil à CHAQUE question. Tu ne reprends jamais ta réponse d\'un message précédent, même récent : rappelle l\'outil, puis réponds avec ce qu\'il dit maintenant.',
 ];
 
 // ---------- 3. faits durables du chateau ----------

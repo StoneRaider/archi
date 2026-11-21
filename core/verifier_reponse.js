@@ -221,6 +221,20 @@ function main() {
       }
     } catch (e) { /* la piece ne doit jamais empecher la reponse de partir */ }
   }
+  // Un etat qui change ne se reprend pas de la conversation (core/reverifier.js, essai reel du 21/11) : le message demandait
+  // un outil d'etat (monteur, agenda, recherche, image), le tour ne contient AUCUN appel d'outil, et la reponse affirme
+  // quand meme quelque chose. Reglage ARCHI_REVERIF : « dit » (defaut), « journal », « eteint ». Pose APRES le bloc
+  // « if (alertes.length) », comme les promesses.
+  const reverif = String(process.env.ARCHI_REVERIF || 'dit').trim().toLowerCase();
+  if (reverif !== 'eteint') {
+    try {
+      const R = require('./reverifier');
+      const oublies = R.outilsNonInterroges(typeof inp.msg === 'string' ? inp.msg : '', steps, reponse);
+      for (const o of oublies) alertes.push('[journal] outil non interroge : ' + o.outil);
+      const phrase = reverif !== 'journal' && oublies.length ? R.avertissement(oublies) : '';
+      if (phrase && !sortie.includes('⚠️ À vérifier : je n\'ai pas interrogé')) sortie += '\n\n' + phrase;
+    } catch (e) { /* jamais d'obstacle a la reponse */ }
+  }
   rendre(sortie, alertes);
 }
 try { main(); } catch (e) { try { process.stdout.write(JSON.stringify({ reponse: String((ENTREE || {}).reponse || ''), alertes: [], erreur: String(e.message || e) })); } catch (e2) { process.stdout.write(JSON.stringify({ reponse: '', alertes: [] })); } }

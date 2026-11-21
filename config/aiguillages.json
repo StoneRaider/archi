@@ -28,7 +28,7 @@
  },
  {
   "si": "\\b(trader|trading|portefeuille fictif)\\b",
-  "dire": "Le trader : outil trader. action=etat pour dire ou il en est, action=tour pour qu'il decide maintenant, action=marche pour les prix. C'est une SIMULATION (argent fictif) : repete sa phrase telle quelle et n'ajoute aucun conseil d'achat ou de vente."
+  "dire": "Le trader : outil trader. action=etat pour dire ou il en est, action=tour pour qu'il decide maintenant, action=marche pour les prix. C'est une SIMULATION (argent fictif) : repete sa phrase telle quelle et n'ajoute aucun conseil d'achat ou de vente. Appelle l'outil a CHAQUE question, meme si tu as deja repondu plus haut : l'etat a pu changer depuis."
  },
  {
   "si": "\\b(quels? (sont )?(tes )?outils|(quels|tes) outils|outils (as|a)[- ]tu|liste (compl[eè]te )?(de |des )?(tes |tous tes )?outils|que sais[- ]tu faire|de quoi es[- ]tu capable|qu'est[- ]ce que tu sais faire)",
@@ -62,7 +62,7 @@
  },
  {
   "si": "^(?![\\s\\S]*\\b(?:rappel\\w*|pr[eé]viens|pense[sz]?|pdf|mails?|imprime\\w*)\\b)(?=[\\s\\S]*\\b(?:mon|ton|notre|cet|l['’]|dans le|sur le|[aà] l['’]|au) ?(?:agenda|calendrier)\\b|[\\s\\S]*\\b(?:ajoute\\w*|mets|inscris|cr[eé]e\\w*)\\b[^.?!]{0,30}\\b(?:rendez-vous|rdv)\\b)(?=[\\s\\S]*\\b(?:ajoute\\w*|mets|inscris|cr[eé]e\\w*|note[sz]?|qu.est-ce que j.ai|j.ai quoi|ai-je|est-ce que j.ai|quoi de pr[eé]vu|regarde\\w*|montre\\w*|dis-moi|consulte\\w*|v[eé]rifie\\w*|lis|rendez-vous|rdv|libre|dispo\\w*|semaine|demain|aujourd.hui|ce soir)\\b)",
-  "dire": "L'agenda : outil agenda. Voir : action=voir, jour = le mot de l'utilisateur (aujourd'hui, demain, jeudi). Ajouter : action=ajouter, titre, quand = ses mots tels quels (« jeudi 18h ») : l'outil fait un ESSAI A BLANC et redit la date ; repete-la et demande s'il confirme. Apres son oui : le MEME appel avec confirmer=oui. Ne calcule jamais la date toi-meme. S'il dit que l'agenda n'est pas relie, repete-le."
+  "dire": "L'agenda : outil agenda. Voir : action=voir, jour = le mot de l'utilisateur (aujourd'hui, demain, jeudi). Ajouter : action=ajouter, titre, quand = ses mots tels quels (« jeudi 18h ») : l'outil fait un ESSAI A BLANC et redit la date : dis sa phrase_pour_utilisateur telle quelle (jamais sa consigne). Apres son oui : le MEME appel avec confirmer=oui. Ne calcule jamais la date toi-meme. S'il dit que l'agenda n'est pas relie, repete-le. Appelle l'outil a CHAQUE question, meme si tu as deja repondu plus haut : l'etat a pu changer depuis."
  },
  {
   "si": "(?:^|[.;:!?]\\s+|\\barchi[, ]+)(?:cherche|recherche|trouve|regarde)[sz]?(?:[- ](?:moi|nous))?(?![,\\w])(?!\\s+dans\\b)[^.?!]{0,60}\\b(?:sur (?:le |l['’])?(?:web|net|internet|google)|en ligne)\\b|\\b(?:fais|lance)\\w* une recherche (?:web|internet|sur (?:le |l['’])?(?:web|net|internet|google))\\b|\\brecherche (?:web|internet)\\b",
@@ -75,7 +75,11 @@
  },
  {
   "si": "\\b(?:monteur|montage) vid[eé]o\\b|\\b(?:o[uù] en est|arr[eê]te[sz]?|lance[sz]?|stoppe[sz]?|annule[sz]?)\\b[^.?!]{0,20}\\b(?:le|un|mon|du) (?:montage|monteur)\\b(?! (?:du|de la|de l|des|financier)\\b)|\\bmonte[sz]?[- ](?:moi|nous)\\b[^.?!]{0,30}\\b(?:vid[eé]os?|temps forts|souvenirs)\\b|\\bmonte[sz]? (?:la|les|une|des|mes|ma) (?:vid[eé]os?|temps forts|souvenirs)\\b(?! dans\\b)",
-  "dire": "Le monteur video : outil monteur. « ou en est le montage » -> action=etat. « monte... » -> action=monter (mode = event ou souvenirs) : ESSAI A BLANC d'abord, puis le MEME appel avec confirmer=oui apres le oui de l'utilisateur. S'il dit que le monteur n'est pas installe, repete ce qui manque. Tu ne dis « c'est lance » que si l'outil le dit."
+  "dire": "Le monteur video : outil monteur. « ou en est le montage » -> action=etat. « monte... » -> action=monter (mode = event ou souvenirs) : ESSAI A BLANC d'abord : dis sa phrase_pour_utilisateur telle quelle (jamais sa consigne) ; puis le MEME appel avec confirmer=oui apres le oui de l'utilisateur. S'il dit que le monteur n'est pas installe, repete ce qui manque. Tu ne dis « c'est lance » que si l'outil le dit. Appelle l'outil a CHAQUE question, meme si tu as deja repondu plus haut : l'etat a pu changer depuis."
+ },
+ {
+  "si": "^\\s*(?:archi[, ]+)?(?:rev[eé]rifie[sz]?|v[eé]rifie[sz]? (?:encore|[aà] nouveau|de nouveau|vraiment|avec (?:ton|l.)outil)|regarde vraiment)\\b",
+  "dire": "Reverification demandee : rappelle MAINTENANT l'outil dont parlait ta reponse precedente (le meme appel), et reponds avec ce qu'il dit a l'instant, jamais avec ta reponse d'avant. Si tu ne sais pas quel outil, demande-le."
  },
  {
   "si": "^\\s*(oui|ouais|ok|okay|d.accord|vas[- ]y|go|confirme|c.est bon|fais[- ]le|allez)(?:[\\s,.!]+(?:oui|vas[- ]y|fais[- ]le|go|merci|archi|c.est bon|d.accord|confirme|allez))*[\\s,.!]*$",
