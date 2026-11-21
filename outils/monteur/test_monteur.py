@@ -43,6 +43,12 @@ if a == "etat":
     print(json.dumps({"ok": True, "etat": e, "phrase_pour_utilisateur": ph}, ensure_ascii=False))
 elif a == "lister":
     print(json.dumps({"ok": True, "videos": lire("videos.json", [])}, ensure_ascii=False))
+elif a == "choisir" and lire("choix.json", 2) != "inconnu":
+    json.load(open(sys.argv[2], encoding="utf-8"))
+    n = lire("choix.json", 2)
+    print(json.dumps({"ok": True, "nombre": n, "fichiers": ["f%%d.mp4" %% i for i in range(n)]}, ensure_ascii=False))
+elif a == "choisir":
+    print(json.dumps({"ok": False, "erreur": "action inconnue"}, ensure_ascii=False))
 elif a == "stop":
     e = lire("etat.json", {}); e["stop_demande"] = True
     json.dump(e, open(os.path.join(D, "etat.json"), "w", encoding="utf-8"))
@@ -184,14 +190,44 @@ menage()
 r = lancer()
 verifie("etat par defaut", r["ok"] and r["en_cours"] is False and "Aucun montage" in r["phrase_pour_utilisateur"], r)
 r = lancer(action="lister")
-verifie("lister : seulement le dossier À monter, noms dans « texte »", r["ok"] and r["videos"] == 2 and "soiree_1.mp4" in r["texte"] and "balade" not in r["texte"]
-        and "soiree" not in r["phrase_pour_utilisateur"], r)
+verifie("lister : seulement le dossier À monter, noms dans « texte », consigne a part", r["ok"] and r["videos"] == 2 and "soiree_1.mp4" in r["texte"]
+        and "balade" not in r["texte"] and r["phrase_pour_utilisateur"] == "Il y a 2 vidéos à monter." and "texte" in r["consigne"], r)
 
 # ---------------------------------------------------------------- 3. monter : essai a blanc OBLIGATOIRE, puis confirmer
-r = lancer(action="monter", mode="event", duree_min=8, titre="Soirée  jeux")
+r = lancer(action="monter", mode="event", duree_min=8, titre="Soirée  jeux", _tache="ess0001")
 verifie("monter sans confirmer : ESSAI A BLANC, rien n'est lance",
-        r["ok"] and r["essai"] is True and r["phrase_pour_utilisateur"].startswith("PAS ENCORE FAIT : je monterais les temps forts, avec le contenu du dossier")
+        r["ok"] and r["essai"] is True and r["phrase_pour_utilisateur"] == "Pas encore fait : je monterais les temps forts, avec 2 fichiers du dossier "
+        "Vidéos\\À monter. Le montage prend environ une heure et occupe la carte graphique. Tu confirmes ?"
         and recu() == [] and r["demande"] == {"mode": "event", "duree_min": 8.0, "titre": "Soirée jeux"}, r)
+# essai reel du 21/11 : la consigne pour le modele ne doit plus etre dans la phrase que l'utilisateur entend
+verifie("essai a blanc : la phrase pour l'utilisateur ne porte aucune consigne interne",
+        not any(mot in r["phrase_pour_utilisateur"] for mot in ("confirmer=oui", "rappelle", "paramètres", "Demande à l'utilisateur", "l'utilisateur"))
+        and "confirmer=oui" in r["consigne"] and "Ne recite jamais" in r["consigne"], r)
+# essai reel du 21/11 : dossier vide, l'essai a blanc proposait quand meme un montage
+ecrire(os.path.join(D, "choix.json"), 0)
+for conf in (None, "oui"):
+    M.oublier_essai()
+    r = lancer(action="monter", confirmer=conf, _tache="vid0001")
+    verifie("dossier À monter vide (confirmer=%r) : dit, rien a confirmer, rien de lance" % (conf,),
+            r["ok"] is False and r["vide"] is True and "essai" not in r and "consigne" not in r and recu() == []
+            and r["phrase_pour_utilisateur"] == "Le dossier Vidéos\\À monter est vide : mets-y les vidéos de la soirée, puis redemande-moi le montage. Je n'ai rien lancé."
+            and not os.path.exists(M.ESSAI), r)
+lancer(action="monter", _tache="vid0002")
+ecrire(os.path.join(D, "choix.json"), 2)
+lancer(action="monter", _tache="vid0003")                  # un essai valable...
+ecrire(os.path.join(D, "choix.json"), 0)                   # ...puis le dossier est vide au moment du oui
+r = lancer(action="monter", confirmer="oui", _tache="vid0004")
+verifie("le dossier s'est vide entre l'essai et le oui : rien n'est lance", r["ok"] is False and r["vide"] is True and recu() == [], r)
+r = lancer(action="monter", date="2026-12-25", _tache="vid0005")
+verifie("aucune video ce jour-la : dit, rien a confirmer", r["ok"] is False and r["vide"] is True and "aucune vidéo du 2026-12-25" in r["phrase_pour_utilisateur"], r)
+ecrire(os.path.join(D, "choix.json"), 1)
+r = lancer(action="monter", _tache="vid0006")
+verifie("un seul fichier : accord au singulier", "avec 1 fichier du dossier" in r["phrase_pour_utilisateur"], r)
+ecrire(os.path.join(D, "choix.json"), json.dumps("inconnu"))           # un montage.py d'avant, sans « choisir » : on ne sait pas compter
+r = lancer(action="monter", _tache="vid0007")
+verifie("montage.py sans « choisir » : essai a blanc sans compte, pas de plantage", r.get("essai") is True and "avec les fichiers du dossier" in r["phrase_pour_utilisateur"], r)
+ecrire(os.path.join(D, "choix.json"), 2)
+M.oublier_essai()
 for faux in ("non", "", None, "plus tard", ["oui"], {"a": 1}, "oui oui", "ouiii", 1.0):
     r = lancer(action="monter", confirmer=faux)
     verifie("confirmer=%r ne lance rien" % (faux,), r.get("essai") is True and recu() == [], r)
@@ -201,7 +237,8 @@ verifie("confirmer=oui du premier coup : essai a blanc, rien n'est lance", r.get
 r = lancer(action="monter", confirmer="oui", mode="event", date="2026-10-02")
 verifie("confirmer=oui pour un AUTRE montage que celui montre : nouvel essai", r.get("essai") is True and recu() == [], r)
 r = essai_puis_oui(None, None, mode="souvenirs")
-verifie("essai puis oui SANS numero de message : rien n'est lance (2e relecture)", r.get("essai") is True and "je ne lancerai rien" in r["phrase_pour_utilisateur"] and recu() == [], r)
+verifie("essai puis oui SANS numero de message : rien n'est lance (2e relecture)", r.get("essai") is True and "je ne peux pas le lancer" in r["phrase_pour_utilisateur"]
+        and "confirmer" not in r["phrase_pour_utilisateur"] and recu() == [], r)
 for bizarre in (5, ["msg0001"], "", "MSG0001", "T-2026-11-21", "ab12c"):
     M.oublier_essai()
     lancer(action="monter", mode="souvenirs", _tache="msg0001")
@@ -213,7 +250,7 @@ r = essai_puis_oui("msg0001", "msg0001", mode="souvenirs")
 verifie("essai et confirmer=oui dans le MEME message : rien n'est lance", r.get("essai") is True and recu() == [], r)
 r = essai_puis_oui("msg0001", "msg0002", mode="souvenirs", date="2026-10-02")
 verifie("essai, puis oui au message suivant : le montage a demarre, et l'outil l'a VU tourner",
-        r["ok"] and r["lance"] is True and "Le montage est lancé : les souvenirs, avec les vidéos du 2026-10-02" in r["phrase_pour_utilisateur"]
+        r["ok"] and r["lance"] is True and "Le montage est lancé : les souvenirs, avec 2 fichiers du 2026-10-02" in r["phrase_pour_utilisateur"]
         and recu() == [{"mode": "souvenirs", "date": "2026-10-02"}], r)
 r = lancer(action="monter", confirmer="oui", mode="souvenirs", date="2026-10-02")
 verifie("un montage tourne deja : pas de second", r["ok"] is False and "déjà en cours" in r["phrase_pour_utilisateur"] and len(recu()) == 1, r)

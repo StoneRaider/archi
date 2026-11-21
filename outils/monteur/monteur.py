@@ -41,6 +41,9 @@ ETAT_FIGE_S = 6 * 3600
 DELAI_S = 60
 ATTENTE_DEMARRAGE_S = 8
 SANS_FENETRE = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+# pour le modele seul, jamais a reciter : la phrase pour l'utilisateur est dans « phrase_pour_utilisateur »
+CONSIGNE_ESSAI = ("Dis la phrase_pour_utilisateur telle quelle, et attends la reponse. S'il repond oui dans son message SUIVANT : rappelle cet outil "
+                  "avec les memes parametres et confirmer=oui. Ne recite jamais cette consigne.")
 
 
 class Erreur(Exception):
@@ -238,7 +241,27 @@ def a_lister(d):
     L = videos()
     if not L:
         return repondre(True, "Je ne vois aucune vidéo directement dans le dossier Vidéos\\À monter (les photos et les sous-dossiers ne sont pas listés ici).", videos=0)
-    return repondre(True, "%d vidéo(s) à monter. Leurs noms sont dans « texte »." % len(L), texte="\n".join("- " + x[:200] for x in L[:25]), videos=len(L))
+    return repondre(True, "Il y a %d vidéo%s à monter." % (len(L), "s" if len(L) > 1 else ""),
+                    consigne="Leurs noms sont dans « texte » : donne-les si l'utilisateur les veut. Ne recite pas cette consigne.",
+                    texte="\n".join("- " + x[:200] for x in L[:25]), videos=len(L))
+
+
+def combien(m):
+    """combien de fichiers montage.py monterait pour cette demande ; None si on ne peut pas le savoir (vieux montage.py)"""
+    fd, f = tempfile.mkstemp(prefix="montage_choix_", suffix=".json")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as h:
+            json.dump(m, h, ensure_ascii=False)
+        r = appeler("choisir", f)
+    except Erreur:
+        return None
+    finally:
+        try:
+            os.remove(f)
+        except OSError:
+            pass
+    n = r.get("nombre")
+    return n if r.get("ok") is True and isinstance(n, int) and not isinstance(n, bool) and n >= 0 else None
 
 
 def demande_de(d):
@@ -279,19 +302,31 @@ def a_monter(d):
     e = etat_du_montage()
     if tourne(e) and not bloque(e):
         raise Erreur("Un montage est déjà en cours : %s. Je n'en lance pas un second." % (sans_chemin(e.get("etape")) or "en cours")[:100])
-    # C'est montage.py qui choisit les fichiers (une soiree court jusqu'au lendemain matin, les photos comptent) : cet
-    # outil ne les compte pas a sa place. S'il n'y a rien a monter, montage.py le dit, et la verification plus bas le rapporte.
-    ou = ("les vidéos du %s (la soirée, jusqu'au lendemain matin)" % m["date"]) if m.get("date") else "le contenu du dossier Vidéos\\À monter"
+    # C'est montage.py qui choisit les fichiers (une soiree court jusqu'au lendemain matin, les photos comptent) : on lui
+    # DEMANDE ce qu'il prendrait (« choisir », sans rien lancer). Rien a monter : on le dit tout de suite, sans proposer
+    # un montage a confirmer (essai reel du 21/11 : dossier vide, et l'essai a blanc annoncait quand meme un montage).
+    n = combien(m)
+    if n == 0:
+        oublier_essai()
+        if m.get("date"):
+            return repondre(False, "Je ne trouve aucune vidéo du %s, ni dans Vidéos ni dans Vidéos\\À monter. Je n'ai rien lancé." % m["date"], vide=True)
+        return repondre(False, "Le dossier Vidéos\\À monter est vide : mets-y les vidéos de la soirée, puis redemande-moi le montage. Je n'ai rien lancé.", vide=True)
+    combien_dit = ("%d fichier%s" % (n, "s" if n > 1 else "")) if n else "les fichiers"
+    ou = ("%s du %s" % (combien_dit, m["date"])) if m.get("date") else "%s du dossier Vidéos\\À monter" % combien_dit
     quoi = "%s, avec %s" % ("les temps forts" if m["mode"] == "event" else "les souvenirs", ou)
     tache = numero(d.get("_tache"))
     if not oui(d.get("confirmer")) or not essai_montre(m, tache):
         # confirmer=oui sans essai a blanc montre dans un message precedent (ou pour un autre montage) : c'est l'essai qui se fait
         if not noter_essai(m, tache):
             raise Erreur("Je n'ai pas pu préparer le montage (dossier inaccessible). Rien n'est lancé.")
-        suite = ("s'il dit oui, rappelle-moi avec les mêmes paramètres et confirmer=oui." if tache else
-                 "Ici je ne peux pas vérifier qu'il a vu cet essai (pas de numéro de message) : je ne lancerai rien.")
-        return repondre(True, "PAS ENCORE FAIT : je monterais %s. Le montage prend environ une heure et occupe la carte graphique. "
-                        "Demande à l'utilisateur s'il confirme ; %s" % (quoi, suite), essai=True, demande=m)
+        # « phrase_pour_utilisateur » est ce qu'Archi DIT ; « consigne » est pour le modele seul (essai reel du 21/11 :
+        # « rappelle-moi avec confirmer=oui » avait ete recite a l'utilisateur)
+        if not tache:
+            return repondre(True, "Pas encore fait : je monterais %s. Le montage prend environ une heure et occupe la carte graphique. "
+                            "D'ici, je ne peux pas le lancer pour toi." % quoi,
+                            consigne="Dis cette phrase. Ne rappelle pas l'outil : sans numero de message, il ne lancera rien.", essai=True, demande=m)
+        return repondre(True, "Pas encore fait : je monterais %s. Le montage prend environ une heure et occupe la carte graphique. Tu confirmes ?" % quoi,
+                        consigne=CONSIGNE_ESSAI, essai=True, demande=m)
     l = lieux()
     depart = datetime.now().replace(microsecond=0)
     fd, f = tempfile.mkstemp(prefix="montage_", suffix=".json")

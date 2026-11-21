@@ -983,6 +983,16 @@ def main():
         print(json.dumps({"ok": True, "phrase_pour_utilisateur": "Je demande l'arrêt du montage, il s'arrête à la fin de l'étape en cours."}, ensure_ascii=False))
     elif a == "lister":
         print(json.dumps({"ok": True, "videos": lister()}, ensure_ascii=False))
+    elif a == "choisir":
+        # ce que « --fichier » monterait pour cette demande, SANS rien lancer (outils/monteur s'en sert pour son essai a
+        # blanc : un dossier vide se dit avant de demander une confirmation)
+        try:
+            with open(sys.argv[2], encoding="utf-8") as f:
+                d = json.load(f)
+            L = choisir_fichiers(d if isinstance(d, dict) else {})
+            print(json.dumps({"ok": True, "nombre": len(L), "fichiers": [os.path.basename(x) for x in L[:25]]}, ensure_ascii=False))
+        except Exception as e:
+            print(json.dumps({"ok": False, "erreur": str(e)[:200]}, ensure_ascii=False))
     else:
         print(json.dumps({"ok": False, "erreur": "action inconnue"}, ensure_ascii=False))
 

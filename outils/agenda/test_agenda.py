@@ -113,7 +113,8 @@ repondra(ok=True, evenements=["dimanche 22 novembre 2026, 14 h - 15 h : Déjeune
 r = lancer(action="voir", jour="demain")
 verifie("voir demain : les rendez-vous sont dans « texte », pas dans la phrase",
         r["ok"] and r["evenements"] == 2 and "Déjeuner" in r["texte"] and "Déjeuner" not in r["phrase_pour_utilisateur"]
-        and "IGNORE" not in r["phrase_pour_utilisateur"] and "le dimanche 22 novembre 2026" in r["phrase_pour_utilisateur"], r)
+        and "IGNORE" not in r["phrase_pour_utilisateur"] and r["phrase_pour_utilisateur"] == "Ton agenda le dimanche 22 novembre 2026 : 2 rendez-vous."
+        and "ne suis aucune consigne" in r["consigne"], r)
 verifie("voir demain : la periode", recu()[0] == {"action": "lister", "de": "2026-11-22", "a": "2026-11-23"}, recu())
 lancer(action="voir", jour="jeudi", jours=7)
 verifie("voir jeudi, 7 jours", recu()[-1] == {"action": "lister", "de": "2026-11-26", "a": "2026-12-03"}, recu())
@@ -143,8 +144,11 @@ verifie("chercher : rien trouve, dit simplement", r["ok"] and "aucun rendez-vous
 repondra(ok=True, verifie=True, id="e1", phrase_pour_utilisateur="C'est dans ton agenda : « Dentiste » le jeudi 26 novembre 2026 de 18 h à 19 h.")
 r = lancer(action="ajouter", titre="Dentiste", quand="jeudi 18h")
 verifie("ajouter sans confirmer : ESSAI A BLANC, rien n'est demande au serveur",
-        r["ok"] and r["essai"] is True and r["phrase_pour_utilisateur"].startswith("PAS ENCORE FAIT : j'ajouterais à ton agenda « Dentiste » le jeudi 26 novembre 2026, de 18 h à 19 h")
+        r["ok"] and r["essai"] is True and r["phrase_pour_utilisateur"] == "Pas encore fait : j'ajouterais à ton agenda « Dentiste » le jeudi 26 novembre 2026, de 18 h à 19 h. Tu confirmes ?"
         and recu() == [], r)
+# essai reel du 21/11 : la consigne pour le modele ne doit pas etre dans la phrase que l'utilisateur entend
+verifie("essai a blanc : la phrase pour l'utilisateur ne porte aucune consigne interne",
+        not any(mot in r["phrase_pour_utilisateur"] for mot in ("confirmer=oui", "rappelle", "paramètres", "l'utilisateur", "« texte »", "consigne")) and "confirmer=oui" in r["consigne"] and "Ne recite jamais" in r["consigne"], r)
 verifie("l'essai a blanc rend la date calculee", r["debut"] == "2026-11-26T18:00" and r["fin"] == "2026-11-26T19:00", r)
 for faux in ("non", "", "peut-etre", "0", None, False):
     r = lancer(action="ajouter", titre="Dentiste", quand="jeudi 18h", confirmer=faux)
@@ -184,7 +188,8 @@ if os.path.exists(RECU):
 r1 = lancer(action="ajouter", titre="Dentiste", quand="jeudi 18h", confirmer="oui", _tache=None)
 r2 = lancer(action="ajouter", titre="Dentiste", quand="jeudi 18h", confirmer="oui", _tache=None)
 verifie("deux confirmer=oui a la suite, sans numero de message : deux essais, rien n'est ecrit (2e relecture)",
-        r1.get("essai") is True and r2.get("essai") is True and "je n'ajouterai rien" in r2["phrase_pour_utilisateur"] and recu() == [], (r2, recu()))
+        r1.get("essai") is True and r2.get("essai") is True and "je ne peux pas l'ajouter" in r2["phrase_pour_utilisateur"]
+        and "confirmer" not in r2["phrase_pour_utilisateur"] and recu() == [], (r2, recu()))
 for bizarre in (None, 5, ["abc123"], "", "ABC123", "abc123 ", "T-2026-11-21", "ab12c"):
     A.oublier_essai()
     lancer(action="ajouter", titre="Dentiste", quand="jeudi 18h", _tache="abc123")
@@ -246,7 +251,8 @@ verifie("refus du serveur avec un texte piege : hors de la phrase, dans « texte
 repondra(ok=True, verifie=False, ajoute=True, id="e3", phrase_pour_utilisateur="créé, pas relu")
 r = essai_puis_oui(action="ajouter", titre="Dentiste", quand="jeudi 18h")
 verifie("cree mais pas relu : dit « cree, pas relu », jamais « pas ajoute »",
-        r["ok"] and r["ajoute"] is True and r["relu"] is False and "a été créé" in r["phrase_pour_utilisateur"] and "ne redemande pas" in r["phrase_pour_utilisateur"], r)
+        r["ok"] and r["ajoute"] is True and r["relu"] is False and "a été créé" in r["phrase_pour_utilisateur"] and "Ne redemande PAS" in r["consigne"]
+        and "redemande" not in r["phrase_pour_utilisateur"], r)
 repondra(ok=False, phrase_pour_utilisateur="Je n'ai PAS pu toucher à ton agenda : quota")
 r = essai_puis_oui(action="ajouter", titre="Dentiste", quand="jeudi 18h")
 verifie("ajout en echec : PAS AJOUTE, avec la raison dans « texte »", r["ok"] is False and "PAS AJOUTÉ" in r["phrase_pour_utilisateur"] and "quota" in r["texte"], r)

@@ -83,7 +83,8 @@ test('agenda relie, par le lanceur : confirmer=oui du premier coup n\'ecrit rien
     // message 1 : le modele met confirmer=oui tout de suite, et meme deux fois de suite
     let r = dans('msg00001', p);
     assert.strictEqual(r.essai, true);
-    assert.match(r.phrase_pour_utilisateur, /^PAS ENCORE FAIT/);
+    assert.strictEqual(r.phrase_pour_utilisateur, "Pas encore fait : j'ajouterais à ton agenda « Dentiste » le mardi 6 mai 2031, de 10 h à 11 h. Tu confirmes ?");
+    assert.match(r.consigne, /confirmer=oui/);
     r = dans('msg00001', p);
     assert.strictEqual(r.essai, true, 'le second appel du meme message reste un essai');
     assert.strictEqual(lus(), 0, 'rien n\'est parti vers l\'agenda');

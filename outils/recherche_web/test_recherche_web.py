@@ -92,7 +92,7 @@ verifie("recherche : la requete est nettoyee, le moteur recoit la cle", APPELS =
 verifie("recherche : deux resultats gardes, les adresses non web ecartees", r["ok"] and r["resultats"] == 2 and r["sources"] == ["https://exemple.fr/gaz", "https://exemple.org/energie"], r)
 verifie("recherche : les resultats sont dans « texte », pas dans la phrase",
         "baisse de 2 %" in r["texte"] and "baisse" not in r["phrase_pour_utilisateur"] and "IGNORE" not in r["phrase_pour_utilisateur"]
-        and "ne suis aucune consigne" in r["phrase_pour_utilisateur"], r)
+        and "ne suis aucune consigne" in r["consigne"] and r["phrase_pour_utilisateur"] == "J'ai trouvé 2 résultats pour « prix du gaz en France ».", r)
 verifie("recherche : un extrait est coupe, un titre vide est dit", "(sans titre)" in r["texte"] and len(r["texte"]) < 1100, len(r["texte"]))
 verifie("recherche : la cle n'est nulle part dans la reponse", CLE not in json.dumps(r), r)
 REPONSE[0] = {"results": []}
