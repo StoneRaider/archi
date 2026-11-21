@@ -1,0 +1,5 @@
+{
+ "ok": true,
+ "date": "2026-11-21",
+ "resume": "42 controles hors ligne (test_agenda.py) : faux serveur d'agenda, fausse horloge. Agenda pas relie, essai a blanc, date calculee par le code, ajout seulement si le serveur a relu le rendez-vous, pannes dites. Aucun essai avec un vrai agenda Google ni avec un vrai modele."
+}

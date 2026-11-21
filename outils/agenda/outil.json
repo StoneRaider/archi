@@ -1,0 +1,48 @@
+{
+ "nom": "agenda",
+ "description": "MODE D EMPLOI : l'agenda Google de l'utilisateur. action=voir (jour = aujourd'hui, demain, jeudi, 26/11 ; jours = combien de jours). action=chercher (texte = un mot du rendez-vous). action=ajouter (titre, quand = les mots de l'utilisateur, ex. « jeudi 18h », « demain 9h » ; duree_min ; lieu) : d'abord l'ESSAI A BLANC, qui redit la date calculee ; puis confirmer=oui seulement apres le oui de l'utilisateur. Ne calcule jamais la date toi-meme. Pas de modification ni de suppression.",
+ "script": "agenda.py",
+ "parametres": [
+  {
+   "nom": "action",
+   "description": "voir (defaut), chercher ou ajouter"
+  },
+  {
+   "nom": "jour",
+   "description": "voir : aujourd'hui, demain, jeudi, 26/11 ou AAAA-MM-JJ"
+  },
+  {
+   "nom": "jours",
+   "description": "voir : nombre de jours a montrer (1 par defaut, 7 pour la semaine)"
+  },
+  {
+   "nom": "texte",
+   "description": "chercher : un mot du titre du rendez-vous"
+  },
+  {
+   "nom": "titre",
+   "description": "ajouter : le titre du rendez-vous, avec les mots de l'utilisateur"
+  },
+  {
+   "nom": "quand",
+   "description": "ajouter : le jour et l'heure tels que l'utilisateur les a dits (jeudi 18h, demain 9h, 26/11 14h)"
+  },
+  {
+   "nom": "duree_min",
+   "description": "ajouter : duree en minutes (60 par defaut)"
+  },
+  {
+   "nom": "lieu",
+   "description": "ajouter : le lieu (facultatif)"
+  },
+  {
+   "nom": "confirmer",
+   "description": "ajouter : oui seulement quand l'utilisateur a dit oui a la date de l'essai a blanc"
+  }
+ ],
+ "timeout_s": 60,
+ "touche": [
+  "agenda Google (lecture ; ajout apres essai a blanc et confirmation)",
+  "internet"
+ ]
+}
