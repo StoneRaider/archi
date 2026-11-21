@@ -34,9 +34,18 @@ MUSIQUE = os.path.join(VIDEOS, "Musique libre")
 BASE = os.path.join(os.environ.get("ARCHI_BASE") or os.path.join(ACCUEIL, ".n8n-files"), "montage")
 ETAT = os.path.join(BASE, "etat.json")
 _WH = os.environ.get("ARCHI_WHISPER_DIR") or os.path.join(os.path.expanduser("~"), "whisper")   # dossier de ffmpeg + whisper.cpp (ARCHI_WHISPER_DIR)
+# Sur une installation faite par installation.bat, ffmpeg est dans le PATH d'Archi et whisper.cpp est celui de la voix
+# (ARCHI_WHISPER_EXE, ARCHI_WHISPER_MODELE) : on les prend quand le dossier ARCHI_WHISPER_DIR ne les a pas.
+# outils/monteur/monteur.py fait la MEME recherche avant de lancer un montage : garder les deux d'accord.
 FFMPEG = os.path.join(_WH, "ffmpeg.exe")
+if not os.path.exists(FFMPEG):
+    FFMPEG = os.environ.get("ARCHI_FFMPEG") or shutil.which("ffmpeg") or FFMPEG
 WHISPER = os.environ.get("ARCHI_WHISPER") or os.path.join(_WH, "whisper-bin-x64", "Release", "whisper-cli.exe")
+if not os.path.exists(WHISPER):
+    WHISPER = os.environ.get("ARCHI_WHISPER_EXE") or WHISPER
 WHISPER_MODELE = os.path.join(_WH, "ggml-small.bin")
+if not os.path.exists(WHISPER_MODELE):
+    WHISPER_MODELE = os.environ.get("ARCHI_WHISPER_MODELE") or WHISPER_MODELE
 LM = os.environ.get("ARCHI_LM_URL", "http://127.0.0.1:1234/v1").rstrip("/") + "/chat/completions"
 RETOUR = os.environ.get("ARCHI_WEBHOOK_ALERTE", "")   # webhook n8n LOCAL qui previent l'utilisateur (facultatif)
 POLICE = "C\\:/Windows/Fonts/arialbd.ttf"

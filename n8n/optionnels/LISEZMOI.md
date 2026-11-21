@@ -7,8 +7,10 @@ workflows liés dans les nœuds « Call n8n Workflow Tool ».
 
 **Reliés à l'agent de la démo**, et essayés dans une installation neuve : Hunter (`enquete_osint`), vidéos et pages
 (`lire_page`, `videos_youtube`) et le navigateur (`navigateur`). L'agent a aussi l'outil Wikipédia de n8n, sans clé.
-**Importés mais pas encore reliés** : le monteur (il lui faut d'autres modules Python), les pièces 3D (OpenSCAD et
-Telegram) et la vision par lien. La page d'accueil les annonce « en cours de développement » (`config/vitrine.json`).
+**Importés mais pas reliés à l'agent** : le monteur, la vision par lien et les pièces 3D (OpenSCAD et Telegram).
+Depuis le 21/11, l'agent monte une vidéo et regarde une image en ligne par deux **outils maison** (`outils/monteur`,
+`outils/image_lien`), qui n'ont pas besoin de ces workflows : `monteur.json` et `vision.json` restent pour Hunter et pour
+qui veut les appeler depuis n8n. Les pièces 3D restent annoncées « en cours de développement » (`config/vitrine.json`).
 
 | Fichier | Ce qu'il fait |
 |---|---|

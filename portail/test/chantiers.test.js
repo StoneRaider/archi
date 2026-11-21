@@ -23,11 +23,23 @@ const PREUVES = {
   'Pilotage de drone': { noeuds: ['drone', 'pilotage_drone'], registre: ['drone'] },
   'Appel à l\'expert': { noeuds: ['expert', 'appel_expert'], registre: ['expert', 'appel_expert'] },
   'Concevoir une pièce 3D': { noeuds: ['impression_3d', 'conception_3d', 'catalogues_3d', 'piece_3d'], registre: ['conception_3d', 'piece_3d'] },
-  'Monteur vidéo': { noeuds: ['monteur', 'monteur_video'], workflows: ['ArchiMonteur0001'], registre: ['monteur'] },
-  'Agenda à la voix': { noeuds: ['agenda'], registre: ['agenda'], code: [['n8n/fabriquer_workflow.py', /\/agenda\b/]] },
-  'Recherche sur le web': { noeuds: ['recherche_web', 'chercher_web'], registre: ['recherche_web'] },
-  'Analyser une image depuis un lien': { noeuds: ['analyse_image', 'vision', 'decrire_image'], workflows: ['ArchiVision00001'], registre: ['vision'] },
 };
+// Sortis de la liste le 21/11, parce que branches : le tour du jour du trader (core/tournees.js), et quatre outils maison.
+const BRANCHES = ['recherche_web', 'image_lien', 'agenda', 'monteur'];
+
+test('chantiers du depot : ce qui en est sorti est bien branche (fiche, registre, script, tests hors ligne)', () => {
+  for (const nom of BRANCHES) {
+    assert.ok(vitrine.outils.some(f => f.nom === nom && !f.agent), nom + ' : fiche dans la vitrine');
+    assert.ok(registre[nom] && registre[nom].script === nom + '.py', nom + ' : au registre');
+    assert.deepStrictEqual(registre[nom], JSON.parse(lire('outils/' + nom + '/outil.json')), nom + ' : le registre recopie la fiche');
+    assert.ok(fs.existsSync(path.join(DEPOT, 'outils', nom, nom + '.py')), nom + ' : script');
+    assert.ok(fs.existsSync(path.join(DEPOT, 'outils', nom, 'test_' + nom + '.py')), nom + ' : tests');
+    assert.ok(lire('.github/workflows/tests.yml').includes('outils/' + nom + ' && python test_' + nom + '.py'), nom + ' : tests lances par la CI');
+    assert.ok(!vitrine.en_developpement.some(c => new RegExp(nom.split('_')[0], 'i').test(c.titre)), nom + ' : plus annonce en construction');
+  }
+  assert.match(lire('core/tournees.js'), /trader: \['trader', 'trader\.py'\]/);
+  assert.ok(!vitrine.en_developpement.some(c => /trader/i.test(c.titre)));
+});
 
 test('chantiers du depot : chaque projet annonce a sa preuve a surveiller', () => {
   assert.deepStrictEqual(vitrine.en_developpement.map(c => c.titre).sort(), Object.keys(PREUVES).sort());
@@ -49,9 +61,9 @@ test('chantiers : une installation dit ce qui est deja en service chez elle, et 
   const tous = vitrine.en_developpement.map(c => c.titre);
   assert.deepStrictEqual(P.chantiers(r).map(c => c.titre), tous);                      // sans fichier : toute la liste
   const f = path.join(base, 'outils', 'en_service.json');
-  fs.writeFileSync(f, JSON.stringify(['Monteur vidéo', 'appel a l expert', 'Outil qui n\'existe pas']));
-  assert.deepStrictEqual(P.chantiers(r).map(c => c.titre), tous.filter(t => t !== 'Monteur vidéo' && t !== 'Appel à l\'expert'));
-  for (const abime of ['{', '"Monteur vidéo"', '{"Monteur vidéo": true}', '[1, null, {}]', '']) {
+  fs.writeFileSync(f, JSON.stringify(['Concevoir une pièce 3D', 'appel a l expert', 'Outil qui n\'existe pas']));
+  assert.deepStrictEqual(P.chantiers(r).map(c => c.titre), tous.filter(t => t !== 'Concevoir une pièce 3D' && t !== 'Appel à l\'expert'));
+  for (const abime of ['{', '"Pilotage de drone"', '{"Pilotage de drone": true}', '[1, null, {}]', '']) {
     fs.writeFileSync(f, abime);
     assert.deepStrictEqual(P.chantiers(r).map(c => c.titre), tous, abime);             // fichier abime : rien ne change
   }

@@ -1,6 +1,6 @@
 [
  {
-  "si": "\\b(rappel\\w*|plus tard|demain (?:(?:a|à) )?\\d\\w*|demain (?:matin|midi|apr[eè]s-midi|soir)|(?:pr[eé]vien|pense|programme|note)\\w*[^.?!]{0,60}\\bdemain|dans \\d+ ?(min|h|heure|jour)\\w*|tous les (jours|lundis?|mardis?|mercredis?|jeudis?|vendredis?|samedis?|dimanches?|mois|matins?|soirs?)|quand j.arrive)\\b",
+  "si": "^(?![\\s\\S]*\\b(?:agenda|calendrier)\\b)[\\s\\S]*?\\b(rappel\\w*|plus tard|demain (?:(?:a|à) )?\\d\\w*|demain (?:matin|midi|apr[eè]s-midi|soir)|(?:pr[eé]vien|pense|programme|note)\\w*[^.?!]{0,60}\\bdemain|dans \\d+ ?(min|h|heure|jour)\\w*|tous les (jours|lundis?|mardis?|mercredis?|jeudis?|vendredis?|samedis?|dimanches?|mois|matins?|soirs?)|quand j.arrive)\\b",
   "dire": "Rappel ou tache PLUS TARD (ou a l'arrivee sur un lieu) : appelle TOUT DE SUITE l'outil planificateur (action=ajouter, texte, et UN moment : a, tous_les ou lieu). Un simple rappel ne demande AUCUN accord : ne pose pas de question, appelle l'outil. Tu ne dis « C'est programme » que si l'outil vient de le repondre."
  },
  {
@@ -61,12 +61,28 @@
   "dire": "Le mecanicien : outil mecanicien. « fabrique-moi un outil qui... » -> action=construire, texte = ce que l'outil doit faire avec les mots de l'utilisateur, accord=oui (il vient de le demander). « construis la 2 » -> action=construire, numero=2, accord=oui. « valide la 2 » -> action=valider, numero=2, accord=oui. « ou en est l'atelier » -> action=etat. « montre la 2 » -> action=voir, numero=2. « note l'idee... » -> action=idee, texte. « abandonne la 2 » -> action=abandonner, numero=2. « retire l'outil X » -> action=retirer, nom=X, accord=oui. Repete sa phrase_pour_utilisateur TELLE QUELLE."
  },
  {
+  "si": "\\b(agenda|calendrier)\\b",
+  "dire": "L'agenda : outil agenda. Voir : action=voir, jour = le mot de l'utilisateur (aujourd'hui, demain, jeudi). Ajouter : action=ajouter, titre, quand = ses mots tels quels (« jeudi 18h ») : l'outil fait un ESSAI A BLANC et redit la date ; repete-la et demande s'il confirme. Apres son oui : le MEME appel avec confirmer=oui. Ne calcule jamais la date toi-meme. S'il dit que l'agenda n'est pas relie, repete-le."
+ },
+ {
+  "si": "\\b(cherche|recherche|trouve|regarde)\\w*[^.?!]{0,40}\\b(sur (le |l.)?(web|net|internet)|en ligne)\\b|\\b(actualit[eé]s?|derni[eè]res nouvelles)\\b",
+  "dire": "Une information recente : outil recherche_web, texte = quelques mots precis. Reponds a partir des resultats seulement, avec l'adresse de la source ; si les resultats ne repondent pas, dis-le. S'il dit que la recherche n'est pas branchee, repete-le, sans rien inventer."
+ },
+ {
+  "si": "https?://\\S+\\.(?:jpe?g|png|webp|gif)(?:[?#]\\S*)?(?=\\s|$)",
+  "dire": "Un lien vers une image : outil image_lien (pas lire_page), lien = le lien complet, question = ce que l'utilisateur veut savoir. Reponds a partir de la description rendue, sans rien ajouter."
+ },
+ {
+  "si": "\\b(monteur|montage)\\b|\\bmonte[sz]?[- ](moi|nous|la|le|les|une?)\\b[^.?!]{0,40}\\b(vid[eé]os?|soir[eé]e|souvenirs?|temps forts)\\b",
+  "dire": "Le monteur video : outil monteur. « ou en est le montage » -> action=etat. « monte... » -> action=monter (mode = event ou souvenirs) : ESSAI A BLANC d'abord, puis le MEME appel avec confirmer=oui apres le oui de l'utilisateur. S'il dit que le monteur n'est pas installe, repete ce qui manque. Tu ne dis « c'est lance » que si l'outil le dit."
+ },
+ {
   "si": "^\\s*(oui|ouais|ok|okay|d.accord|vas[- ]y|go|confirme|c.est bon|fais[- ]le|allez)(?:[\\s,.!]+(?:oui|vas[- ]y|fais[- ]le|go|merci|archi|c.est bon|d.accord|confirme|allez))*[\\s,.!]*$",
-  "dire": "L'utilisateur vient de dire oui. Si ta reponse juste avant proposait une action d'un outil (essai a blanc, accord demande) : refais CET appel maintenant, avec les memes parametres et accord=oui ; pour une prise (prises_shelly), ajoute confirmer=oui. Sinon, ne lance aucun outil : continue simplement la conversation. Ne dis « c'est fait » qu'apres la reponse de l'outil."
+  "dire": "L'utilisateur vient de dire oui. Si ta reponse juste avant proposait une action d'un outil (essai a blanc, accord demande) : refais CET appel maintenant, avec les memes parametres et accord=oui ; pour une prise (prises_shelly), l'agenda ou le monteur, ajoute confirmer=oui. Sinon, ne lance aucun outil : continue simplement la conversation. Ne dis « c'est fait » qu'apres la reponse de l'outil."
  },
  {
   "si": "(\\badresse\\b(?! (mail|e-?mail|ip|web|url|de facturation|de livraison))|\\b(son|sa|ses|leur|le) domicile\\b|o[uù] (il |elle )?(habite|vit|loge|demeure)|\\b(habite|vit|loge)(-t-(il|elle))? o[uù](\\s|\\?|$)|\\bnum[ée]ro (de |d.)?(t[ée]l|portable|perso|fixe)|\\b(le|son|ses|leur) num[ée]ro\\b(?! ?(de |d.|du )?(la |l.)?(commande|suivi|facture|s[ée]rie|version|colis|dossier|client|contrat|siret|siren|tva|[ée]pisode|page|ligne|\\d))|\\b0[67]\\b|(son|ses|leur) (t[ée]l[ée]phone|portable)|(t[ée]l[ée]phone|portable) (de|d.|du) |\\bcoordonn[ée]es\\b|\\bvie priv[ée]e\\b|plaque d.immatriculation)",
   "et": "(\\b(trouve|trouver|cherche|chercher|donne|donner|retrouve|retrouver|d[ée]niche|enqu[eê]te|renseigne|quel(le)? est|c.est quoi|tu (as|connais|sais))\\b|^\\s*o[uù]\\s|o[uù]\\s*\\?|\\b(habite|vit|loge)(-t-(il|elle))? o[uù](\\s|\\?|$))",
-  "dire": "Coordonnees ou vie privee : si l'on te demande de CHERCHER l'adresse, le telephone ou la vie privee d'un PARTICULIER (voisin, collegue, ex, une personne privee nommee), refuse poliment en une phrase et n'appelle AUCUN outil (ni enquete_osint, ni navigateur, ni lire_page). Une entreprise, un commerce ou un service public : c'est permis. Ce qui concerne l'utilisateur lui-meme, ou ce qu'il t'a deja confie (sa memoire, ses contacts, ses clients), reste utilisable normalement : tu refuses seulement de le chercher dehors."
+  "dire": "Coordonnees ou vie privee : si l'on te demande de CHERCHER l'adresse, le telephone ou la vie privee d'un PARTICULIER (voisin, collegue, ex, une personne privee nommee), refuse poliment en une phrase et n'appelle AUCUN outil (ni enquete_osint, ni navigateur, ni lire_page, ni recherche_web). Une entreprise, un commerce ou un service public : c'est permis. Ce qui concerne l'utilisateur lui-meme, ou ce qu'il t'a deja confie (sa memoire, ses contacts, ses clients), reste utilisable normalement : tu refuses seulement de le chercher dehors."
  }
 ]

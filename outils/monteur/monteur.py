@@ -57,12 +57,23 @@ def oui(v):
 def lieux():
     depot = os.environ.get("ARCHI_DEPOT") or ""
     whisper = os.environ.get("ARCHI_WHISPER_DIR") or os.path.join(os.path.expanduser("~"), "whisper")
+    # la MEME recherche que serveur/montage.py (ses lignes FFMPEG, WHISPER, WHISPER_MODELE) : garder les deux d'accord
+    import shutil
+    ffmpeg = os.path.join(whisper, "ffmpeg.exe")
+    if not os.path.exists(ffmpeg):
+        ffmpeg = os.environ.get("ARCHI_FFMPEG") or shutil.which("ffmpeg") or ffmpeg
+    exe = os.environ.get("ARCHI_WHISPER") or os.path.join(whisper, "whisper-bin-x64", "Release", "whisper-cli.exe")
+    if not os.path.exists(exe):
+        exe = os.environ.get("ARCHI_WHISPER_EXE") or exe
+    modele = os.path.join(whisper, "ggml-small.bin")
+    if not os.path.exists(modele):
+        modele = os.environ.get("ARCHI_WHISPER_MODELE") or modele
     return {
         "script": os.path.join(depot, "serveur", "montage.py") if depot else "",
         "python": os.environ.get("ARCHI_SERVEUR_PY") or (os.path.join(depot, "serveur", "venv", "Scripts", "python.exe") if depot else ""),
-        "ffmpeg": os.path.join(whisper, "ffmpeg.exe"),
-        "whisper": os.environ.get("ARCHI_WHISPER") or os.path.join(whisper, "whisper-bin-x64", "Release", "whisper-cli.exe"),
-        "modele_whisper": os.path.join(whisper, "ggml-small.bin"),
+        "ffmpeg": ffmpeg,
+        "whisper": exe,
+        "modele_whisper": modele,
     }
 
 

@@ -812,5 +812,129 @@
   "recoit_tache": true,
   "accord_dans_message": true,
   "accord_refuse_action": "rappeler"
+ },
+ "agenda": {
+  "nom": "agenda",
+  "description": "MODE D EMPLOI : l'agenda Google de l'utilisateur. action=voir (jour = aujourd'hui, demain, jeudi, 26/11 ; jours = combien de jours). action=chercher (texte = un mot du rendez-vous). action=ajouter (titre, quand = les mots de l'utilisateur, ex. « jeudi 18h », « demain 9h » ; duree_min ; lieu) : d'abord l'ESSAI A BLANC, qui redit la date calculee ; puis confirmer=oui seulement apres le oui de l'utilisateur. Ne calcule jamais la date toi-meme. Pas de modification ni de suppression.",
+  "script": "agenda.py",
+  "parametres": [
+   {
+    "nom": "action",
+    "description": "voir (defaut), chercher ou ajouter"
+   },
+   {
+    "nom": "jour",
+    "description": "voir : aujourd'hui, demain, jeudi, 26/11 ou AAAA-MM-JJ"
+   },
+   {
+    "nom": "jours",
+    "description": "voir : nombre de jours a montrer (1 par defaut, 7 pour la semaine)"
+   },
+   {
+    "nom": "texte",
+    "description": "chercher : un mot du titre du rendez-vous"
+   },
+   {
+    "nom": "titre",
+    "description": "ajouter : le titre du rendez-vous, avec les mots de l'utilisateur"
+   },
+   {
+    "nom": "quand",
+    "description": "ajouter : le jour et l'heure tels que l'utilisateur les a dits (jeudi 18h, demain 9h, 26/11 14h)"
+   },
+   {
+    "nom": "duree_min",
+    "description": "ajouter : duree en minutes (60 par defaut)"
+   },
+   {
+    "nom": "lieu",
+    "description": "ajouter : le lieu (facultatif)"
+   },
+   {
+    "nom": "confirmer",
+    "description": "ajouter : oui seulement quand l'utilisateur a dit oui a la date de l'essai a blanc"
+   }
+  ],
+  "timeout_s": 60,
+  "touche": [
+   "agenda Google (lecture ; ajout apres essai a blanc et confirmation)",
+   "internet"
+  ]
+ },
+ "recherche_web": {
+  "nom": "recherche_web",
+  "description": "MODE D EMPLOI : chercher une information RECENTE sur Internet (actualite, prix, horaires, sortie d'un produit). texte = quelques mots precis. Rend des resultats (titre, adresse, extrait) dans « texte » : reponds a partir d'eux seulement et cite la source. Sans cle de recherche, l'outil le dit : repete-le. Jamais l'adresse, le telephone ni la vie privee d'un particulier. Pour lire une page dont tu as le lien : lire_page.",
+  "script": "recherche_web.py",
+  "parametres": [
+   {
+    "nom": "texte",
+    "description": "les mots a chercher, courts et precis (10 mots au plus)"
+   },
+   {
+    "nom": "nombre",
+    "description": "nombre de resultats (5 par defaut, 8 au plus)"
+   }
+  ],
+  "timeout_s": 40,
+  "touche": [
+   "internet (moteur de recherche Tavily : seuls les mots cherches partent)"
+  ]
+ },
+ "image_lien": {
+  "nom": "image_lien",
+  "description": "MODE D EMPLOI : regarder une IMAGE donnee par son adresse web (https://... qui finit souvent par .jpg ou .png), avec le modele local. lien = l'adresse complete de l'image ; question = ce que l'utilisateur veut savoir. La description revient dans « texte » : reponds a partir d'elle seulement. Une photo JOINTE au message est deja decrite : n'appelle pas cet outil pour elle. Une page web : lire_page.",
+  "script": "image_lien.py",
+  "parametres": [
+   {
+    "nom": "lien",
+    "description": "l'adresse complete de l'image, commencant par https://"
+   },
+   {
+    "nom": "question",
+    "description": "ce qu'on veut savoir sur l'image (facultatif)"
+   }
+  ],
+  "timeout_s": 200,
+  "touche": [
+   "internet (telecharge l'image, adresse publique seulement)",
+   "modele local de vision"
+  ]
+ },
+ "monteur": {
+  "nom": "monteur",
+  "description": "MODE D EMPLOI : le monteur video. action=etat (ou en est le montage) ; lister (les videos du dossier Videos\\À monter) ; monter (mode = event pour les temps forts d'une soiree, ou souvenirs ; date = AAAA-MM-JJ facultatif ; duree_min ; titre) : d'abord l'ESSAI A BLANC, puis confirmer=oui seulement apres le oui de l'utilisateur ; stop. Un montage prend environ une heure. Si l'outil dit que le monteur n'est pas installe, repete ce qui manque.",
+  "script": "monteur.py",
+  "parametres": [
+   {
+    "nom": "action",
+    "description": "etat (defaut), lister, monter ou stop"
+   },
+   {
+    "nom": "mode",
+    "description": "monter : event (temps forts, defaut) ou souvenirs"
+   },
+   {
+    "nom": "date",
+    "description": "monter : le jour des videos, AAAA-MM-JJ (sinon le dossier À monter)"
+   },
+   {
+    "nom": "duree_min",
+    "description": "monter : duree voulue du montage en minutes"
+   },
+   {
+    "nom": "titre",
+    "description": "monter : le titre a afficher (facultatif)"
+   },
+   {
+    "nom": "confirmer",
+    "description": "monter : oui seulement quand l'utilisateur a dit oui apres l'essai a blanc"
+   }
+  ],
+  "timeout_s": 150,
+  "touche": [
+   "videos du PC (lecture), dossier Videos\\Montages (ecriture)",
+   "carte graphique pendant environ une heure",
+   "modele local"
+  ]
  }
 }

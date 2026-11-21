@@ -610,7 +610,9 @@ const LECTEURS_DE_CONTENU = [o('lire_page'), o('lire_pdf'), o('videos_youtube'),
   o('vision_video'), o('oeil'), o('recolte_youtube'), o('indicateur_polymarket'), o('memoire'), o('retro'),
   o('ranger_mails', { seulement: ['chercher', 'dossiers', 'journal'] }), o('mails', { seulement: LIRE_LES_MAILS }),
   o('curateur', { seulement: ['examiner', 'propositions'] }),
-  o('mecanicien', { seulement: ['etat', 'voir'] })];
+  o('mecanicien', { seulement: ['etat', 'voir'] }),
+  // les outils branches le 21/11 : une recherche, une image regardee, l'agenda lu, la liste des videos a monter
+  o('recherche_web'), o('image_lien'), o('agenda', { seulement: ['voir', 'chercher', ''] }), o('monteur', { seulement: ['etat', 'lister', ''] })];
 // (a) pour l'envoi : chercher dans les mails, relire la memoire
 const LECTURES_D_ENVOI = [o('ranger_mails', { seulement: ['chercher', 'dossiers', 'journal'] }), o('mails', { seulement: LIRE_LES_MAILS }), o('memoire')];
 

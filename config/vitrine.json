@@ -10,6 +10,10 @@
   {"nom": "Wikipedia", "agent": true, "titre": "Wikipédia", "quoi": ""},
   {"nom": "videos_youtube", "agent": true, "titre": "Vidéos YouTube", "quoi": "Cherche des vidéos sur un sujet et te résume ce qu'elles disent."},
   {"nom": "navigateur", "agent": true, "titre": "Navigateur", "quoi": ""},
+  {"nom": "recherche_web", "titre": "Recherche sur le web", "quoi": "Chercher une information récente sur Internet, avec ses sources.", "besoin": "une clé Tavily (gratuite)"},
+  {"nom": "image_lien", "titre": "Regarder une image en ligne", "quoi": "Tu donnes l'adresse d'une image, le modèle local la décrit. Elle ne part vers aucun service."},
+  {"nom": "agenda", "titre": "Agenda", "quoi": "Voir ton agenda et y ajouter un rendez-vous. Il te redit la date avant d'écrire.", "besoin": "un agenda Google relié"},
+  {"nom": "monteur", "titre": "Monteur vidéo", "quoi": "Monte les temps forts d'une soirée ou les souvenirs d'une sortie. Environ une heure.", "besoin": "ffmpeg et whisper.cpp"},
   {"nom": "creer_pdf", "titre": "Créer un PDF", "quoi": ""},
   {"nom": "lire_pdf", "titre": "Lire un PDF", "quoi": "Facture, contrat, courrier : même scanné, il le lit."},
   {"nom": "transmettre_document", "titre": "Donner un document", "quoi": "T'envoie un PDF rangé sur le PC.", "besoin": "Telegram"},
@@ -34,10 +38,6 @@
  "en_developpement": [
   {"titre": "Pilotage de drone", "quoi": "Piloter un drone depuis Archi (ArduPilot, MAVLink), avec ton accord avant chaque décollage."},
   {"titre": "Appel à l'expert", "quoi": "Pour une question trop dure : demander à un modèle plus puissant en ligne, seulement après ton accord."},
-  {"titre": "Concevoir une pièce 3D", "quoi": "Décrire une pièce simple : il en fait un fichier prêt à imprimer, ou la trouve dans un catalogue."},
-  {"titre": "Monteur vidéo", "quoi": "Monter les temps forts d'une soirée, avec sous-titres."},
-  {"titre": "Agenda à la voix", "quoi": "Voir son agenda et y ajouter un rendez-vous."},
-  {"titre": "Recherche sur le web", "quoi": "Chercher une information récente sur Internet, pas seulement lire un lien donné."},
-  {"titre": "Analyser une image depuis un lien", "quoi": "Aujourd'hui il décrit la photo que tu joins. Bientôt : une image donnée par son adresse."}
+  {"titre": "Concevoir une pièce 3D", "quoi": "Décrire une pièce simple : il en fait un fichier prêt à imprimer, ou la trouve dans un catalogue."}
  ]
 }

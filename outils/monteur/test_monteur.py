@@ -52,7 +52,9 @@ elif a == "--fichier":
 with open(os.path.join(DEPOT, "serveur", "montage.py"), "w", encoding="utf-8") as h:
     h.write(FAUX_MONTAGE)
 os.environ.update(ARCHI_DEPOT=DEPOT, ARCHI_SERVEUR_PY=sys.executable, ARCHI_WHISPER_DIR=WHISPER)
-os.environ.pop("ARCHI_WHISPER", None)
+for k in ("ARCHI_WHISPER", "ARCHI_WHISPER_EXE", "ARCHI_WHISPER_MODELE", "ARCHI_FFMPEG"):
+    os.environ.pop(k, None)
+os.environ["PATH"] = os.path.dirname(sys.executable)      # pas de ffmpeg du PC dans ces tests
 sys.path.insert(0, ICI)
 import monteur as M  # noqa: E402
 
@@ -144,6 +146,20 @@ except ImportError:
 if not NUMPY:
     M.pret = lambda: []      # ce PC de test n'a pas numpy : les tests suivants supposent le monteur installe
 verifie("tout est la : rien ne manque", M.pret() == [], M.pret())
+# une installation faite par installation.bat : ffmpeg dans le PATH d'Archi, whisper.cpp de la voix (ARCHI_WHISPER_EXE, ARCHI_WHISPER_MODELE)
+vrai_pret = M.pret
+autre = os.path.join(D, "installation")
+os.makedirs(os.path.join(autre, "ffmpeg"))
+for f in ("ffmpeg/ffmpeg.exe", "whisper-cli.exe", "ggml-small.bin"):
+    open(os.path.join(autre, f), "w").close()
+os.environ.update(ARCHI_WHISPER_DIR=os.path.join(D, "vide"), ARCHI_FFMPEG=os.path.join(autre, "ffmpeg", "ffmpeg.exe"),
+                  ARCHI_WHISPER_EXE=os.path.join(autre, "whisper-cli.exe"), ARCHI_WHISPER_MODELE=os.path.join(autre, "ggml-small.bin"))
+l = M.lieux()
+verifie("les reglages de la voix servent au monteur", l["ffmpeg"].endswith("ffmpeg.exe") and os.path.exists(l["ffmpeg"]) and l["whisper"] == os.environ["ARCHI_WHISPER_EXE"]
+        and l["modele_whisper"] == os.environ["ARCHI_WHISPER_MODELE"], l)
+for k in ("ARCHI_FFMPEG", "ARCHI_WHISPER_EXE", "ARCHI_WHISPER_MODELE"):
+    os.environ.pop(k)
+os.environ["ARCHI_WHISPER_DIR"] = WHISPER
 
 # ---------------------------------------------------------------- 2. etat, lister
 menage()

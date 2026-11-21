@@ -62,3 +62,11 @@ jobs:
         run: cd outils/imprimante_3d && python test_imprimante_3d.py
       - name: Regles dures du navigateur
         run: cd serveur && python test_navigateur_regles.py
+      - name: Tests de l'agenda (serveur simule)
+        run: cd outils/agenda && python test_agenda.py
+      - name: Tests de la recherche web (moteur simule)
+        run: cd outils/recherche_web && python test_recherche_web.py
+      - name: Tests de l'image par lien (site et modele simules)
+        run: cd outils/image_lien && python test_image_lien.py
+      - name: Tests du monteur video (montage simule)
+        run: cd outils/monteur && python test_monteur.py

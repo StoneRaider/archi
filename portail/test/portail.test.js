@@ -908,9 +908,9 @@ test('workflow de la demo : les outils de l agent sont relies aux deux agents, v
   const nav = ids.ArchiNavigateur1;
   assert.ok(nav.nodes.find(x => x.name === 'Navigateur').parameters.jsCode.includes('$env.TELEGRAM_BOT_TOKEN && $env.ARCHI_TELEGRAM_CHAT_ID'));
   assert.equal(nav.nodes.find(x => x.name === 'Envoyer capture').onError, 'continueRegularOutput');
-  // ce qui n'est pas relie (monteur, pieces 3D, image par lien) est annonce « en cours de developpement », pas dans les outils
-  for (const mot of [/monteur/i, /pi[eè]ce 3D/i, /image/i]) assert.ok(v.en_developpement.some(c => mot.test(c.titre)), String(mot));
-  assert.ok(!v.outils.some(o => /monteur|impression3d|catalogues|analyse_image/.test(o.nom)));
+  // les workflows optionnels du monteur et de la vision ne sont pas relies a l'agent ; depuis le 21/11 ce sont des outils maison (monteur, image_lien)
+  for (const mot of [/pi[eè]ce 3D/i]) assert.ok(v.en_developpement.some(c => mot.test(c.titre)), String(mot));
+  assert.ok(!v.outils.some(o => o.agent && /monteur|impression3d|catalogues|analyse_image/.test(o.nom)));
   // le curateur et le mecanicien sont des outils, plus des projets
   const reg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'chateau_exemple', 'outils', 'registre.json'), 'utf8'));
   for (const nom of ['curateur', 'mecanicien']) {
