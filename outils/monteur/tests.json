@@ -1,0 +1,5 @@
+{
+ "ok": true,
+ "date": "2026-11-21",
+ "resume": "29 controles hors ligne (test_monteur.py) : faux montage.py, faux dossier whisper. Monteur pas installe (ce qui manque est dit), essai a blanc, demarrage verifie, arret, pannes. Aucun vrai montage n'a ete lance par cet outil."
+}

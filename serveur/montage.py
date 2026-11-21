@@ -92,8 +92,29 @@ def etat(**k):
         raise InterruptedError("arrêté par l'utilisateur")
 
 
+def annoncer(vocal):
+    """sans webhook de retour : l'annonce part comme un rappel du planificateur d'Archi (page du PC, appli, Telegram)"""
+    script = os.path.join(os.path.dirname(BASE), "outils", "planificateur", "planificateur.py")
+    if not os.path.exists(script):
+        return
+    f = os.path.join(BASE, "annonce_%d.json" % int(time.time() * 1000))
+    try:
+        with open(f, "w", encoding="utf-8") as h:
+            json.dump({"texte": vocal, "de": "monteur"}, h, ensure_ascii=False)
+        subprocess.run([os.environ.get("ARCHI_PY") or sys.executable, script, "--annoncer", "--fichier", f], capture_output=True, timeout=40,
+                       env=dict(os.environ, PYTHONIOENCODING="utf-8"), creationflags=CREATION)
+    except Exception:
+        pass
+    finally:
+        try:
+            os.remove(f)
+        except OSError:
+            pass
+
+
 def renvoyer(texte, vocal):
     if not RETOUR:
+        annoncer(vocal)
         return
     try:
         req = urllib.request.Request(RETOUR, data=json.dumps({"type": "REPONSE", "canal": "montage", "texte": texte, "vocal": vocal}).encode("utf-8"),

@@ -1,0 +1,37 @@
+{
+ "nom": "monteur",
+ "description": "MODE D EMPLOI : le monteur video. action=etat (ou en est le montage) ; lister (les videos du dossier Videos\\À monter) ; monter (mode = event pour les temps forts d'une soiree, ou souvenirs ; date = AAAA-MM-JJ facultatif ; duree_min ; titre) : d'abord l'ESSAI A BLANC, puis confirmer=oui seulement apres le oui de l'utilisateur ; stop. Un montage prend environ une heure. Si l'outil dit que le monteur n'est pas installe, repete ce qui manque.",
+ "script": "monteur.py",
+ "parametres": [
+  {
+   "nom": "action",
+   "description": "etat (defaut), lister, monter ou stop"
+  },
+  {
+   "nom": "mode",
+   "description": "monter : event (temps forts, defaut) ou souvenirs"
+  },
+  {
+   "nom": "date",
+   "description": "monter : le jour des videos, AAAA-MM-JJ (sinon le dossier À monter)"
+  },
+  {
+   "nom": "duree_min",
+   "description": "monter : duree voulue du montage en minutes"
+  },
+  {
+   "nom": "titre",
+   "description": "monter : le titre a afficher (facultatif)"
+  },
+  {
+   "nom": "confirmer",
+   "description": "monter : oui seulement quand l'utilisateur a dit oui apres l'essai a blanc"
+  }
+ ],
+ "timeout_s": 150,
+ "touche": [
+  "videos du PC (lecture), dossier Videos\\Montages (ecriture)",
+  "carte graphique pendant environ une heure",
+  "modele local"
+ ]
+}
