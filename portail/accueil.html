@@ -1100,8 +1100,11 @@ async function ouvrirMicro() {
   let flux = null;
   const rendre = () => { if (flux) flux.getTracks().forEach(t => t.stop()); };
   try {
-    try { flux = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
-    catch (x) { note('souci', 'Je n\'ai pas accès au micro : autorise-le pour cette page (icône à gauche de l\'adresse), puis reclique.'); return; }
+    // la boite d'autorisation du micro fait sortir du plein ecran : on le retient avant, on y revient apres (accord ou refus)
+    try { pleinEcran.avantBoite(); } catch (x) { /* le plein ecran ne doit jamais empecher le micro */ }
+    const retour = () => { try { pleinEcran.apresBoite(); } catch (x) { /* idem */ } };
+    try { flux = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); retour(); }
+    catch (x) { retour(); note('souci', 'Je n\'ai pas accès au micro : autorise-le pour cette page (icône à gauche de l\'adresse), puis reclique.'); return; }
     const contexte = new (window.AudioContext || window.webkitAudioContext)();
     const analyseur = contexte.createAnalyser();
     analyseur.fftSize = 1024;
@@ -1444,28 +1447,50 @@ setTimeout(() => $('idees').classList.add('efface'), 180000);   // les idees de 
 // ---- le plein ecran : Archi prend tout l'ecran, pour s'y plonger. Un navigateur n'y passe qu'apres un geste de l'utilisateur :
 // le premier clic ou la premiere touche suffit. Echap en sort ; on n'y revient pas tout seul avant le prochain lancement.
 // Menu > Plein ecran l'allume ou l'eteint, et ce PC s'en souvient (« non » : plus de plein ecran automatique).
+// Une boite d'autorisation du navigateur (le micro) fait sortir du plein ecran sans que l'utilisateur l'ait voulu :
+// avantBoite() retient qu'on y etait (ou qu'on y entrait), apresBoite() y revient, tout de suite si le navigateur
+// l'accepte, sinon au prochain clic ou a la prochaine touche (le plein ecran exige un geste).
 const pleinEcran = (() => {
   const b = $('b-plein'), possible = !!(document.fullscreenEnabled && document.documentElement.requestFullscreen);
-  let voulu = true, essaye = false;
+  let voulu = true, essaye = false, demande = null, aRetrouver = false;
   try { voulu = localStorage.getItem('archi_plein_ecran') !== 'non'; } catch (x) { /* sans stockage : plein ecran par defaut */ }
   const dedans = () => !!document.fullscreenElement;
-  const entrer = () => { if (possible && !dedans()) document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {}); };
-  const sortir = () => { if (dedans()) document.exitFullscreen().catch(() => {}); };
+  const entrer = () => {
+    if (!possible || dedans()) return Promise.resolve();
+    const d = Promise.resolve().then(() => document.documentElement.requestFullscreen({ navigationUI: 'hide' })).catch(() => {}).then(() => { if (demande === d) demande = null; });
+    demande = d;
+    return d;
+  };
+  const sortir = () => { aRetrouver = false; if (dedans()) document.exitFullscreen().catch(() => {}); };
+  const avantBoite = () => { aRetrouver = possible && voulu && (dedans() || !!demande); };
+  function auProchainGeste() {
+    const geste = ev => {
+      if (ev.key === 'Escape' || ev.key === 'F11') return;
+      removeEventListener('pointerdown', geste, true); removeEventListener('keydown', geste, true);
+      if (voulu && !dedans() && !(ev.target && ev.target.closest && ev.target.closest('#b-plein'))) entrer();
+    };
+    addEventListener('pointerdown', geste, true); addEventListener('keydown', geste, true);
+  }
+  const apresBoite = () => {
+    if (!aRetrouver) return Promise.resolve();
+    aRetrouver = false;
+    return (demande || Promise.resolve()).then(() => (dedans() || !voulu ? null : entrer())).then(() => { if (voulu && !dedans()) auProchainGeste(); });
+  };
   function premierGeste(ev) {
     if (essaye || ev.key === 'Escape' || ev.key === 'F11' || (ev.target && ev.target.closest && ev.target.closest('#b-plein'))) return;
     essaye = true;
     removeEventListener('pointerdown', premierGeste, true); removeEventListener('keydown', premierGeste, true);
     if (voulu) entrer();
   }
-  if (!possible) { b.hidden = true; return { entrer, sortir }; }
+  if (!possible) { b.hidden = true; return { entrer, sortir, avantBoite, apresBoite }; }
   addEventListener('pointerdown', premierGeste, true); addEventListener('keydown', premierGeste, true);
   document.addEventListener('fullscreenchange', () => { b.firstChild.nodeValue = dedans() ? 'Quitter le plein écran' : 'Plein écran'; });
   b.onclick = () => {
-    const oui = !dedans(); essaye = true; menu(false);
+    const oui = !dedans(); essaye = true; voulu = oui; menu(false);
     try { localStorage.setItem('archi_plein_ecran', oui ? 'oui' : 'non'); } catch (x) { /* navigation privee */ }
     if (oui) entrer(); else sortir();
   };
-  return { entrer, sortir };
+  return { entrer, sortir, avantBoite, apresBoite };
 })();
 
 // ---- la visite guidee : au premier lancement, puis a la demande
