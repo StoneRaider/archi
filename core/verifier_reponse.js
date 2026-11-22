@@ -150,6 +150,27 @@ function main() {
     }
     process.stdout.write(JSON.stringify({ reponse: m.reponse, alertes: lignes.concat(m.alertes) }));
   };
+  // Le modele n'a rien rendu (vide, sa reflexion seule, ou l'agent de n8n arrete a sa limite d'essais) : la page ne reste
+  // pas muette (core/reponse_vide.js, essai reel du 22/11). L'apercu d'un mail prepare dans ce tour passe d'abord ; sinon
+  // une phrase honnete dit quels outils ont ete appeles et si leurs appels ont abouti. Elle n'annonce jamais une action.
+  let secours = '';
+  try {
+    const RV = require('./reponse_vide');
+    if (RV.estVide(inp.reponse == null ? '' : String(inp.reponse))) {
+      let titres = {};
+      try {
+        const v = JSON.parse(fs.readFileSync(process.env.ARCHI_VITRINE || path.join(__dirname, '..', 'config', 'vitrine.json'), 'utf8'));
+        for (const f of (Array.isArray(v && v.outils) ? v.outils : [])) if (f && typeof f.nom === 'string' && typeof f.titre === 'string') titres[f.nom.toLowerCase()] = f.titre;
+      } catch (e) { titres = {}; }
+      secours = RV.phraseDeSecours(String(inp.reponse == null ? '' : inp.reponse), steps, { titres });
+    }
+  } catch (e) { secours = ''; }
+  if (secours) {
+    let m = { reponse: '', alertes: [] };
+    try { m = require('./apercu_mail').montrer('', steps); } catch (e) { m = { reponse: '', alertes: [] }; }
+    process.stdout.write(JSON.stringify({ reponse: m.reponse || secours, alertes: ['[journal] reponse vide du modele' + (m.reponse ? '' : ' : phrase de secours')].concat(m.alertes || []) }));
+    return;
+  }
   if (!reponse.trim()) { rendre(reponse, []); return; }
   // Seules les REPONSES des outils comptent : ce qu'Archi a tape dans sa requete (toolInput) reste sa propre invention.
   const obs = steps.map(s => { const o = s && s.observation; return typeof o === 'string' ? o : JSON.stringify(o || ''); });

@@ -48,9 +48,9 @@
   "dire": "Le navigateur : outil navigateur (ouvrir, lire, elements, cliquer, remplir, montrer, fermer). Jamais de mot de passe ni de bouton final : c'est l'utilisateur qui les fait. Pour seulement lire un article : lire_page."
  },
  {
-  "si": "\\b(vid[eé]os?|youtube)\\b",
+  "si": "^(?![\\s\\S]*\\b(?:dossier|r[eé]pertoire) (?:«\\s*|\\\")?[aà] monter\\b)[\\s\\S]*\\b(vid[eé]os?|youtube)\\b",
   "et": "\\b(cherche|trouve|r[eé]sume|que disent|qu'en disent)",
-  "dire": "Chercher des videos YouTube et resumer ce qu'elles disent : outil videos_youtube, action=chercher (cible = mots-cles, question = ce qu'on veut savoir). Lancer une video sur le telephone : outil maison telephone."
+  "dire": "Chercher des videos YouTube et resumer ce qu'elles disent : outil videos_youtube, action=chercher (cible = mots-cles, question = ce qu'on veut savoir). Lancer une video sur le telephone : outil maison telephone. Les videos du PC a monter (dossier « A monter ») : outil maison monteur, pas celui-ci."
  },
  {
   "si": "\\bcurateur\\b|\\b(range|ranger|rangement|nettoie|nettoyer|trie|trier|fais le m[eé]nage)\\b[^.?!]{0,40}\\bm[eé]moire\\b",
@@ -66,16 +66,16 @@
  },
  {
   "si": "(?:^|[.;:!?]\\s+|\\barchi[, ]+)(?:cherche|recherche|trouve|regarde)[sz]?(?:[- ](?:moi|nous))?(?![,\\w])(?!\\s+dans\\b)[^.?!]{0,60}\\b(?:sur (?:le |l['’])?(?:web|net|internet|google)|en ligne)\\b|\\b(?:fais|lance)\\w* une recherche (?:web|internet|sur (?:le |l['’])?(?:web|net|internet|google))\\b|\\brecherche (?:web|internet)\\b",
-  "dire": "Une information recente : outil recherche_web, texte = quelques mots precis. Reponds a partir des resultats seulement, avec l'adresse de la source ; si les resultats ne repondent pas, dis-le. S'il dit que la recherche n'est pas branchee, repete-le, sans rien inventer. Jamais les coordonnees ni la vie privee d'un particulier : la, refuse."
+  "dire": "Une information recente : outil recherche_web, texte = quelques mots precis : appel exact outils_maison {\"action\":\"utiliser\",\"outil\":\"recherche_web\",\"parametres\":{\"texte\":\"quelques mots\"}}. Reponds a partir des resultats seulement, avec l'adresse de la source ; si les resultats ne repondent pas, dis-le. S'il dit que la recherche n'est pas branchee, repete-le tel quel, sans rien inventer : ne dis pas « aucun resultat », et n'appelle pas Wikipedia ni un autre outil a la place. Jamais les coordonnees ni la vie privee d'un particulier : la, refuse."
  },
  {
   "si": "https?://\\S+\\.(?:jpe?g|png|webp|gif)(?:[?#]\\S*?)?(?=[\\s.,;:!?)\"»]*(?:\\s|$))",
-  "dire": "Un lien vers une image : outil image_lien (pas lire_page), lien = le lien complet, question = ce que l'utilisateur veut savoir. Reponds a partir de la description rendue, sans rien ajouter.",
+  "dire": "Un lien vers une image : outil image_lien (pas lire_page), lien = le lien complet, question = ce que l'utilisateur veut savoir. Appel exact : outils_maison {\"action\":\"utiliser\",\"outil\":\"image_lien\",\"parametres\":{\"lien\":\"https://...\",\"question\":\"...\"}}. S'il echoue, dis sa phrase : ne reponds jamais vide. Reponds a partir de la description rendue, sans rien ajouter.",
   "et": "\\b(?:regarde\\w*|d[eé]cri\\w*|analyse\\w*|vois|voit|c.est quoi|qu.est-ce|montre|repr[eé]sente|qu.y a-t-il|lis|que dit|image|photo)\\b|^\\s*https?://\\S+\\s*$"
  },
  {
-  "si": "\\b(?:monteur|montage) vid[eé]o\\b|\\b(?:o[uù] en est|arr[eê]te[sz]?|lance[sz]?|stoppe[sz]?|annule[sz]?)\\b[^.?!]{0,20}\\b(?:le|un|mon|du) (?:montage|monteur)\\b(?! (?:du|de la|de l|des|financier)\\b)|\\bmonte[sz]?[- ](?:moi|nous)\\b[^.?!]{0,30}\\b(?:vid[eé]os?|temps forts|souvenirs)\\b|\\bmonte[sz]? (?:la|les|une|des|mes|ma) (?:vid[eé]os?|temps forts|souvenirs)\\b(?! dans\\b)",
-  "dire": "Le monteur video : outil monteur. « ou en est le montage » -> action=etat. « monte... » -> action=monter (mode = event ou souvenirs) : ESSAI A BLANC d'abord : dis sa phrase_pour_utilisateur telle quelle (jamais sa consigne) ; puis le MEME appel avec confirmer=oui apres le oui de l'utilisateur. S'il dit que le monteur n'est pas installe, repete ce qui manque. Tu ne dis « c'est lance » que si l'outil le dit. Appelle l'outil a CHAQUE question, meme si tu as deja repondu plus haut : l'etat a pu changer depuis."
+  "si": "\\b(?:monteur|montage) vid[eé]o\\b|\\b(?:o[uù] en est|arr[eê]te[sz]?|lance[sz]?|stoppe[sz]?|annule[sz]?)\\b[^.?!]{0,20}\\b(?:le|un|mon|du) (?:montage|monteur)\\b(?! (?:du|de la|de l|des|financier)\\b)|\\bmonte[sz]?[- ](?:moi|nous)\\b[^.?!]{0,30}\\b(?:vid[eé]os?|temps forts|souvenirs)\\b|\\bmonte[sz]? (?:la|les|une|des|mes|ma) (?:vid[eé]os?|temps forts|souvenirs)\\b(?! dans\\b)|\\b(?:dossier|r[eé]pertoire) (?:«\\s*|\\\")?[aà] monter\\b|\\b(?:liste[sz]?|lister|quel(?:le)?s?|montre\\w*|affiche\\w*|combien|y a-t-il|il y a|dis-moi|vois|voir)\\b[^.?!]{0,60}\\bvid[eé]os?\\b[^.?!]{0,40}(?<![a-zà-ÿ])[aà] monter\\b(?! (?:(?:un|une|des|le|la|les|mon|ma|mes|[aà]|en|sur|au|aux|du)(?![a-zà-ÿ])|l['’]))",
+  "dire": "Le monteur video : outil monteur. « ou en est le montage » -> action=etat. « liste les videos a monter », « qu'y a-t-il dans le dossier A monter » -> action=lister : appel exact outils_maison {\"action\":\"utiliser\",\"outil\":\"monteur\",\"parametres\":{\"action\":\"lister\"}} (ce sont des fichiers du PC : jamais videos_youtube, qui cherche sur YouTube). « monte... » -> action=monter (mode = event ou souvenirs) : ESSAI A BLANC d'abord : dis sa phrase_pour_utilisateur telle quelle (jamais sa consigne) ; puis le MEME appel avec confirmer=oui apres le oui de l'utilisateur. S'il dit que le monteur n'est pas installe, repete ce qui manque. Tu ne dis « c'est lance » que si l'outil le dit. Appelle l'outil a CHAQUE question, meme si tu as deja repondu plus haut : l'etat a pu changer depuis."
  },
  {
   "si": "^\\s*(?:archi[, ]+)?(?:rev[eé]rifie[sz]?|v[eé]rifie[sz]? (?:encore|[aà] nouveau|de nouveau|vraiment|avec (?:ton|l.)outil)|regarde vraiment)\\b",

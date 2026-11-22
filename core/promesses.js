@@ -125,6 +125,13 @@ function actesDesSteps(steps) {
         actes.push({ outil: outilAgent, action: entree ? motAction(entree.action) : '', statut });
         continue;
       }
+      // l'appel n'avait pas la forme exacte et le lanceur l'a reinterprete ({"action":"monter"} -> monteur, 22/11) : il dit
+      // lui-meme, dans sa reponse, quel outil et quelle action il a compris (champ « compris », pose par le lanceur seul)
+      const compris = (observationDe(pas.observation) || {}).compris;
+      if (estObjet(compris) && /^[a-z0-9_]{1,40}$/.test(nomOutil(compris.outil))) {
+        actes.push({ outil: nomOutil(compris.outil), action: motAction(compris.action), statut });
+        continue;
+      }
       const nom = entree ? nomOutil(entree.outil) : '';
       if (!nom) {
         const obs = observationDe(pas.observation);
@@ -772,5 +779,5 @@ function promessesADire(reponse, steps) {
 module.exports = {
   actesDesSteps, promessesEnLAir, avertissement, promessesADire, RAISONS_DITES,
   ENVOI, NOMS_DES_FAMILLES: FAMILLES.map(f => f.famille).concat([ENVOI]),
-  _interne: { phrases, statutDe, entreeDe, parametresDe, FAMILLES },
+  _interne: { phrases, statutDe, entreeDe, parametresDe, observationDe, FAMILLES },
 };

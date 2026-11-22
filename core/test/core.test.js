@@ -233,7 +233,9 @@ test('outils : l action de l outil mise au premier niveau ({"action":"examiner",
   assert.equal(sansNom.ok, false);
   assert.ok(!sansNom.outils, 'pas la liste');
   assert.match(sansNom.phrase_pour_utilisateur, /action de : mecanicien\. Rappelle outils_maison avec \{"action":"utiliser","outil":"mecanicien","parametres":\{"action":"construire"/);
-  assert.match(outils.lancer({ action: 'Examiner' }, { registre: vrai }).phrase_pour_utilisateur, /action de : curateur/);
+  // « examiner » n'appartient qu'au curateur et ne demande aucun accord : depuis le 22/11 le lanceur le lance (voir
+  // qwythos_tolerant.test.js). « appliquer », sensible, rend toujours le format exact.
+  assert.match(outils.lancer({ action: 'Appliquer' }, { registre: vrai, executer: () => { throw new Error('rien ne doit etre lance'); } }).phrase_pour_utilisateur, /action de : curateur/);
   assert.match(outils.lancer({ action: 'voler' }, { registre: vrai }).phrase_pour_utilisateur, /Il manque le nom de l'outil/);
   assert.ok(outils.lancer({ action: '.*' }, { registre: vrai }).outils, 'une action piege ne devient pas une expression');
   assert.match(outils.lancer({ action: 'con(s)' }, { registre: vrai }).phrase_pour_utilisateur, /Il manque le nom de l'outil : rappelle/, 'pas « construire »');

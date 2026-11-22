@@ -149,7 +149,7 @@
   },
   {
    "parameters": {
-    "description": "Cherche des videos YouTube sur un sujet et resume ce qu'elles DISENT (sous-titres), ou resume une video precise. action=chercher : 3 videos (cible = mots-cles, question = ce que l'utilisateur veut savoir). action=lien : une video (cible = son lien). Prend 1 a 3 minutes. Pour LANCER une video sur le telephone : outil maison telephone. Pour recolter une chaine entiere : outil maison recolte_youtube.",
+    "description": "Cherche des videos YouTube sur un sujet et resume ce qu'elles DISENT (sous-titres), ou resume une video precise. action=chercher : 3 videos (cible = mots-cles, question = ce que l'utilisateur veut savoir). action=lien : une video (cible = son lien). Prend 1 a 3 minutes. Pour LANCER une video sur le telephone : outil maison telephone. Pour recolter une chaine entiere : outil maison recolte_youtube. Seulement YouTube : les videos du PC (dossier A monter, montage) ne passent PAS par ici, c est l outil maison monteur (action lister, etat ou monter).",
     "workflowId": {
      "__rl": true,
      "value": "ArchiVideosPage1",
@@ -619,7 +619,7 @@
   },
   {
    "parameters": {
-    "description": "Cherche des videos YouTube sur un sujet et resume ce qu'elles DISENT (sous-titres), ou resume une video precise. action=chercher : 3 videos (cible = mots-cles, question = ce que l'utilisateur veut savoir). action=lien : une video (cible = son lien). Prend 1 a 3 minutes. Pour LANCER une video sur le telephone : outil maison telephone. Pour recolter une chaine entiere : outil maison recolte_youtube.",
+    "description": "Cherche des videos YouTube sur un sujet et resume ce qu'elles DISENT (sous-titres), ou resume une video precise. action=chercher : 3 videos (cible = mots-cles, question = ce que l'utilisateur veut savoir). action=lien : une video (cible = son lien). Prend 1 a 3 minutes. Pour LANCER une video sur le telephone : outil maison telephone. Pour recolter une chaine entiere : outil maison recolte_youtube. Seulement YouTube : les videos du PC (dossier A monter, montage) ne passent PAS par ici, c est l outil maison monteur (action lister, etat ou monter).",
     "workflowId": {
      "__rl": true,
      "value": "ArchiVideosPage1",

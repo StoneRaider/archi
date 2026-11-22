@@ -256,7 +256,8 @@ DESC_PAGE = ("Lit une page web ou un article a partir de son lien, pour le resum
 DESC_VIDEOS = ("Cherche des videos YouTube sur un sujet et resume ce qu'elles DISENT (sous-titres), ou resume une video precise. "
                "action=chercher : 3 videos (cible = mots-cles, question = ce que l'utilisateur veut savoir). action=lien : une video "
                "(cible = son lien). Prend 1 a 3 minutes. Pour LANCER une video sur le telephone : outil maison telephone. "
-               "Pour recolter une chaine entiere : outil maison recolte_youtube.")
+               "Pour recolter une chaine entiere : outil maison recolte_youtube. Seulement YouTube : les videos du PC (dossier A monter, "
+               "montage) ne passent PAS par ici, c est l outil maison monteur (action lister, etat ou monter).")
 DESC_NAVIGATEUR = ("Tes mains sur le web : un navigateur Edge a toi (profil a part), qui ouvre des pages, lit, clique et remplit. "
                    "Actions : ouvrir (cible = adresse), chercher (barre de recherche du site : cible = site, valeur = mots ; "
                    "n'invente jamais l'adresse d'une page precise), elements (liste numerotee de ce qui est cliquable), "

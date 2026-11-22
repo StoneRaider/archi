@@ -78,7 +78,16 @@ verifie("sans cle : pas branche, dit, rien n'est cherche", r["ok"] is False and 
 os.environ["TAVILY_API_KEY"] = "   "
 r = lancer({"texte": "prix du gaz"})
 verifie("cle vide : pareil", r["ok"] is False and APPELS == [], r)
+# essai reel du 22/11 : le modele appelle l'outil sans mots (appel mal ecrit). Sans cle, la vraie cause reste « pas branchee »
+os.environ.pop("TAVILY_API_KEY", None)
+for demande in ({}, {"texte": ""}, {"action": "recherche_web"}, {"query": "prix du gaz"}):
+    r = lancer(demande)
+    verifie("sans cle, appel %r : pas branchee, jamais « dis-moi quoi chercher »" % (demande,), r["ok"] is False and r.get("branche") is False
+            and APPELS == [] and "n'est pas branchée" in r["phrase_pour_utilisateur"] and "consigne" in r and "texte" not in r, r)
 os.environ["TAVILY_API_KEY"] = CLE
+r = lancer({})
+verifie("avec cle, sans mots : il demande quoi chercher, rien n'est cherche", r["ok"] is False and APPELS == []
+        and "quoi chercher" in r["phrase_pour_utilisateur"] and "consigne" in r, r)
 
 # ---------------------------------------------------------------- 2. une recherche
 REPONSE[0] = {"results": [

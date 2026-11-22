@@ -1,5 +1,5 @@
 {
  "ok": true,
- "date": "2026-11-21",
- "resume": "31 controles hors ligne (test_recherche_web.py) : faux moteur de recherche. Sans cle, cle refusee, quota, Internet coupe, resultats ranges dans « texte », cle jamais recopiee. Aucun essai avec le vrai moteur ni avec un vrai modele."
+ "date": "2026-11-22",
+ "resume": "36 controles hors ligne (test_recherche_web.py) : faux moteur de recherche. Sans cle (dit en premier, meme sans mots a chercher), cle refusee, quota, Internet coupe, resultats ranges dans « texte », cle jamais recopiee. Aucun essai avec le vrai moteur ni avec un vrai modele."
 }

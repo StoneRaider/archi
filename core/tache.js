@@ -1,7 +1,7 @@
 // tache.js - la carte de la tache en cours : ce qu'Archi est en train de faire, etape par etape (idee reprise de Brahma, sans son code).
 // Un seul fichier, <etat>\tache.json, que la page d'accueil relit chaque seconde. Trois moments :
 //   debut     : un message arrive (noeud Contexte du workflow)            {action:'debut', source, texte}
-//   etape     : un outil maison demarre puis finit (outils_maison.js)     etapeDebut({outil, action}) -> n ; etapeFin({n, ok, phrase})
+//   etape     : un outil maison demarre puis finit (outils_maison.js)     etapeDebut({outil, action, empreinte}) -> n ; etapeFin({n, ok, phrase})
 //   fin       : la reponse est prete (noeud Verifier)                     {action:'fin', ok, outils:[noms des outils utilises]}
 // Les outils branches directement sur l'agent (lire_page, navigateur...) ne passent pas par ici pendant qu'ils tournent :
 // la fin les ajoute a la carte, marques « apres ».
@@ -75,7 +75,10 @@ function creer(options) {
     const outil = nomOutil(e && e.outil) || 'liste';
     if (t.etapes.length >= MAX_ETAPES) return 0;
     const n = t.etapes.length + 1;
-    t.etapes.push({ n, outil, action: motAction(e && e.action), debut: maintenant(), fin: 0, ok: null, phrase: '', estime_ms: estimation(outil), apres: false });
+    const etape = { n, outil, action: motAction(e && e.action), debut: maintenant(), fin: 0, ok: null, phrase: '', estime_ms: estimation(outil), apres: false };
+    // l'empreinte de l'appel (un condense, jamais les parametres) : le lanceur reconnait un appel refait a l'identique
+    if (e && typeof e.empreinte === 'string' && /^[a-f0-9]{8,16}$/.test(e.empreinte)) etape.empreinte = e.empreinte;
+    t.etapes.push(etape);
     ecrire(F, t);
     return n;
   }
@@ -133,7 +136,15 @@ function creer(options) {
     };
   }
 
-  return { debut, etapeDebut, etapeFin, fin, voir, fichier: F };
+  /** les etapes finies du message en cours, pour le lanceur (core/outils_maison.js, arretDeBoucle) : reussie ou non, et
+   *  l'empreinte de l'appel. La page ne recoit pas l'empreinte (voir() ne la rend pas). */
+  function passees() {
+    const t = ouverte();
+    if (!t) return [];
+    return t.etapes.filter(s => s && s.fin && !s.apres).map(s => ({ ok: s.ok !== false, empreinte: typeof s.empreinte === 'string' ? s.empreinte : '' }));
+  }
+
+  return { debut, etapeDebut, etapeFin, fin, voir, passees, fichier: F };
 }
 
 /** pour le CLI et les noeuds n8n : une demande {action:'debut'|'fin'|'voir', ...} -> un objet JSON, jamais d'exception */

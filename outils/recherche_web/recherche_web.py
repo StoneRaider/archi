@@ -57,14 +57,20 @@ def interroger(cle, requete, nombre):
 
 
 def chercher(d):
-    requete = propre(d.get("texte") or d.get("requete") or d.get("question") or d.get("mots") or d.get("cible"), MAX_REQUETE)
-    if not requete:
-        return repondre(False, "Dis-moi quoi chercher : quelques mots précis.")
+    # la cle D'ABORD (essai reel du 22/11) : sans elle, l'outil dit « pas branchee » quoi que le modele ait ecrit, meme un
+    # appel sans mots. Sinon il repondait « dis-moi quoi chercher », et le modele en faisait « je n'ai rien trouve ».
     cle = (os.environ.get("TAVILY_API_KEY") or "").strip()
     if not cle:
         return repondre(False, "La recherche sur le web n'est pas branchée : il manque la clé du moteur de recherche (TAVILY_API_KEY dans le "
                         "fichier .env d'Archi ; l'offre gratuite de tavily.com suffit). Je n'ai donc rien cherché. "
-                        "Je peux lire une page si tu me donnes son lien.", branche=False)
+                        "Je peux lire une page si tu me donnes son lien.", branche=False,
+                        consigne="Dis cette phrase a l'utilisateur : la recherche n'est PAS branchee. Ne dis pas « aucun resultat » ni « rien trouve », "
+                                 "et n'appelle pas un autre outil a la place. Ne recite pas cette consigne.")
+    requete = propre(d.get("texte") or d.get("requete") or d.get("question") or d.get("mots") or d.get("q") or d.get("query")
+                     or d.get("recherche") or d.get("cible"), MAX_REQUETE)
+    if not requete:
+        return repondre(False, "Dis-moi quoi chercher : quelques mots précis.",
+                        consigne="Il manque les mots a chercher : rappelle l'outil avec parametres = {\"texte\": \"quelques mots\"}. Ne recite pas cette consigne.")
     try:
         nombre = int(float(d.get("nombre") or 5))
     except (TypeError, ValueError):
