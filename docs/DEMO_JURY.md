@@ -10,7 +10,7 @@ Sur la page [Releases](../../../releases/latest) du dépôt :
 
 | Fichier | Ce que c'est |
 |---|---|
-| `Archi-1.0.zip` | La démo complète (le dépôt + l'appli Android déjà compilée). C'est le seul fichier nécessaire. |
+| `Archi-1.1.zip` | La démo complète (le dépôt + l'appli Android déjà compilée). C'est le seul fichier nécessaire. |
 | `Archi.apk` | La même appli Android, à part. Facultatif : la page d'accueil du PC la propose par QR code. |
 
 Les deux sont fabriqués par GitHub Actions (workflow `publication.yml`) à partir du code de ce dépôt, après
@@ -19,13 +19,15 @@ le contrôle « aucun secret ni donnée personnelle » et les tests. Rien n'est 
 ## 2. Ce qu'il faut
 
 - Windows 10 ou 11, 64 bits, une connexion Internet pour l'installation ;
-- une carte graphique de 16 Go de mémoire vidéo (le modèle en prend environ 7) ; testé sur AMD Radeon RX 9070 ;
+- une carte graphique de 16 Go de mémoire vidéo (le modèle et son contexte de 32k en prennent environ 13,5) ;
+  testé sur AMD Radeon RX 9070 ;
 - environ 15 Go de place libre (dont 7 Go pour le modèle Qwythos 9B, qui sert aussi pour les photos) ;
-- aucun compte à créer, aucune clé API. Telegram est facultatif.
+- aucun compte à créer, aucune clé API. Telegram est facultatif, la recherche sur le web aussi (clé Tavily gratuite,
+  `TAVILY_API_KEY` dans `.env`).
 
 ## 3. Installer : un double-clic
 
-1. Extraire `Archi-1.0.zip` (clic droit › « Extraire tout »).
+1. Extraire `Archi-1.1.zip` (clic droit › « Extraire tout »).
 2. Double-cliquer sur **`installation.bat`**. Il demande un prénom et si l'on veut Telegram (répondre non suffit).
 3. Attendre 15 à 40 minutes selon la connexion. Si Windows affiche « Windows a protégé votre ordinateur » :
    « Informations complémentaires », puis « Exécuter quand même » (le fichier n'est pas signé par un éditeur).
@@ -54,6 +56,14 @@ double-cliquer sur **`verifier_archi.bat`**.
 | Clic sur le micro, puis parler, puis « fin de transmission » | La phrase transcrite sur le PC (whisper.cpp), puis une réponse écrite **et parlée** |
 | « Résume-moi la page Wikipédia de la tour Eiffel » | Un outil appelé, une réponse sourcée |
 | « Fais un tour de trader » | Un tour du trader **en simulation** (1 000 $ fictifs, vrais prix publics, aucun ordre réel) |
+| « Regarde cette image https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=600 et dis-moi ce que tu vois » | La description de la photo (un chat), faite par le modèle du PC |
+| « Cherche sur le web le prix du gaz aujourd'hui » | Sans clé Tavily : « la recherche sur le web n'est pas branchée ». Il ne fait pas semblant |
+| « Tu as bien envoyé le mail à Paul hier soir ? » | Il ne sait pas et le dit : aucun mail n'est relié. Il n'invente pas un envoi |
+| « Allume le radiateur » | Aucune prise n'est réglée sur un PC neuf : il le dit, et n'annonce rien d'allumé |
+
+Ces quatre dernières lignes sont là exprès : Archi doit dire « je ne sais pas » ou « ce n'est pas branché » plutôt
+que d'inventer. Le modèle, petit, écrit parfois l'appel d'un outil au lieu de le lancer : le code le lance alors
+lui-même, avec les mêmes contrôles d'accord (`core/appel_en_texte.js`).
 
 Avec un téléphone Android : scanner le QR code de la page d'accueil, installer l'appli, toucher « Brancher l'appli ».
 La page du PC coche chaque étape en direct. Ensuite on peut écrire, parler ou envoyer une photo depuis le téléphone :

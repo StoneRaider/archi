@@ -2,7 +2,7 @@
 
 ## Le plus simple (Windows 10 ou 11) : `installation.bat`
 
-1. Télécharge `Archi-1.0.zip` (page Releases du dépôt) et extrais-le.
+1. Télécharge `Archi-1.1.zip` (page Releases du dépôt) et extrais-le.
 2. Double-clique sur `installation.bat`. Il installe tout dans `%USERPROFILE%\Archi` (15 à 40 minutes).
 3. La page d'accueil s'ouvre : parle à Archi. Pour le téléphone, scanne le QR code de cette page.
 

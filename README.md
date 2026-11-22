@@ -19,7 +19,7 @@ Ni la photo ni la conversation ne passent par un service d'IA en ligne.
 
 Il faut Windows 10 ou 11, une carte graphique de 16 Go (le modèle en prend environ 7) et environ 15 Go de place libre.
 
-1. **Télécharge `Archi-1.0.zip`** sur la page [Releases](../../releases/latest), puis extrais-le
+1. **Télécharge `Archi-1.1.zip`** sur la page [Releases](../../releases/latest), puis extrais-le
    (clic droit › « Extraire tout »).
 2. **Double-clique sur `installation.bat`.** Il demande ton prénom et si tu veux aussi Telegram, puis installe
    tout, tout seul, en 15 à 40 minutes selon ta connexion.
