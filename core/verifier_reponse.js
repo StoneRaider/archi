@@ -265,6 +265,9 @@ function main(inp) {
 // que dans l'agent, puis le modele ecrit la phrase ; tous les controles ci-dessus portent ensuite sur cette phrase.
 async function demarrer() {
   const inp = lireEntree();
+  // « Archi : … » : le modele imite sa propre reponse gardee en memoire courte (essai reel du 22/11) ; la page et la voix
+  // disent deja qui parle
+  if (typeof inp.reponse === 'string' && /^\s*archi\s*:\s*\S/i.test(inp.reponse)) inp.reponse = inp.reponse.replace(/^\s*archi\s*:\s*/i, '');
   try {
     const r = await require('./appel_en_texte').rattraper(inp);
     if (r) {

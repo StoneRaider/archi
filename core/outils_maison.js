@@ -74,6 +74,23 @@ function baliserResultat(r) {
   return r;
 }
 
+// Appel ecrit en texte par le modele, lance par le verificateur (core/appel_en_texte.js) : un texte ne donne JAMAIS
+// d'accord ni de « confirmer », sous aucun nom (confirmer, confirmation, accord, _accord...), a aucune profondeur, y
+// compris dans un JSON ecrit en texte (relecture independante du 22/11 : memoire « oublier » + confirmer=oui effacait).
+const CLE_D_ACCORD = /accord|confirm/i;
+function purgerAccords(x, profondeur) {
+  if ((profondeur || 0) > 20 || x == null || typeof x !== 'object') return x;
+  for (const k of Object.keys(x)) {
+    if (CLE_D_ACCORD.test(k)) { delete x[k]; continue; }
+    const v = x[k];
+    if (v && typeof v === 'object') purgerAccords(v, (profondeur || 0) + 1);
+    else if (typeof v === 'string' && /^\s*[{[]/.test(v)) {
+      try { const j = JSON.parse(v); if (j && typeof j === 'object') x[k] = JSON.stringify(purgerAccords(j, (profondeur || 0) + 1)); } catch (e) { /* un texte */ }
+    }
+  }
+  return x;
+}
+
 function lireParametres(p) {
   if (p == null || p === '') return {};
   let o = p;
@@ -358,6 +375,9 @@ function lancerCompris(demande, options, suivi) {
   for (const k of Object.keys(params)) if (/^_?accord/i.test(k) && k !== 'accord') delete params[k];
   // pareil pour « _tache » (le numero du message en cours) : il ne vient que du lanceur, voir plus bas
   for (const k of Object.keys(params)) if (/^_tache/i.test(k)) delete params[k];
+  // le drapeau vient du processus parent (core/appel_en_texte.js), jamais de ce que le modele ecrit
+  const rattrape = options.rattrape === true || process.env.ARCHI_APPEL_RATTRAPE === '1';
+  if (rattrape) purgerAccords(params);
   // sensible_si : ["outil"] (parametre present) ou {"action": ["appel", "sms"]} (parametre egal a une de ces valeurs)
   const si = o.sensible_si;
   const surveilles = si && !Array.isArray(si) && typeof si === 'object' ? Object.keys(si) : [];
@@ -370,7 +390,7 @@ function lancerCompris(demande, options, suivi) {
   const sensible = !!o.sensible
     || (Array.isArray(si) && si.some(present))
     || surveilles.some(k => present(k) && [].concat(si[k] || []).map(nu).includes(nu(params[k])));
-  const accord = /^\s*oui\s*$/i.test(String(d.accord || ''));
+  const accord = !rattrape && /^\s*oui\s*$/i.test(String(d.accord || ''));
   suivi.action = typeof params.action === 'string' ? normaliser(params.action) : '';
   // ce que le modele a ecrit, pour l'exemple a recopier : jamais un champ d'accord, jamais un champ interne
   // jamais un « confirmer » : le lanceur n'en ecrit aucun, meme dans un exemple
@@ -512,7 +532,7 @@ function empreinteDe(entree) {
   try { return require('crypto').createHash('sha256').update(JSON.stringify(entree)).digest('hex').slice(0, 12); } catch (e) { return ''; }
 }
 
-module.exports = { lancer, lireRegistre, lireParametres, baliserResultat, arretDeBoucle, empreinteDe };
+module.exports = { lancer, lireRegistre, lireParametres, baliserResultat, arretDeBoucle, empreinteDe, purgerAccords };
 
 if (require.main === module) {
   let entree = {};

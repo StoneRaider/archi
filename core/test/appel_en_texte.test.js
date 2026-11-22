@@ -148,3 +148,62 @@ test('I : jamais de consigne au modele ni de JSON dans la phrase', async () => {
   assert.strictEqual(A.consigneRecopiee('Il fait beau, accorde-toi une pause.', []), '');
   assert.strictEqual(A.consigneRecopiee('C\'est programmé.', [camera]), '');
 });
+
+// ------------------------------------------------------------------ 2e relecture independante du 22/11
+test('J : le lanceur purge accord et confirmer d\'un appel rattrape, sous tous les noms et a toute profondeur', () => {
+  const { purgerAccords } = require('../outils_maison');
+  const p = { action: 'oublier', texte: 'Paul', confirmer: 'oui', Confirmation: true, _accord: 'oui',
+    criteres: '{"confirmer":"oui","de":"x"}', sous: { accord: 'oui', liste: [{ confirmer: 1, garde: 2 }] } };
+  assert.deepStrictEqual(purgerAccords(p), { action: 'oublier', texte: 'Paul', criteres: '{"de":"x"}', sous: { liste: [{ garde: 2 }] } });
+  // le drapeau est pose pour l'enfant, jamais par ce que le modele ecrit
+  let env = null;
+  const o = { executer: (c, a, opt) => { env = opt.env; return '{"ok":false,"accord_requis":true}'; } };
+  A.lancerOutil({ action: 'utiliser', outil: 'memoire', arguments: { action: 'oublier', texte: 'Paul', confirmer: 'oui' } }, o);
+  assert.strictEqual(env.ARCHI_APPEL_RATTRAPE, '1');
+});
+
+test('J bis : de bout en bout, memoire « oublier » + confirmer sous un alias ne part pas en effacement', () => {
+  const B = fs.mkdtempSync(path.join(os.tmpdir(), 'archi-purge-'));
+  const reg = { memoire: { nom: 'memoire', script: 'memoire.py', timeout_s: 20 } };
+  fs.mkdirSync(path.join(B, 'outils', 'memoire'), { recursive: true });
+  fs.writeFileSync(path.join(B, 'outils', 'registre.json'), JSON.stringify(reg));
+  fs.writeFileSync(path.join(B, 'outils', 'memoire', 'memoire.py'), '');
+  const outils = require('../outils_maison');
+  const recus = [];
+  const executer = (cmd, args) => { recus.push(JSON.parse(fs.readFileSync(args[2], 'utf8'))); return '{"ok":true}'; };
+  for (const forme of ['arguments', 'args', 'params', 'parameters', 'input', 'parametres']) {
+    process.env.ARCHI_APPEL_RATTRAPE = '1';
+    try {
+      outils.lancer({ action: 'utiliser', outil: 'memoire', [forme]: { action: 'oublier', texte: 'Paul', confirmer: 'oui', parametres: '{"confirmation":"oui"}' } },
+        { base: B, registre: reg, executer, rattrape: true });
+    } finally { delete process.env.ARCHI_APPEL_RATTRAPE; }
+  }
+  assert.ok(recus.length > 0);
+  for (const r of recus) assert.ok(!JSON.stringify(r).match(/confirm|accord/i), JSON.stringify(r));
+});
+
+test('K : consigneRecopiee ne touche pas aux reponses normales', () => {
+  const outil = { action: { tool: 'outils_maison', toolInput: { input: '{"action":"utiliser","outil":"agenda"}' } }, observation: JSON.stringify({ ok: true, phrase_pour_utilisateur: 'Contact trouvé.' }) };
+  for (const r of ["Paul t'a appelé ce matin. Rappelle-le avec ton fixe.", "Rappelle le avec le numéro qu'il t'a laissé.",
+    "J'ai utilisé outils_maison pour lire ton agenda.", 'Demande-le à l\'utilisateur concerné.', 'D\'accord, je note.',
+    '[TEXTE] Exemple : {"action":"utiliser","accord":"oui"}'])
+    assert.strictEqual(A.consigneRecopiee(r, [outil]), '', r);
+  // sans outil dans le tour : rien n'est remplace, meme avec une marque
+  assert.strictEqual(A.consigneRecopiee("L'accord se donne avec accord=oui.", []), '');
+  // une observation n8n peut etre une chaine JSON dans une chaine
+  const double = { action: { tool: 'outils_maison' }, observation: JSON.stringify(JSON.stringify({ ok: false, accord_requis: true })) };
+  assert.strictEqual(A.consigneRecopiee('Cet outil est sensible : rappelle-le avec accord=oui.', [double]), A.ACCORD);
+});
+
+test('L : la suggestion du lanceur recopiee part ; une liste ne bloque pas l\'appel suivant', async () => {
+  const suggestion = { action: { tool: 'outils_maison', toolInput: { input: '{"action":"regarder","lien":"https://exemple.org/chat.jpg"}' } },
+    observation: JSON.stringify({ ok: false, erreur_format: true, phrase_pour_utilisateur: 'Rappelle outils_maison avec ' + IMAGE }) };
+  const o = fauxOutil({ ok: true, texte: 'un chat' });
+  const r = await A.rattraper({ reponse: IMAGE, msg: 'regarde', steps: [suggestion] }, { executer: o.executer, fetch: fauxModele('Un chat.') });
+  assert.strictEqual(o.recus.length, 1, 'la suggestion du lanceur n\'est pas une recopie');
+  assert.strictEqual(r.reponse, 'Un chat.');
+  const liste = { action: { tool: 'outils_maison', toolInput: { input: '{"action":"liste"}' } }, observation: JSON.stringify({ ok: true, outils: [] }) };
+  const o2 = fauxOutil({ ok: true, texte: 'un chat' });
+  await A.rattraper({ reponse: IMAGE, msg: 'regarde', steps: [liste] }, { executer: o2.executer, fetch: fauxModele('Un chat.') });
+  assert.strictEqual(o2.recus.length, 1, 'une liste reussie ne bloque pas image_lien');
+});

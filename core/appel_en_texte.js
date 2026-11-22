@@ -36,7 +36,10 @@ const FAIT_SANS_PHRASE = "L'outil a répondu, mais je n'ai pas su te formuler sa
 const TROP_LONG = "L'outil a mis trop longtemps à répondre : il a peut-être agi quand même. Vérifie avant de me le redemander.";
 const ACCORD = "Pour ça, il me faut d'abord ton accord. Je le fais ?";
 // une phrase ecrite pour le modele, pas pour l'utilisateur
-const POUR_LE_MODELE = /accord\s*=\s*oui|"accord"\s*:|outils_maison|rappelle[- ]le avec|rappelle outils|\{\s*"(?:action|outil)"\s*:|(?:dis|demande)[- ]l[ea] [aà] l'utilisateur|[aà] l'utilisateur tel quel/i;
+const POUR_LE_MODELE = /accord\s*=\s*oui|"accord"\s*:|confirmer\s*=\s*oui|outils_maison|rappelle[- ]le avec|rappelle outils|rappelle l'outil|\{\s*"(?:action|outil)"\s*:|(?:dis|demande)[- ]l[ea] [aà] l'utilisateur|[aà] l'utilisateur (?:tel quel|de confirmer|s'il)|ne r[eé]essaie pas|pose-lui la question/i;
+// pour remplacer une reponse NORMALE : seulement des marques sans ambiguite (relecture du 22/11 : « rappelle-le avec
+// ton fixe », « j'ai utilise outils_maison » sont du francais honnete)
+const CONSIGNE_SURE = /accord\s*=\s*oui|"accord"\s*:|confirmer\s*=\s*oui|rappelle[- ]le avec accord|rappelle l'outil|rappelle outils_maison/i;
 
 function sansReflexion(t) {
   // une reflexion jamais refermee (coupee par max_tokens) part aussi
@@ -81,11 +84,13 @@ function lancerOutil(appel, options) {
   const o = options || {};
   try {
     const out = (o.executer || cp.execFileSync)(process.execPath, [path.join(__dirname, 'outils_maison.js')], {
-      input: JSON.stringify(appel), timeout: o.delaiOutil || DELAI_OUTIL, windowsHide: true, env: process.env,
+      input: JSON.stringify(appel), timeout: o.delaiOutil || DELAI_OUTIL, windowsHide: true,
+      env: Object.assign({}, process.env, { ARCHI_APPEL_RATTRAPE: '1' }),
       maxBuffer: 20 * 1024 * 1024,
     }).toString('utf8').trim().split(/\r?\n/).pop();
     return JSON.parse(out);
   } catch (e) {
+    if (e && e.code === 'ENOBUFS') return { ok: false, phrase_pour_utilisateur: "L'outil a répondu trop long pour moi : il a peut-être agi. Vérifie avant de me le redemander." };
     if (e && (e.code === 'ETIMEDOUT' || e.signal === 'SIGTERM')) return { ok: false, trop_long: true, phrase_pour_utilisateur: TROP_LONG };
     return { ok: false, phrase_pour_utilisateur: "L'outil n'a pas répondu." };
   }
@@ -100,7 +105,7 @@ async function phraseDuModele(msg, appel, resultat, options) {
     messages: [
       { role: 'system', content: consigneModele() },
       { role: 'user', content: "Message de l'utilisateur : « " + String(msg || '').slice(0, 1500) + ' »\n\n'
-        + 'Outil lance : ' + String(appel.outil || appel.action || '').slice(0, 40) + '\n'
+        + (o.dejaFait ? 'Outil deja appele dans ce tour (pas relance) : ' : 'Outil lance : ') + String(appel.outil || appel.action || '').slice(0, 40) + '\n'
         + 'Resultat de l\'outil : ' + resume(resultat) + "\n\nEcris maintenant la reponse a l'utilisateur." },
     ],
   };
@@ -150,7 +155,10 @@ function secoursDe(resultat) {
   return SECOURS;
 }
 
-const lire = x => { if (x && typeof x === 'object') return x; try { return JSON.parse(String(x)); } catch (e) { return null; } };
+const lire = x => {
+  if (x && typeof x === 'object') return x;
+  try { const j = JSON.parse(String(x)); return typeof j === 'string' ? lire(j) : (j && typeof j === 'object' ? j : null); } catch (e) { return null; }
+};
 
 /**
  * Rattrape un appel ecrit. Rend null si la reponse n'en est pas un (ou si le reglage est eteint, ou si l'appel est une
@@ -164,15 +172,24 @@ async function rattraper(inp, options) {
   const nom = String(brut.outil || brut.action || '').slice(0, 40);
   // une recopie (du message, d'un mail, d'une page) n'est pas une decision : la reponse part telle quelle
   const cle = serre(JSON.stringify(brut));
-  const vus = [inp.msg].concat(steps.map(st => { const ob = st && st.observation; return typeof ob === 'string' ? ob : JSON.stringify(ob || ''); }));
+  const exterieur = t => (String(t).match(/\[\[\s*CONTENU EXT[\s\S]*?(?:\[\[\s*FIN[^\]]*\]\]|$)/gi) || []).join('\n');
+  const vus = [inp.msg].concat(steps.map(st => { const ob = st && st.observation; return exterieur(typeof ob === 'string' ? ob : JSON.stringify(ob || '')); }));
   if (vus.some(v => serre(v).includes(cle))) return null;
   const alertes = ['[journal] appel ecrit en texte : ' + nom];
   let resultat, ajout = [];
   const reg = registre(options);
   // deja lance dans ce tour : un appel d'outils_maison qui a reussi, ou ce meme appel (echoue ou non)
   const entree = st => { const ti = st.action.toolInput; return serre(typeof ti === 'string' ? ti : (ti && (ti.input || ti.query)) || JSON.stringify(ti || '')); };
-  const dejaLance = steps.filter(st => st && st.action && st.action.tool === 'outils_maison'
-    && ((lire(st.observation) || {}).ok === true || entree(st).includes(cle)));
+  const nomDe = x => String((x && (x.outil || x.action)) || '').trim().toLowerCase();
+  const visees = [nomDe(brut)];
+  const dejaLance = steps.filter(st => {
+    if (!(st && st.action && st.action.tool === 'outils_maison')) return false;
+    if (entree(st).includes(cle)) return true;
+    const ob = lire(st.observation) || {};
+    let ti = st.action.toolInput; ti = lire(typeof ti === 'string' ? ti : (ti && (ti.input || ti.query)) || '') || {};
+    const nomme = [nomDe(ti), String((ob.compris && ob.compris.outil) || '').toLowerCase()];
+    return ob.ok === true && nomme.some(n => n && visees.includes(n));
+  });
   const t = (reg[String(brut.outil || '').trim()] || reg[String(brut.action || '').trim()] || {}).timeout_s;
   if (dejaLance.length) {
     // pas de 2e lancement (deux rappels, deux impressions) : la phrase part de ce resultat-la
@@ -190,7 +207,7 @@ async function rattraper(inp, options) {
     }];
     alertes[0] += resultat && resultat.ok ? ' (outil ok)' : ' (outil en echec)';
   }
-  let phrase = await phraseDuModele(inp.msg, brut, resultat, options);
+  let phrase = await phraseDuModele(inp.msg, brut, resultat, Object.assign({}, options, { dejaFait: dejaLance.length > 0 }));
   if (!phrase) { phrase = secoursDe(resultat); alertes.push('[journal] appel ecrit : phrase de secours'); }
   return { reponse: phrase, steps: steps.concat(ajout), alertes };
 }
@@ -202,10 +219,10 @@ async function rattraper(inp, options) {
 function consigneRecopiee(reponse, steps) {
   if (eteint()) return '';
   const t = sansReflexion(reponse).trim();
-  if (!t || !POUR_LE_MODELE.test(t)) return '';
-  const obs = (Array.isArray(steps) ? steps : []).filter(st => st && st.action && st.action.tool === 'outils_maison').map(st => lire(st.observation));
-  const dernier = obs.length ? obs[obs.length - 1] : null;
-  return dernier ? secoursDe(dernier) : SECOURS;
+  if (!t || t.length > 400 || /^\s*\[TEXTE\]/i.test(t) || !CONSIGNE_SURE.test(t)) return '';
+  const obs = (Array.isArray(steps) ? steps : []).filter(st => st && st.action && st.action.tool === 'outils_maison').map(st => lire(st.observation)).filter(Boolean);
+  if (!obs.length) return '';      // aucun outil dans le tour : rien a remplacer
+  return secoursDe(obs[obs.length - 1]);
 }
 
 module.exports = { appelEcrit, rattraper, consigneRecopiee, lancerOutil, phraseDuModele, sansAccord, SECOURS, FAIT_SANS_PHRASE, TROP_LONG, ACCORD };
