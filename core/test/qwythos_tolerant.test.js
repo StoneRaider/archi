@@ -102,6 +102,12 @@ test('A : un outil qui agit hors du PC, ou qui a une action soumise a accord, n\
     const r = rienLance(d, 'outil jamais devine');
     assert.strictEqual(r.erreur_format, true, JSON.stringify(d));
   }
+  // une action au premier niveau et une AUTRE dans parametres : l'outil n'est pas devine par l'une pour partir avec l'autre
+  for (const d of [{ action: 'monter', parametres: { action: 'stop' } }, { action: 'monter', parametres: { action: 'annuler' } },
+    { action: 'tour', parametres: { action: 'stop' } }, { action: 'tour', parametres: { action: 'reprendre' } }, { action: 'regarder', parametres: { action: 'stop', lien: 'https://exemple.org/a.jpg' } }]) {
+    assert.strictEqual(rienLance(d, 'deux actions differentes').erreur_format, true, JSON.stringify(d));
+  }
+  assert.deepStrictEqual(essai({ action: 'monter', parametres: { action: 'monter' } }).lances, [{ outil: 'monteur', p: { action: 'monter' } }]);
   // nommes, ils marchent comme avant
   assert.deepStrictEqual(essai({ action: 'examiner', outil: 'curateur' }).lances, [{ outil: 'curateur', p: { action: 'examiner' } }]);
   assert.deepStrictEqual(essai({ action: 'telephone', parametres: { action: 'lampe', etat: 'on' } }).lances, [{ outil: 'telephone', p: { action: 'lampe', etat: 'on' } }]);

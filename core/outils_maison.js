@@ -291,7 +291,10 @@ function lancerCompris(demande, options, suivi) {
     const a = generique(haut) || !haut ? dedans : haut;
     const cles = [...new Set(champsLibres(d).concat(Object.keys(pBrut).filter(k => !vide(pBrut[k]))))]
       .filter(k => k !== 'action' && !cleConfirmer(k) && !/^_?accord/i.test(k));
-    const v = devinerOutil(reg, a, cles);
+    // deux actions differentes, une au premier niveau et une dans parametres ({"action":"monter","parametres":{"action":
+    // "stop"}}) : on ne devine rien, sinon l'outil serait choisi par l'une et lance avec l'autre (relecture du 22/11)
+    const conflit = !!haut && !generique(haut) && !!dedans && dedans !== haut;
+    const v = conflit ? {} : devinerOutil(reg, a, cles);
     if (v.nom) {
       nom = v.nom; action = 'utiliser'; devine = true; suivi.reinterprete = true;
       actionOutil = v.par === 'action' && !dedans ? a : '';
