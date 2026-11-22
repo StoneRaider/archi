@@ -173,14 +173,21 @@ async function rattraper(inp, options) {
   // une recopie (du message, d'un mail, d'une page) n'est pas une decision : la reponse part telle quelle
   const cle = serre(JSON.stringify(brut));
   const exterieur = t => (String(t).match(/\[\[\s*CONTENU EXT[\s\S]*?(?:\[\[\s*FIN[^\]]*\]\]|$)/gi) || []).join('\n');
-  const vus = [inp.msg].concat(steps.map(st => { const ob = st && st.observation; return exterieur(typeof ob === 'string' ? ob : JSON.stringify(ob || '')); }));
+  // les outils branches directement sur l'agent (lire_page, navigateur...) ne balisent pas leur contenu : toute leur
+  // observation compte ; pour outils_maison, seul le contenu exterieur (ses suggestions d'appel exact doivent partir)
+  const vus = [inp.msg].concat(steps.map(st => {
+    const ob = st && st.observation; const t = typeof ob === 'string' ? ob : JSON.stringify(ob || '');
+    return st && st.action && st.action.tool === 'outils_maison' ? exterieur(t) : t;
+  }));
   if (vus.some(v => serre(v).includes(cle))) return null;
+  // l'utilisateur a demande a VOIR un appel (un exemple, le JSON) : il le voit, rien ne part
+  if (/\bjson\b|\bexemple\b|montre[- ]moi (?:comment|l'appel|le format)|appel exact|sans (?:le )?lancer|sans rien lancer/i.test(String(inp.msg || ''))) return null;
   const alertes = ['[journal] appel ecrit en texte : ' + nom];
   let resultat, ajout = [];
   const reg = registre(options);
   // deja lance dans ce tour : un appel d'outils_maison qui a reussi, ou ce meme appel (echoue ou non)
   const entree = st => { const ti = st.action.toolInput; return serre(typeof ti === 'string' ? ti : (ti && (ti.input || ti.query)) || JSON.stringify(ti || '')); };
-  const nomDe = x => String((x && (x.outil || x.action)) || '').trim().toLowerCase();
+  const nomDe = x => { const n = String((x && (x.outil || x.action)) || '').trim().toLowerCase(); return /^(utiliser|lancer|outils?)$/.test(n) ? '' : n; };
   const visees = [nomDe(brut)];
   const dejaLance = steps.filter(st => {
     if (!(st && st.action && st.action.tool === 'outils_maison')) return false;
@@ -188,7 +195,7 @@ async function rattraper(inp, options) {
     const ob = lire(st.observation) || {};
     let ti = st.action.toolInput; ti = lire(typeof ti === 'string' ? ti : (ti && (ti.input || ti.query)) || '') || {};
     const nomme = [nomDe(ti), String((ob.compris && ob.compris.outil) || '').toLowerCase()];
-    return ob.ok === true && nomme.some(n => n && visees.includes(n));
+    return ob.ok === true && nomme.some(n => n && visees.includes(n)) && visees[0] !== '';
   });
   const t = (reg[String(brut.outil || '').trim()] || reg[String(brut.action || '').trim()] || {}).timeout_s;
   if (dejaLance.length) {

@@ -267,7 +267,9 @@ async function demarrer() {
   const inp = lireEntree();
   // « Archi : … » : le modele imite sa propre reponse gardee en memoire courte (essai reel du 22/11) ; la page et la voix
   // disent deja qui parle
-  if (typeof inp.reponse === 'string' && /^\s*archi\s*:\s*\S/i.test(inp.reponse)) inp.reponse = inp.reponse.replace(/^\s*archi\s*:\s*/i, '');
+  // (pas quand on lui demande son nom : « Archi : un assistant local… » est alors la reponse)
+  if (typeof inp.reponse === 'string' && /^\s*archi\s*:\s*\S/i.test(inp.reponse)
+    && !/\b(?:nom|appelles?|qui es|archi)\b/i.test(String(inp.msg || ''))) inp.reponse = inp.reponse.replace(/^\s*archi\s*:\s*/i, '');
   try {
     const r = await require('./appel_en_texte').rattraper(inp);
     if (r) {
