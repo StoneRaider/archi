@@ -270,6 +270,10 @@ async function demarrer() {
     if (r) {
       ENTREE = Object.assign({}, inp, { reponse: r.reponse, steps: r.steps });
       ALERTES_AVANT = r.alertes;
+    } else {
+      // une consigne destinee au modele recopiee telle quelle (« rappelle-le avec accord=oui ») ne part pas
+      const phrase = require('./appel_en_texte').consigneRecopiee(inp.reponse, inp.steps);
+      if (phrase) { ENTREE = Object.assign({}, inp, { reponse: phrase }); ALERTES_AVANT = ['[journal] consigne du modele recopiee : remplacee']; }
     }
   } catch (e) { /* le rattrapage ne bloque jamais la reponse */ }
   main(ENTREE);

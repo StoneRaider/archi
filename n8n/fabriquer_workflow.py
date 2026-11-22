@@ -231,7 +231,15 @@ return (r.telegram || []).map(texte => ({ json: { chat_id: chat, texte } }));
 VERIFIER = APPEL_NODE + r"""
 const a = $input.first().json;
 const c = $('Contexte').first().json;
-const v = appelNode('verifier_reponse.js', { reponse: a.output || '', steps: a.intermediateSteps || [], msg: c.texte, profil: c.profil });
+// le verificateur ne doit jamais laisser l'utilisateur sans reponse (delai depasse, sortie illisible) : une reponse qui
+// n'est qu'un appel d'outil ecrit en texte ne part pas telle quelle
+let v;
+try {
+  v = appelNode('verifier_reponse.js', { reponse: a.output || '', steps: a.intermediateSteps || [], msg: c.texte, profil: c.profil });
+} catch (x) {
+  const brut = String(a.output || '').trim();
+  v = { reponse: /^[{`]/.test(brut) || !brut ? "Je n'ai pas réussi à terminer ma réponse. Redis-moi ta demande." : brut, alertes: ['[journal] verificateur en echec'] };
+}
 // la carte de la tache : la reponse est prete ; les outils branches sur l'agent (vus seulement ici) s'y ajoutent
 try {
   const outils = (a.intermediateSteps || []).map(s => String(((s || {}).action || {}).tool || '')).filter(Boolean);

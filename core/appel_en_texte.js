@@ -9,18 +9,42 @@
 //      la phrase pour l'utilisateur ;
 //   3. le resultat rejoint les « steps » du tour : les controles qui suivent (noms inventes, promesses en l'air) le voient.
 // Un seul appel par tour : si le modele recrit un appel, ou si quoi que ce soit echoue, une phrase honnete le dit.
-// Reglage ARCHI_APPEL_ECRIT : « lance » (defaut) ou « eteint » (la reponse part telle quelle, comme avant).
+//
+// Relecture independante du 22/11 : un texte n'est pas une decision. Le modele peut MONTRER un appel (« montre-moi le
+// JSON que tu enverrais »), recopier celui d'un mail, ou « proposer » l'appel avec "accord":"oui" au lieu de poser la
+// question. Donc, pour un appel rattrape :
+//   - JAMAIS d'accord : "accord" est retire (et « confirmer » des parametres) ; un outil sensible repond « il faut
+//     l'accord », le modele pose la question, et le « oui » de l'utilisateur passe au tour suivant par l'agent ;
+//   - rien n'est lance si l'appel figure dans le message ou dans un resultat d'outil du tour (recopie) ;
+//   - rien n'est relance si l'agent a deja appele outils_maison dans ce tour : la phrase part de ce resultat-la ;
+//   - pas d'outil plus long que le delai (timeout_s du registre > 200 s) : coupe en route, il pourrait agir quand meme.
+// Et (consigneRecopiee) une reponse qui recopie une consigne destinee au modele (« rappelle-le avec accord=oui »)
+// est remplacee par une phrase pour l'utilisateur.
+// Reglage ARCHI_APPEL_ECRIT : « lance » (defaut) ou « eteint » (rattrapage et filtre des consignes coupes : la reponse
+// part telle quelle, comme avant).
 'use strict';
 const cp = require('child_process');
 const path = require('path');
 
-const APPEL_MAX = 4000, RESULTAT_MAX = 6000, DELAI_OUTIL = 190000, DELAI_MODELE = 90000;   // 280 s : sous les 290 s du noeud Verifier
+const fs = require('fs');
+const os = require('os');
+// 205 + 60 = 265 s : sous les 290 s du noeud Verifier. Un outil de plus de 200 s (timeout_s) n'est pas rattrape : le
+// lanceur coupe lui-meme son script a timeout_s, avant que ce delai-ci ne coupe le lanceur.
+const APPEL_MAX = 4000, RESULTAT_MAX = 6000, DELAI_OUTIL = 205000, DELAI_MODELE = 60000, OUTIL_MAX_S = 200;
 const SECOURS = "Je n'ai pas réussi à lancer l'outil comme il faut. Redis-moi ta demande, autrement si possible.";
 const FAIT_SANS_PHRASE = "L'outil a répondu, mais je n'ai pas su te formuler sa réponse. Redemande-moi si besoin.";
+const TROP_LONG = "L'outil a mis trop longtemps à répondre : il a peut-être agi quand même. Vérifie avant de me le redemander.";
+const ACCORD = "Pour ça, il me faut d'abord ton accord. Je le fais ?";
+// une phrase ecrite pour le modele, pas pour l'utilisateur
+const POUR_LE_MODELE = /accord\s*=\s*oui|"accord"\s*:|outils_maison|rappelle[- ]le avec|rappelle outils|\{\s*"(?:action|outil)"\s*:|(?:dis|demande)[- ]l[ea] [aà] l'utilisateur|[aà] l'utilisateur tel quel/i;
 
 function sansReflexion(t) {
-  return String(t == null ? '' : t).replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^[\s\S]*<\/think>/i, '');
+  // une reflexion jamais refermee (coupee par max_tokens) part aussi
+  return String(t == null ? '' : t).replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^[\s\S]*<\/think>/i, '').replace(/<think>[\s\S]*$/i, '');
 }
+// pour comparer deux JSON : sans blancs ni barres obliques, et sans les « \n » d'un JSON recopie dans une chaine
+const serre = s => String(s == null ? '' : s).replace(/\\+[nrt]/g, ' ').replace(/[\s\\]/g, '');
+const eteint = () => String(process.env.ARCHI_APPEL_ECRIT || 'lance').trim().toLowerCase() === 'eteint';
 
 /** L'appel d'outil ecrit comme reponse, ou null. La reponse ENTIERE doit etre un objet JSON (bloc de code accepte). */
 function appelEcrit(reponse) {
@@ -58,9 +82,11 @@ function lancerOutil(appel, options) {
   try {
     const out = (o.executer || cp.execFileSync)(process.execPath, [path.join(__dirname, 'outils_maison.js')], {
       input: JSON.stringify(appel), timeout: o.delaiOutil || DELAI_OUTIL, windowsHide: true, env: process.env,
+      maxBuffer: 20 * 1024 * 1024,
     }).toString('utf8').trim().split(/\r?\n/).pop();
     return JSON.parse(out);
   } catch (e) {
+    if (e && (e.code === 'ETIMEDOUT' || e.signal === 'SIGTERM')) return { ok: false, trop_long: true, phrase_pour_utilisateur: TROP_LONG };
     return { ok: false, phrase_pour_utilisateur: "L'outil n'a pas répondu." };
   }
 }
@@ -85,7 +111,7 @@ async function phraseDuModele(msg, appel, resultat, options) {
     const rep = await f(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps), signal: ctrl.signal });
     const j = await rep.json();
     const texte = sansReflexion((((j.choices || [])[0] || {}).message || {}).content || '').trim();
-    if (!texte || appelEcrit(texte) || /^\s*[{[]/.test(texte)) return '';
+    if (!texte || appelEcrit(texte) || /^\s*[{[]/.test(texte) || /\{\s*"/.test(texte) || POUR_LE_MODELE.test(texte)) return '';
     // la phrase entiere entre guillemets (essai reel du 22/11) : on les retire
     const g = /^(["«“])\s*([\s\S]*?)\s*(["»”])$/.exec(texte);
     if (g && !/["«»“”]/.test(g[2])) return g[2];
@@ -97,30 +123,89 @@ async function phraseDuModele(msg, appel, resultat, options) {
   }
 }
 
-/**
- * Rattrape un appel ecrit. Rend null si la reponse n'en est pas un (ou si le reglage est eteint) ; sinon
- * { reponse, steps, alertes } : la phrase pour l'utilisateur et les steps completes du resultat.
- */
-async function rattraper(inp, options) {
-  if (String(process.env.ARCHI_APPEL_ECRIT || 'lance').trim().toLowerCase() === 'eteint') return null;
-  const appel = appelEcrit(inp && inp.reponse);
-  if (!appel) return null;
-  const resultat = lancerOutil(appel, options);
-  const steps = (Array.isArray(inp.steps) ? inp.steps : []).concat([{
-    action: { tool: 'outils_maison', toolInput: { input: JSON.stringify(appel) }, log: 'appel ecrit en texte, lance par le verificateur' },
-    observation: JSON.stringify(resultat),
-  }]);
-  let phrase = await phraseDuModele(inp.msg, appel, resultat, options);
-  const alertes = ['[journal] appel ecrit en texte : ' + String(appel.outil || appel.action).slice(0, 40)
-    + (resultat && resultat.ok ? ' (outil ok)' : ' (outil en echec)')];
-  if (!phrase) {
-    // l'outil a peut-etre AGI (une prise allumee) : on ne dit jamais « pas reussi » apres un succes. Sa propre phrase,
-    // sinon un constat neutre.
-    const p = resultat && typeof resultat.phrase_pour_utilisateur === 'string' ? resultat.phrase_pour_utilisateur.trim() : '';
-    phrase = resultat && resultat.ok === true ? (p && p.length <= 600 ? p : FAIT_SANS_PHRASE) : SECOURS;
-    alertes.push('[journal] appel ecrit : phrase de secours');
-  }
-  return { reponse: phrase, steps, alertes };
+/** Le registre des outils (pour timeout_s), ou {}. */
+function registre(options) {
+  if (options && options.registre) return options.registre;
+  try {
+    const base = process.env.ARCHI_BASE || path.join(os.homedir(), '.n8n-files');
+    return JSON.parse(fs.readFileSync(path.join(base, 'outils', 'registre.json'), 'utf8')) || {};
+  } catch (e) { return {}; }
 }
 
-module.exports = { appelEcrit, rattraper, lancerOutil, phraseDuModele, SECOURS, FAIT_SANS_PHRASE };
+/** L'appel, prive de tout accord : un texte n'en donne jamais. */
+function sansAccord(appel) {
+  const a = JSON.parse(JSON.stringify(appel));
+  delete a.accord; delete a.confirmer;
+  if (a.parametres && typeof a.parametres === 'object' && !Array.isArray(a.parametres)) { delete a.parametres.accord; delete a.parametres.confirmer; }
+  return a;
+}
+
+/** Phrase de secours a partir d'un resultat : jamais « pas reussi » apres un succes, jamais une consigne au modele. */
+function secoursDe(resultat) {
+  if (resultat && resultat.trop_long) return TROP_LONG;
+  if (resultat && resultat.accord_requis) return ACCORD;
+  const p = resultat && typeof resultat.phrase_pour_utilisateur === 'string' ? resultat.phrase_pour_utilisateur.trim() : '';
+  const lisible = p && p.length <= 600 && !POUR_LE_MODELE.test(p);
+  if (resultat && resultat.ok === true) return lisible ? p : FAIT_SANS_PHRASE;
+  return SECOURS;
+}
+
+const lire = x => { if (x && typeof x === 'object') return x; try { return JSON.parse(String(x)); } catch (e) { return null; } };
+
+/**
+ * Rattrape un appel ecrit. Rend null si la reponse n'en est pas un (ou si le reglage est eteint, ou si l'appel est une
+ * recopie) ; sinon { reponse, steps, alertes } : la phrase pour l'utilisateur et les steps completes du resultat.
+ */
+async function rattraper(inp, options) {
+  if (eteint()) return null;
+  const brut = appelEcrit(inp && inp.reponse);
+  if (!brut) return null;
+  const steps = Array.isArray(inp.steps) ? inp.steps : [];
+  const nom = String(brut.outil || brut.action || '').slice(0, 40);
+  // une recopie (du message, d'un mail, d'une page) n'est pas une decision : la reponse part telle quelle
+  const cle = serre(JSON.stringify(brut));
+  const vus = [inp.msg].concat(steps.map(st => { const ob = st && st.observation; return typeof ob === 'string' ? ob : JSON.stringify(ob || ''); }));
+  if (vus.some(v => serre(v).includes(cle))) return null;
+  const alertes = ['[journal] appel ecrit en texte : ' + nom];
+  let resultat, ajout = [];
+  const reg = registre(options);
+  // deja lance dans ce tour : un appel d'outils_maison qui a reussi, ou ce meme appel (echoue ou non)
+  const entree = st => { const ti = st.action.toolInput; return serre(typeof ti === 'string' ? ti : (ti && (ti.input || ti.query)) || JSON.stringify(ti || '')); };
+  const dejaLance = steps.filter(st => st && st.action && st.action.tool === 'outils_maison'
+    && ((lire(st.observation) || {}).ok === true || entree(st).includes(cle)));
+  const t = (reg[String(brut.outil || '').trim()] || reg[String(brut.action || '').trim()] || {}).timeout_s;
+  if (dejaLance.length) {
+    // pas de 2e lancement (deux rappels, deux impressions) : la phrase part de ce resultat-la
+    resultat = lire(dejaLance[dejaLance.length - 1].observation) || {};
+    alertes.push('[journal] appel ecrit : deja lance dans ce tour, rien de relance');
+  } else if (typeof t === 'number' && t > OUTIL_MAX_S) {
+    resultat = { ok: false, phrase_pour_utilisateur: SECOURS };
+    alertes.push('[journal] appel ecrit : outil trop long pour etre rattrape (' + t + ' s)');
+  } else {
+    const appel = sansAccord(brut);
+    resultat = lancerOutil(appel, options);
+    ajout = [{
+      action: { tool: 'outils_maison', toolInput: { input: JSON.stringify(appel) }, log: 'appel ecrit en texte, lance par le verificateur (sans accord)' },
+      observation: JSON.stringify(resultat),
+    }];
+    alertes[0] += resultat && resultat.ok ? ' (outil ok)' : ' (outil en echec)';
+  }
+  let phrase = await phraseDuModele(inp.msg, brut, resultat, options);
+  if (!phrase) { phrase = secoursDe(resultat); alertes.push('[journal] appel ecrit : phrase de secours'); }
+  return { reponse: phrase, steps: steps.concat(ajout), alertes };
+}
+
+/**
+ * Une reponse qui recopie une consigne destinee au modele (essai reel du 22/11 : « Cet outil est sensible (...) : demande
+ * d'abord l'accord, puis rappelle-le avec accord=oui. ») : la phrase pour l'utilisateur qui la remplace, ou ''.
+ */
+function consigneRecopiee(reponse, steps) {
+  if (eteint()) return '';
+  const t = sansReflexion(reponse).trim();
+  if (!t || !POUR_LE_MODELE.test(t)) return '';
+  const obs = (Array.isArray(steps) ? steps : []).filter(st => st && st.action && st.action.tool === 'outils_maison').map(st => lire(st.observation));
+  const dernier = obs.length ? obs[obs.length - 1] : null;
+  return dernier ? secoursDe(dernier) : SECOURS;
+}
+
+module.exports = { appelEcrit, rattraper, consigneRecopiee, lancerOutil, phraseDuModele, sansAccord, SECOURS, FAIT_SANS_PHRASE, TROP_LONG, ACCORD };
