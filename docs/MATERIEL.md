@@ -3,7 +3,7 @@
 ## Aujourd'hui
 Archi tourne sur un PC de bureau avec une **AMD Radeon RX 9070 (16 Go)**, LM Studio (Vulkan) et Qwythos 9B (6,5 Go).
 Ce modèle raisonne, écrit et décrit les photos : il reste seul chargé, donc une photo n'attend aucun chargement.
-La reconnaissance vocale (Whisper) tourne sur le processeur. Ce qui reste limité : le contexte (16k jetons)
+La reconnaissance vocale (Whisper) tourne sur le processeur. Ce qui reste limité : le contexte (32k jetons, environ 13,5 Go de mémoire vidéo avec le modèle)
 et la taille du modèle, choisi petit pour répondre vite.
 
 ## Avec plus de mémoire vidéo (32 Go)

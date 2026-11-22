@@ -1,6 +1,6 @@
 # lancer_archi.ps1 - lance Archi avec les reglages du fichier .env (lance par lancer_archi.bat ou le raccourci du Bureau).
 #   1. lit .env (sans jamais afficher les valeurs) : le .env gagne sur les variables de Windows ;
-#   2. reveille le cerveau (LM Studio : serveur + modele charge avec un contexte de 16k) ;
+#   2. reveille le cerveau (LM Studio : serveur + modele charge avec un contexte de 32k) ;
 #   3. ouvre la page d'accueil locale (le portail) et, pour le telephone, un tunnel HTTPS qui ne mene QU'AU portail ;
 #   4. demarre la voix (Pocket TTS), le serveur mails/agenda, puis n8n (dans cette fenetre : la fermer arrete Archi).
 # Marche avec les programmes prives poses par installation.bat (dossier programmes\), sinon avec ceux du PATH.
@@ -114,7 +114,7 @@ try {
             $charges = @()
             try { $charges = @(((Lancer $lms @("ps", "--json") 30).sortie | ConvertFrom-Json) | ForEach-Object { $_.identifier; $_.modelKey }) } catch {}
             if ($charges -notcontains $env:ARCHI_MODELE) {
-                $contexte = if ($env:ARCHI_CONTEXTE) { $env:ARCHI_CONTEXTE } else { "16384" }
+                $contexte = if ($env:ARCHI_CONTEXTE) { $env:ARCHI_CONTEXTE } else { "32768" }
                 Dire "  chargement de $($env:ARCHI_MODELE) sur la carte graphique (contexte $contexte, 20 a 60 secondes)..."
                 $r = Lancer $lms @("load", $env:ARCHI_MODELE, "--context-length", $contexte, "-y") 600 -Points
                 if ($r.code -ne 0) { Dire "  ! Le modele ne s'est pas charge tout seul : il se chargera a la premiere question (plus lent)." "Yellow" }

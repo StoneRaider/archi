@@ -54,7 +54,7 @@ Chaque section du `.env` est commentée. Après un changement, relance Archi.
 | Symptôme | Cause probable |
 |---|---|
 | La page d'accueil dit « LM Studio arrêté » | Ouvre LM Studio, onglet Developer, démarre le serveur. Archi le fait tout seul si `lms` est installé. |
-| Archi répond sans jamais utiliser d'outil | Le modèle a été chargé avec un contexte trop court : relance Archi (il le charge avec 16k), ou règle `ARCHI_CONTEXTE`. |
+| Archi répond sans jamais utiliser d'outil | Le modèle a été chargé avec un contexte trop court : relance Archi (il le charge avec 32k), ou règle `ARCHI_CONTEXTE`. |
 | La photo reste sans réponse | Le modèle de vision n'est pas téléchargé, ou `ARCHI_MODELE_VISION` ne correspond pas à son nom dans LM Studio. |
 | « Téléphone : pas d'adresse » | Le tunnel n'a pas pu s'ouvrir (pas d'Internet, pare-feu). Le détail est dans `donnees\etat\tunnel.log`. |
 | L'appli affiche « Clé refusée » | Le PC a été réinstallé : rescanne le QR code. |
@@ -78,7 +78,7 @@ Il faut Node.js 22, Python 3.12 ou plus récent, et LM Studio.
 1. Installe LM Studio (lmstudio.ai), puis télécharge Qwythos 9B :
    `lms get https://huggingface.co/empero-ai/Qwythos-9B-Claude-Mythos-5-1M-GGUF` (version Q4_K_M, 6,5 Go).
 2. Le même modèle décrit les photos : pas de second modèle à télécharger (`ARCHI_MODELE_VISION` = `ARCHI_MODELE`).
-3. Onglet Developer : démarre le serveur local, et charge Qwythos 9B avec un contexte de 16k.
+3. Onglet Developer : démarre le serveur local, et charge Qwythos 9B avec un contexte de 32k (16k ne suffit pas).
 4. Vérifie avec `curl http://127.0.0.1:1234/v1/models`.
 
 ### 2. Le château et les outils

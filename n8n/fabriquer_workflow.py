@@ -14,7 +14,7 @@ const path = require('path');
 const DEPOT = $env.ARCHI_DEPOT;
 function appelNode(script, entree) {
   const out = cp.execFileSync('node', [path.join(DEPOT, 'core', script)], {
-    input: JSON.stringify(entree), timeout: 30000, windowsHide: true,
+    input: JSON.stringify(entree), timeout: 290000, windowsHide: true,
   }).toString('utf8').trim().split(/\r?\n/).pop();
   return JSON.parse(out);
 }

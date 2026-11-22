@@ -161,6 +161,11 @@ def quand_de(s):
         if u.startswith("j"):
             return now + timedelta(days=n)
         return now + timedelta(minutes=n)
+    # une duree en minutes, seule, sans « dans » (un petit modele ecrit a="2 min" : essai reel du 22/11). Seulement les
+    # minutes : « 2 h » seul reste une heure (2 h du matin).
+    m = re.fullmatch(r"(\d{1,4})\s*(?:min|mins|minutes?|mn)\.?", t)
+    if m:
+        return now + timedelta(minutes=int(m.group(1)))
     m = re.search(r"(\d{4})-(\d{2})-(\d{2})[ t](\d{1,2}):(\d{2})", t)
     if m:
         return datetime(*map(int, m.groups()))

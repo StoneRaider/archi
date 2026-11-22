@@ -52,7 +52,8 @@ def config():
         with open(CONFIG, encoding="utf-8-sig") as f:
             return json.load(f)
     except Exception:
-        raise Erreur("Je ne trouve pas la liste des prises (prises.json).")
+        raise Erreur("Aucune prise connectée n'est réglée sur ce PC : je ne peux ni lire ni changer une prise. "
+                     "Pour en brancher : docs/INSTALLATION.md, « Prises Shelly » (fichier prises.json).")
 
 
 def trouver(cfg, nom):

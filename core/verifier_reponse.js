@@ -23,6 +23,7 @@ const STOP = new Set(('si le la les un une et ou mais donc or ni car pour voici 
 const PARTICULES = new Set(['de', 'du', 'des', 'la', 'le', 'van', 'von', 'al', 'el', 'bin', 'ben', 'ibn', 'da', 'di', 'der', 'den', 'ter', 'af', 'abu', 'y']);
 
 let ENTREE = null; // gardee pour rendre la reponse telle quelle si main() plante
+let ALERTES_AVANT = []; // ce que le rattrapage d'un appel ecrit en texte a note (core/appel_en_texte.js)
 function lireEntree() { try { ENTREE = JSON.parse(fs.readFileSync(0, 'utf8') || '{}'); } catch (e) { ENTREE = {}; } return ENTREE; }
 
 function cacheLire() {
@@ -132,8 +133,7 @@ function promesseSansPlanificateur(reponse, obs) {
   return !obs.some(o => CONFIRMATION.test(norm(o)));
 }
 
-function main() {
-  const inp = lireEntree();
+function main(inp) {
   const propre = t => String(t || '').replace(/[\u2010\u2011\u2012\u2013\u2212]/g, '-').replace(/[\u00a0\u202f\u2009]/g, ' ');
   const reponse = propre(inp.reponse);
   const steps = Array.isArray(inp.steps) ? inp.steps : [];
@@ -148,7 +148,7 @@ function main() {
       const ajout = texte.slice(reponse.length);
       if (m.reponse.length + ajout.length <= 4096) m.reponse += ajout;
     }
-    process.stdout.write(JSON.stringify({ reponse: m.reponse, alertes: lignes.concat(m.alertes) }));
+    process.stdout.write(JSON.stringify({ reponse: m.reponse, alertes: ALERTES_AVANT.concat(lignes, m.alertes) }));
   };
   // Le modele n'a rien rendu (vide, sa reflexion seule, ou l'agent de n8n arrete a sa limite d'essais) : la page ne reste
   // pas muette (core/reponse_vide.js, essai reel du 22/11). L'apercu d'un mail prepare dans ce tour passe d'abord ; sinon
@@ -168,7 +168,7 @@ function main() {
   if (secours) {
     let m = { reponse: '', alertes: [] };
     try { m = require('./apercu_mail').montrer('', steps); } catch (e) { m = { reponse: '', alertes: [] }; }
-    process.stdout.write(JSON.stringify({ reponse: m.reponse || secours, alertes: ['[journal] reponse vide du modele' + (m.reponse ? '' : ' : phrase de secours')].concat(m.alertes || []) }));
+    process.stdout.write(JSON.stringify({ reponse: m.reponse || secours, alertes: ALERTES_AVANT.concat(['[journal] reponse vide du modele' + (m.reponse ? '' : ' : phrase de secours')], m.alertes || []) }));
     return;
   }
   if (!reponse.trim()) { rendre(reponse, []); return; }
@@ -261,4 +261,17 @@ function main() {
   }
   rendre(sortie, alertes);
 }
-try { main(); } catch (e) { try { process.stdout.write(JSON.stringify({ reponse: String((ENTREE || {}).reponse || ''), alertes: [], erreur: String(e.message || e) })); } catch (e2) { process.stdout.write(JSON.stringify({ reponse: '', alertes: [] })); } }
+// Le modele a ecrit l'appel d'outil au lieu de le lancer (core/appel_en_texte.js) : l'appel part, avec les memes controles
+// que dans l'agent, puis le modele ecrit la phrase ; tous les controles ci-dessus portent ensuite sur cette phrase.
+async function demarrer() {
+  const inp = lireEntree();
+  try {
+    const r = await require('./appel_en_texte').rattraper(inp);
+    if (r) {
+      ENTREE = Object.assign({}, inp, { reponse: r.reponse, steps: r.steps });
+      ALERTES_AVANT = r.alertes;
+    }
+  } catch (e) { /* le rattrapage ne bloque jamais la reponse */ }
+  main(ENTREE);
+}
+demarrer().catch(e => { try { process.stdout.write(JSON.stringify({ reponse: String((ENTREE || {}).reponse || ''), alertes: [], erreur: String(e.message || e) })); } catch (e2) { process.stdout.write(JSON.stringify({ reponse: '', alertes: [] })); } });
