@@ -69,4 +69,4 @@ jobs:
       - name: Tests de l'image par lien (site et modele simules)
         run: cd outils/image_lien && python test_image_lien.py
       - name: Tests du monteur video (montage simule)
-        run: cd outils/monteur && python test_monteur.py
+        run: pip install numpy && cd outils/monteur && python test_monteur.py

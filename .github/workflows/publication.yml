@@ -27,6 +27,8 @@ jobs:
           distribution: temurin
           java-version: "21"
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools   # le paquet « tools » par defaut n'existe plus (sdkmanager echoue)
       - name: "Fabriquer l'appli Android, signee par la cle stable (aucune cle d'Archi dedans : elle se branche par QR code)"
         working-directory: appli
         env:
