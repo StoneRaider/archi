@@ -269,7 +269,7 @@ async function demarrer() {
   // disent deja qui parle
   // (pas quand on lui demande son nom : « Archi : un assistant local… » est alors la reponse)
   if (typeof inp.reponse === 'string' && /^\s*archi\s*:\s*\S/i.test(inp.reponse)
-    && !/\b(?:ton nom|comment tu t'appelles|tu t'appelles|qui es[- ]tu|t'es qui)\b/i.test(String(inp.msg || ''))) inp.reponse = inp.reponse.replace(/^\s*archi\s*:\s*/i, '');
+    && !/\b(?:ton nom|comment tu t['’]appelles|tu t['’]appelles|qui es[- ]tu|t['’]es qui)\b/i.test(String(inp.msg || ''))) inp.reponse = inp.reponse.replace(/^\s*archi\s*:\s*/i, '');
   try {
     const r = await require('./appel_en_texte').rattraper(inp);
     if (r) {

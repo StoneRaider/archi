@@ -159,6 +159,21 @@ function secoursDe(resultat) {
 const exempleDemande = m => /\bjson\b|(?<!par )\bexemple d(?:e |')|\bun exemple\b|montre[- ]moi (?:comment|l'appel|le format)|appel exact|sans (?:le )?lancer|sans rien lancer/i
   .test(String(m || ''));
 
+// Le message que voit le verificateur porte aussi les consignes d'aiguillage d'Archi (core/contexte.js : « [CONSIGNE
+// ARCHI] … Appel exact : outils_maison {…} ») : elles contiennent l'appel exact et ses mots. Essai reel du 22/11 : le
+// rattrapage les prenait pour une recopie. On retire MOT POUR MOT les seules consignes connues (config/aiguillages.json) :
+// un contenu colle qui imiterait la marque ne masque rien d'autre que nos propres phrases.
+let CONSIGNES = null;
+function parole(msg) {
+  let t = String(msg == null ? '' : msg);
+  if (!t.includes('[CONSIGNE ARCHI]')) return t;
+  if (CONSIGNES === null) {
+    try { CONSIGNES = require('./contexte').chargerAiguillages().map(a => a.dire).filter(d => typeof d === 'string' && d); } catch (e) { CONSIGNES = []; }
+  }
+  for (const d of CONSIGNES) t = t.split('[CONSIGNE ARCHI] ' + d).join('');
+  return t.replace(/\s+$/, '');
+}
+
 const lire = x => {
   if (x && typeof x === 'object') return x;
   try { const j = JSON.parse(String(x)); return typeof j === 'string' ? lire(j) : (j && typeof j === 'object' ? j : null); } catch (e) { return null; }
@@ -179,13 +194,14 @@ async function rattraper(inp, options) {
   const exterieur = t => (String(t).match(/\[\[\s*CONTENU EXT[\s\S]*?(?:\[\[\s*FIN[^\]]*\]\]|$)/gi) || []).join('\n');
   // les outils branches directement sur l'agent (lire_page, navigateur...) ne balisent pas leur contenu : toute leur
   // observation compte ; pour outils_maison, seul le contenu exterieur (ses suggestions d'appel exact doivent partir)
-  const vus = [inp.msg].concat(steps.map(st => {
+  const msg = parole(inp.msg);
+  const vus = [msg].concat(steps.map(st => {
     const ob = st && st.observation; const t = typeof ob === 'string' ? ob : JSON.stringify(ob || '');
     return st && st.action && st.action.tool === 'outils_maison' ? exterieur(t) : t;
   }));
   if (vus.some(v => serre(v).includes(cle))) return null;
   // l'utilisateur a demande a VOIR un appel (un exemple, le JSON) : il le voit, rien ne part
-  if (exempleDemande(inp.msg)) return null;
+  if (exempleDemande(msg)) return null;
   const alertes = ['[journal] appel ecrit en texte : ' + nom];
   let resultat, ajout = [];
   const reg = registre(options);
@@ -218,7 +234,7 @@ async function rattraper(inp, options) {
     }];
     alertes[0] += resultat && resultat.ok ? ' (outil ok)' : ' (outil en echec)';
   }
-  let phrase = await phraseDuModele(inp.msg, brut, resultat, Object.assign({}, options, { dejaFait: dejaLance.length > 0 }));
+  let phrase = await phraseDuModele(msg, brut, resultat, Object.assign({}, options, { dejaFait: dejaLance.length > 0 }));
   if (!phrase) { phrase = secoursDe(resultat); alertes.push('[journal] appel ecrit : phrase de secours'); }
   return { reponse: phrase, steps: steps.concat(ajout), alertes };
 }
@@ -228,7 +244,7 @@ async function rattraper(inp, options) {
  * d'abord l'accord, puis rappelle-le avec accord=oui. ») : la phrase pour l'utilisateur qui la remplace, ou ''.
  */
 function consigneRecopiee(reponse, steps, msg) {
-  if (eteint() || exempleDemande(msg)) return '';
+  if (eteint() || exempleDemande(parole(msg))) return '';
   const t = sansReflexion(reponse).trim();
   if (!t || t.length > 400 || /^\s*\[TEXTE\]/i.test(t) || !CONSIGNE_SURE.test(t)) return '';
   const obs = (Array.isArray(steps) ? steps : []).filter(st => st && st.action && st.action.tool === 'outils_maison').map(st => lire(st.observation)).filter(Boolean);
@@ -236,4 +252,4 @@ function consigneRecopiee(reponse, steps, msg) {
   return secoursDe(obs[obs.length - 1]);
 }
 
-module.exports = { appelEcrit, rattraper, consigneRecopiee, lancerOutil, phraseDuModele, sansAccord, SECOURS, FAIT_SANS_PHRASE, TROP_LONG, ACCORD };
+module.exports = { parole, appelEcrit, rattraper, consigneRecopiee, lancerOutil, phraseDuModele, sansAccord, SECOURS, FAIT_SANS_PHRASE, TROP_LONG, ACCORD };
