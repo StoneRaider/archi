@@ -155,6 +155,10 @@ function secoursDe(resultat) {
   return SECOURS;
 }
 
+// le message demande a VOIR un appel (pas « par exemple ») : rien n'est lance ni remplace
+const exempleDemande = m => /\bjson\b|(?<!par )\bexemple d(?:e |')|\bun exemple\b|montre[- ]moi (?:comment|l'appel|le format)|appel exact|sans (?:le )?lancer|sans rien lancer/i
+  .test(String(m || ''));
+
 const lire = x => {
   if (x && typeof x === 'object') return x;
   try { const j = JSON.parse(String(x)); return typeof j === 'string' ? lire(j) : (j && typeof j === 'object' ? j : null); } catch (e) { return null; }
@@ -181,7 +185,7 @@ async function rattraper(inp, options) {
   }));
   if (vus.some(v => serre(v).includes(cle))) return null;
   // l'utilisateur a demande a VOIR un appel (un exemple, le JSON) : il le voit, rien ne part
-  if (/\bjson\b|\bexemple\b|montre[- ]moi (?:comment|l'appel|le format)|appel exact|sans (?:le )?lancer|sans rien lancer/i.test(String(inp.msg || ''))) return null;
+  if (exempleDemande(inp.msg)) return null;
   const alertes = ['[journal] appel ecrit en texte : ' + nom];
   let resultat, ajout = [];
   const reg = registre(options);
@@ -223,8 +227,8 @@ async function rattraper(inp, options) {
  * Une reponse qui recopie une consigne destinee au modele (essai reel du 22/11 : « Cet outil est sensible (...) : demande
  * d'abord l'accord, puis rappelle-le avec accord=oui. ») : la phrase pour l'utilisateur qui la remplace, ou ''.
  */
-function consigneRecopiee(reponse, steps) {
-  if (eteint()) return '';
+function consigneRecopiee(reponse, steps, msg) {
+  if (eteint() || exempleDemande(msg)) return '';
   const t = sansReflexion(reponse).trim();
   if (!t || t.length > 400 || /^\s*\[TEXTE\]/i.test(t) || !CONSIGNE_SURE.test(t)) return '';
   const obs = (Array.isArray(steps) ? steps : []).filter(st => st && st.action && st.action.tool === 'outils_maison').map(st => lire(st.observation)).filter(Boolean);

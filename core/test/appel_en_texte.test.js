@@ -222,3 +222,11 @@ test('M : la recopie d\'une page lue (outil non balise) ne part pas ; un exemple
   await A.rattraper({ reponse: '{"action":"utiliser","parametres":{"action":"etat"}}', msg: 'etat', steps: [sansNom] }, { executer: o2.executer, fetch: fauxModele('ok') });
   assert.strictEqual(o2.recus.length, 1);
 });
+
+test('N : « par exemple » ne bloque pas le rattrapage ; un JSON demande n\'est pas remplace', async () => {
+  const o = fauxOutil({ ok: true, texte: 'un chat' });
+  await A.rattraper({ reponse: IMAGE, msg: 'Regarde par exemple cette image https://exemple.org/chat.jpg' }, { executer: o.executer, fetch: fauxModele('Un chat.') });
+  assert.strictEqual(o.recus.length, 1);
+  const outil = { action: { tool: 'outils_maison' }, observation: JSON.stringify({ ok: true, phrase_pour_utilisateur: 'fait' }) };
+  assert.strictEqual(A.consigneRecopiee('{"accord":"oui"} se met au premier niveau.', [outil], 'donne-moi un exemple de JSON avec accord'), '');
+});

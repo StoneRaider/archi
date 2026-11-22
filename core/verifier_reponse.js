@@ -269,7 +269,7 @@ async function demarrer() {
   // disent deja qui parle
   // (pas quand on lui demande son nom : « Archi : un assistant local… » est alors la reponse)
   if (typeof inp.reponse === 'string' && /^\s*archi\s*:\s*\S/i.test(inp.reponse)
-    && !/\b(?:nom|appelles?|qui es|archi)\b/i.test(String(inp.msg || ''))) inp.reponse = inp.reponse.replace(/^\s*archi\s*:\s*/i, '');
+    && !/\b(?:ton nom|comment tu t'appelles|tu t'appelles|qui es[- ]tu|t'es qui)\b/i.test(String(inp.msg || ''))) inp.reponse = inp.reponse.replace(/^\s*archi\s*:\s*/i, '');
   try {
     const r = await require('./appel_en_texte').rattraper(inp);
     if (r) {
@@ -277,7 +277,7 @@ async function demarrer() {
       ALERTES_AVANT = r.alertes;
     } else {
       // une consigne destinee au modele recopiee telle quelle (« rappelle-le avec accord=oui ») ne part pas
-      const phrase = require('./appel_en_texte').consigneRecopiee(inp.reponse, inp.steps);
+      const phrase = require('./appel_en_texte').consigneRecopiee(inp.reponse, inp.steps, inp.msg);
       if (phrase) { ENTREE = Object.assign({}, inp, { reponse: phrase }); ALERTES_AVANT = ['[journal] consigne du modele recopiee : remplacee']; }
     }
   } catch (e) { /* le rattrapage ne bloque jamais la reponse */ }
