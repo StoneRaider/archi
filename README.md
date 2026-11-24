@@ -19,8 +19,11 @@ Ni la photo ni la conversation ne passent par un service d'IA en ligne.
 
 Il faut Windows 10 ou 11, une carte graphique de 16 Go (le modèle en prend environ 7) et environ 15 Go de place libre.
 
-1. **Télécharge `Archi-1.1.zip`** sur la page [Releases](../../releases/latest), puis extrais-le
-   (clic droit › « Extraire tout »).
+1. **Télécharge `Archi-1.1.zip`** sur la page [Releases](../../releases/latest). **Avant de l'extraire** : clic droit
+   sur le ZIP › Propriétés › coche « Débloquer » › OK. Puis extrais-le (clic droit › « Extraire tout »).
+   Windows SmartScreen bloque sinon `installation.bat`, parce qu'il vient d'Internet et n'est pas signé par un
+   éditeur payant ; s'il affiche quand même « Windows a protégé votre ordinateur » : « Informations complémentaires »,
+   puis « Exécuter quand même ». Tout le code est lisible dans ce dépôt.
 2. **Double-clique sur `installation.bat`.** Il demande ton prénom et si tu veux aussi Telegram, puis installe
    tout, tout seul, en 15 à 40 minutes selon ta connexion.
 3. **Parle à Archi.** À la fin, sa page d'accueil s'ouvre dans ton navigateur : écris-lui

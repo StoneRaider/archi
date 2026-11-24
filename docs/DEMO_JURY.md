@@ -27,10 +27,13 @@ le contrôle « aucun secret ni donnée personnelle » et les tests. Rien n'est 
 
 ## 3. Installer : un double-clic
 
-1. Extraire `Archi-1.1.zip` (clic droit › « Extraire tout »).
+1. **Débloquer le ZIP avant de l'extraire** : clic droit sur `Archi-1.1.zip` › Propriétés › cocher « Débloquer » › OK.
+   Sans cela, Windows SmartScreen bloque `installation.bat` (fichier venu d'Internet, non signé par un éditeur).
+   Si le navigateur retient le téléchargement, choisir « Conserver » dans sa liste des téléchargements.
+   Puis extraire le ZIP (clic droit › « Extraire tout »).
 2. Double-cliquer sur **`installation.bat`**. Il demande un prénom et si l'on veut Telegram (répondre non suffit).
-3. Attendre 15 à 40 minutes selon la connexion. Si Windows affiche « Windows a protégé votre ordinateur » :
-   « Informations complémentaires », puis « Exécuter quand même » (le fichier n'est pas signé par un éditeur).
+3. Attendre 15 à 40 minutes selon la connexion. Si Windows affiche malgré tout « Windows a protégé votre ordinateur » :
+   « Informations complémentaires », puis « Exécuter quand même ».
 
 Ce qu'il fait, dans l'ordre : Python, Node.js 22, n8n, ffmpeg, le tunnel du téléphone et la voix, tous **dans le
 dossier d'Archi** (versions fixes, empreintes SHA-256 vérifiées) ; LM Studio par `winget` s'il manque, puis les modèles ;
