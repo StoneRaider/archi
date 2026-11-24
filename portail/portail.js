@@ -379,6 +379,7 @@ function atelier(r) {
 }
 
 const SAIN_DEPUIS = new WeakMap();   // par portail : depuis quand n8n repond
+const ACTIF = new WeakMap();         // par portail : quand le workflow a ete vu actif (on ne resonde qu'une fois par minute)
 
 /** Ce qu'Archi a retenu tout seul (outils/memoire) : le nombre de fiches et de faits, et les derniers faits ranges. */
 function memoire(r) {
@@ -426,17 +427,21 @@ function memoire(r) {
 }
 
 async function etat(r, suivi) {
+  const recent = ACTIF.has(r) && Date.now() - ACTIF.get(r) < 60000;
   const [n8n, sonde, lm, etatVoix] = await Promise.all([
     voir('http://127.0.0.1:' + r.n8nPort + '/healthz', 2500),
     // n8n se dit en bonne sante quelques secondes AVANT d'avoir active le workflow : un message envoye a ce moment-la
     // se perd. Un GET sur le webhook (qui n'accepte que POST) ne lance rien, et sa reponse dit s'il est enregistre.
-    voir('http://127.0.0.1:' + r.n8nPort + '/webhook/telephone-archi', 2500),
+    // Une fois vu actif, on ne resonde qu'une fois par minute : chaque GET ecrit une ligne d'avertissement chez n8n.
+    recent ? null : voir('http://127.0.0.1:' + r.n8nPort + '/webhook/telephone-archi', 2500),
     voir(r.lmUrl + '/models', 2500),
     r.voix ? voix.etat(r.voix).catch(() => null) : null,
   ]);
   const sain = !!(n8n && n8n.code === 200);
-  if (!sain) SAIN_DEPUIS.delete(r); else if (!SAIN_DEPUIS.has(r)) SAIN_DEPUIS.set(r, Date.now());
-  const active = !!(sonde && sonde.code === 404 && /POST request/i.test(sonde.corps));
+  if (!sain) { SAIN_DEPUIS.delete(r); ACTIF.delete(r); } else if (!SAIN_DEPUIS.has(r)) SAIN_DEPUIS.set(r, Date.now());
+  const active = recent || !!(sonde && sonde.code === 404 && /POST request/i.test(sonde.corps));
+  if (sain && active && !recent) ACTIF.set(r, Date.now());
+  if (sonde && !active) ACTIF.delete(r);
   // si la reponse de n8n change de forme un jour, on ne reste pas bloque : au bout de 90 s de bonne sante, on le croit pret
   const agentPret = sain && (active || Date.now() - SAIN_DEPUIS.get(r) > 90000);
   let modeles = [];

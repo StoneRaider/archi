@@ -10,7 +10,7 @@ Sur la page [Releases](../../../releases/latest) du dépôt :
 
 | Fichier | Ce que c'est |
 |---|---|
-| `Archi-1.1.zip` | La démo complète (le dépôt + l'appli Android déjà compilée). C'est le seul fichier nécessaire. |
+| `Archi-1.2.zip` | La démo complète (le dépôt + l'appli Android déjà compilée). C'est le seul fichier nécessaire. |
 | `Archi.apk` | La même appli Android, à part. Facultatif : la page d'accueil du PC la propose par QR code. |
 
 Les deux sont fabriqués par GitHub Actions (workflow `publication.yml`) à partir du code de ce dépôt, après
@@ -20,18 +20,21 @@ le contrôle « aucun secret ni donnée personnelle » et les tests. Rien n'est 
 
 - Windows 10 ou 11, 64 bits, une connexion Internet pour l'installation ;
 - une carte graphique de 16 Go de mémoire vidéo (le modèle et son contexte de 32k en prennent environ 13,5) ;
-  testé sur AMD Radeon RX 9070 ;
+  testé sur AMD Radeon RX 9070. Avec moins (par exemple un portable à 8 Go), tout marche, mais les réponses sont lentes ;
 - environ 15 Go de place libre (dont 7 Go pour le modèle Qwythos 9B, qui sert aussi pour les photos) ;
 - aucun compte à créer, aucune clé API. Telegram est facultatif, la recherche sur le web aussi (clé Tavily gratuite,
   `TAVILY_API_KEY` dans `.env`).
 
 ## 3. Installer : un double-clic
 
-1. **Débloquer le ZIP avant de l'extraire** : clic droit sur `Archi-1.1.zip` › Propriétés › cocher « Débloquer » › OK.
+1. **Débloquer le ZIP avant de l'extraire** : clic droit sur `Archi-1.2.zip` › Propriétés › cocher « Débloquer » › OK.
    Sans cela, Windows SmartScreen bloque `installation.bat` (fichier venu d'Internet, non signé par un éditeur).
    Si le navigateur retient le téléchargement, choisir « Conserver » dans sa liste des téléchargements.
    Puis extraire le ZIP (clic droit › « Extraire tout »).
-2. Double-cliquer sur **`installation.bat`**. Il demande un prénom et si l'on veut Telegram (répondre non suffit).
+2. Double-cliquer sur **`installation.bat`**. Il demande un prénom, si l'on veut Telegram (répondre non suffit) et la
+   boîte à outils Docker (oui pour voir les présentations PowerPoint et le globe de l'Œil ; environ 8 Go et
+   20 minutes de plus, Windows peut demander un redémarrage : relancer alors `installation.bat`).
+   Si LM Studio s'ouvre et propose un modèle, le refuser : l'installateur télécharge Qwythos 9B lui-même.
 3. Attendre 15 à 40 minutes selon la connexion. Si Windows affiche malgré tout « Windows a protégé votre ordinateur » :
    « Informations complémentaires », puis « Exécuter quand même ».
 

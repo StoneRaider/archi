@@ -239,10 +239,17 @@ function synthese(piece, nom) {
 }
 
 // ---------- 5. outils maison ----------
+// Un outil qui a besoin de la boite Docker (« besoin »: "docker" dans le registre) n'est montre au modele que si la boite
+// est demandee (ARCHI_DOCKER=oui) : sinon il le choisissait quand meme (un poeme parti chez Presenton, essai du 24/11).
+// Les registres poses avant ce champ n'ont que le nom : d'ou la liste de secours.
+const BESOIN_DOCKER = new Set(['presentation']);
+function besoinDocker(o) { return o.besoin === 'docker' || BESOIN_DOCKER.has(o.nom); }
+
 function outilsMaison() {
   try {
     const reg = JSON.parse(fs.readFileSync(path.join(BASE, 'outils', 'registre.json'), 'utf8'));
-    const L = Object.values(reg).map(o => '- ' + o.nom + (o.sensible ? ' (SENSIBLE : accord puis accord=oui)' : o.sensible_si ? ' (sans accord ; accord=oui seulement si ' + (Array.isArray(o.sensible_si) ? o.sensible_si.join(', ') + ' est donné'
+    const boite = String(process.env.ARCHI_DOCKER || '').trim().toLowerCase() === 'oui';
+    const L = Object.values(reg).filter(o => boite || !besoinDocker(o)).map(o => '- ' + o.nom + (o.sensible ? ' (SENSIBLE : accord puis accord=oui)' : o.sensible_si ? ' (sans accord ; accord=oui seulement si ' + (Array.isArray(o.sensible_si) ? o.sensible_si.join(', ') + ' est donné'
       : Object.entries(o.sensible_si).map(([k, v]) => k + ' = ' + [].concat(v).join('/')).join(' ; ')) + ')' : '') + ' : ' + String(o.description).slice(0, 300)
       + ' | paramètres : ' + (o.parametres || []).map(p => p.nom + ' = ' + p.description).join(' ; '));
     return L.length ? L.join('\n') : "aucun pour l'instant";

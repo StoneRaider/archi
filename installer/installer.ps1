@@ -17,6 +17,7 @@
 #   -SansLancer              ne lance pas Archi a la fin
 #   -SansRaccourci           ne pose pas le raccourci sur le Bureau
 #   -SansVoix                n'installe ni l'oreille (Whisper) ni la parole (Pocket TTS)
+#   -AvecBoite / -SansBoite  installe (ou non) la boite a outils Docker (Presenton, globe de l'oeil) sans poser la question
 #   -PortN8n, -PortPortail, -PortPorte, -PortServeur, -PortVoix   ports imposes (0 = le premier libre)
 param(
     [string]$Destination = (Join-Path $env:USERPROFILE "Archi"),
@@ -29,6 +30,8 @@ param(
     [switch]$SansLancer,
     [switch]$SansRaccourci,
     [switch]$SansVoix,
+    [switch]$AvecBoite,
+    [switch]$SansBoite,
     [int]$PortN8n = 0,
     [int]$PortPortail = 0,
     [int]$PortPorte = 0,
@@ -42,7 +45,7 @@ try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 # ---------------------------------------------------------------- versions (un seul endroit)
-$VERSION_ARCHI = "1.0"
+$VERSION_ARCHI = "1.2"
 $VERSION_N8N = "1.123.92"          # la serie 1.x, celle avec laquelle les workflows ont ete faits
 $VERSION_NODE = "22"               # Node.js LTS (n8n 1.x demande Node 20.19 a 24)
 # Les programmes telecharges : une version precise, et son empreinte SHA-256 verifiee avant usage.
@@ -54,6 +57,8 @@ $TELECHARGEMENTS = @{
     # la voix : whisper.cpp (l'oreille, version processeur), son modele small, et Pocket TTS (la parole)
     "whisper.zip"     = @("https://github.com/ggml-org/whisper.cpp/releases/download/b5454/whisper-bin-x64.zip", "6ba69e3482d7826214f90a6a9c84ca07782aec1e1d0c6a7c30c994fd5d816ccb")
     "ggml-small.bin"  = @("https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.bin", "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b")
+    # le globe de l'oeil (boite a outils facultative) : gods-eye-view 0.3.0, licence MIT
+    "gods-eye-view.zip" = @("https://github.com/bilawalsidhu/gods-eye-view/archive/refs/tags/v0.3.0.zip", "c5ff258ca25ca2a1dd62fa00c754c856e55ba66be5df7e60b215e70a80e9866d")
     "pocket-tts.zip"  = @("https://github.com/kyutai-labs/pocket-tts/releases/download/v4.0.1/pocket-tts-3.3.0-x86_64-pc-windows-msvc.zip", "98753041f2e65744b989776f87bccb93f1f574a08afe1890c5427ec94cd6309c")
 }
 $VERSION_PYTHON = "3.12"
@@ -67,7 +72,7 @@ $PROG = Join-Path $Destination "programmes"
 $TELE = Join-Path $Destination "telechargements"
 $ENVF = Join-Path $Destination ".env"
 $RAPPORT = New-Object System.Collections.Generic.List[string]
-$UA = @{ "User-Agent" = "Archi-installateur/1.0" }
+$UA = @{ "User-Agent" = "Archi-installateur/1.2" }
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 
 . (Join-Path $PSScriptRoot "commun.ps1")   # Dire, Titre, PortLibre, ValeurEnv, ReglerEnv, ChargerEnv, Lancer, TrouverLms
@@ -174,7 +179,13 @@ try { $libreGo = [math]::Round((New-Object System.IO.DriveInfo ([System.IO.Path]
 Noter ("Carte(s) graphique(s) : " + $(if ($cartes) { $cartes -join ", " } else { "inconnue" }) + $(if ($vramGo) { " ; memoire video : $vramGo Go" } else { "" }))
 Noter "Memoire : $ramGo Go ; place libre sur le disque : $libreGo Go"
 $VISION = $MODELE     # un seul modele pour penser, ecrire et voir : la carte reste libre, rien a recharger
-if ($vramGo -gt 0 -and $vramGo -lt 8) { Souci "Moins de 8 Go de memoire video : le cerveau ($MODELE) debordera sur le processeur. Archi marchera, mais lentement." }
+# Le contexte du cerveau (ARCHI_CONTEXTE) : 32k par defaut (a 16k, la liste des outils et un resultat debordent, essai
+# du 22/11). Qwythos 9B + 32k prennent environ 13,5 Go de memoire video : sous 16 Go, le modele deborde sur le processeur.
+$CONTEXTE = 32768
+if ($vramGo -gt 0 -and $vramGo -lt 16) {
+    if ($vramGo -ge 12) { $CONTEXTE = 24576 }
+    Souci "Memoire video : $vramGo Go, sous les 16 Go conseilles. Le cerveau ($MODELE) et son contexte debordent sur le processeur : Archi marchera, mais lentement."
+}
 if ($libreGo -gt 0 -and $libreGo -lt 15) { Souci "Moins de 15 Go libres : le modele (environ 7 Go) risque de ne pas tenir." }
 
 # ---------------------------------------------------------------- 2. ce qui va etre installe
@@ -184,6 +195,7 @@ Dire "   - Python $VERSION_PYTHON et Node.js $VERSION_NODE prives, n8n $VERSION_
 Dire "   - les outils maison d'Archi, son chateau d'exemple (sa memoire) et ses workflows"
 Dire "   - un tunnel HTTPS sans compte (Cloudflare) pour le telephone, et ffmpeg"
 if (-not $SansVoix) { Dire "   - la voix, en local : Whisper (il t'ecoute) et Pocket TTS (il te repond a voix haute), environ 1 Go" }
+Dire "  En option (question juste apres) : la boite a outils Docker, pour les presentations et le globe de l'oeil."
 if (-not $SansCerveau) {
     Dire "  Le cerveau : LM Studio (installe par winget s'il manque) et un modele (environ 7 Go a telecharger) :"
     Dire "   - $MODELE (le raisonnement, l'ecriture et les photos)"
@@ -196,6 +208,17 @@ $Prenom = ($Prenom -replace '[^\p{L}\p{N} \-]', '').Trim()
 if (-not $Prenom) { $Prenom = "toi" }
 $veutTelegram = $false
 if (-not $Oui) { $veutTelegram = Demander "Brancher aussi Telegram ? (2 minutes, guide, avec ton telephone ; tu peux le faire plus tard)" $false }
+# La boite a outils (facultative) : Docker Desktop fait tourner Presenton (presentations) et le globe de l'oeil.
+# Question posee ici, pour que tout le reste tourne ensuite sans toi.
+$veutBoite = [bool]$AvecBoite
+if (-not $veutBoite -and -not $SansBoite) {
+    if ((Test-Path $ENVF) -and (ValeurEnv "ARCHI_DOCKER") -eq "oui") { $veutBoite = $true }
+    elseif (-not $Oui) {
+        Dire "  Facultatif : la boite a outils (Docker Desktop) ajoute les presentations PowerPoint (Presenton) et le globe de l'oeil."
+        Dire "  Environ 8 Go de plus ; Windows demandera ton accord, et peut-etre un redemarrage."
+        $veutBoite = Demander "Installer aussi la boite a outils ?" $false
+    }
+}
 
 # ---------------------------------------------------------------- 3. les fichiers d'Archi
 Titre "3. Les fichiers d'Archi"
@@ -369,6 +392,8 @@ ReglerEnv "N8N_HIRING_BANNER_ENABLED" "false"
 ReglerEnv "ARCHI_TUNNEL" "rapide"
 # la memoire : Archi retient tout seul ce que tu lui apprends de durable (oui ou non)
 ReglerEnv "ARCHI_MEMOIRE" "oui"
+# le contexte du cerveau, choisi d'apres la memoire video (etape 1) ; une reinstallation garde ton reglage
+ReglerEnv "ARCHI_CONTEXTE" "$CONTEXTE" -Forcer:$nouveauEnv
 Noter "Fichier .env pret (deux cles aleatoires, creees a la premiere installation ; aucune valeur n'est affichee). Ports : n8n $pN8n, page d'accueil $pPortail, porte du telephone $pPorte, serveur $pServeur."
 
 # ---------------------------------------------------------------- 9. le cerveau : LM Studio et les modeles
@@ -401,8 +426,10 @@ if (-not $SansCerveau) {
             if (-not $lms) { throw "LM Studio est installe mais son outil 'lms' n'est pas apparu : ouvre LM Studio une fois, puis relance installation.bat" }
             Noter "LM Studio installe."
         } else { Noter "LM Studio deja la." }
+        # au tout premier lancement, LM Studio finit de se preparer : on reessaie un peu avant de le signaler
         $r = Lancer $lms @("server", "start") 120
-        if ($r.code -ne 0) { Souci "Le serveur de LM Studio n'a pas demarre tout seul : ouvre LM Studio, onglet Developer, et demarre le serveur." }
+        for ($i = 0; $i -lt 3 -and $r.code -ne 0; $i++) { Start-Sleep -Seconds 20; $r = Lancer $lms @("server", "start") 120 }
+        if ($r.code -ne 0) { Souci "Le serveur de LM Studio n'a pas demarre pendant l'installation : Archi le demarrera a son lancement (sinon : LM Studio, onglet Developer, demarrer le serveur)." }
         $la = ModelesLa $lms
         foreach ($role in @("cerveau", "vision")) {
             $voulu = if ($role -eq "cerveau") { $MODELE } else { $VISION }
@@ -512,7 +539,71 @@ try {
     ($r.sortie -split "`r?`n") | Where-Object { $_.Trim() } | ForEach-Object { if ($_ -match "Echec|PAS active") { Souci $_ } else { Noter $_ } }
 } catch { Souci "n8n : $($_.Exception.Message)" }
 
-# ---------------------------------------------------------------- 12. le raccourci et le bilan
+# ---------------------------------------------------------------- 12. la boite a outils (facultative) : Docker
+# Docker Desktop par winget, le globe (gods-eye-view, version figee, empreinte verifiee), puis les conteneurs.
+# Si Docker n'est pas encore pret (WSL a activer, redemarrage), on le dit : relancer installation.bat reprend ici.
+if ($veutBoite) {
+    Titre "12. La boite a outils : Docker, Presenton et le globe de l'oeil"
+    try {
+        $dockerExe = $null
+        $cmd = Get-Command docker -ErrorAction SilentlyContinue
+        if ($cmd) { $dockerExe = $cmd.Source }
+        $dockerDefaut = Join-Path $env:ProgramFiles "Docker\Docker\resources\bin\docker.exe"
+        if (-not $dockerExe -and (Test-Path $dockerDefaut)) { $dockerExe = $dockerDefaut }
+        if (-not $dockerExe) {
+            if ($SansReseau) { throw "Docker n'est pas installe et le reseau est coupe (mode essai)" }
+            if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { throw "winget est absent : installe Docker Desktop depuis docker.com, puis relance installation.bat" }
+            Dire "  installation de Docker Desktop par winget (Windows va demander ton accord ; 5 a 15 minutes)..."
+            & winget install --id Docker.DockerDesktop -e --silent --accept-package-agreements --accept-source-agreements | Out-Null
+            if (Test-Path $dockerDefaut) { $dockerExe = $dockerDefaut }
+            if (-not $dockerExe) { throw "Docker Desktop ne s'est pas installe : installe-le depuis docker.com, puis relance installation.bat" }
+            Noter "Docker Desktop installe."
+        } else { Noter "Docker deja la." }
+        $boite = Join-Path $Destination "boite_outils"
+        $sources = Join-Path $boite "relais_cams\sources.json"
+        if (-not (Test-Path $sources)) { Copy-Item (Join-Path $boite "relais_cams\sources.exemple.json") $sources -Force }
+        $globe = Join-Path $boite "gods-eye-view"
+        if (-not (Test-Path (Join-Path $globe "package.json"))) {
+            try {
+                $zip = Telecharger "gods-eye-view.zip"
+                $tmp = Join-Path $TELE "gods-eye-view"
+                Decompresser $zip $tmp
+                $dedans = Get-ChildItem $tmp -Directory | Select-Object -First 1
+                if (-not $dedans -or -not (Test-Path (Join-Path $dedans.FullName "package.json"))) { throw "archive inattendue" }
+                if (Test-Path $globe) { Remove-Item $globe -Recurse -Force }
+                Move-Item $dedans.FullName $globe
+                Noter "Globe de l'oeil pose (gods-eye-view 0.3.0, licence MIT)."
+            } catch { Souci "Globe de l'oeil : $($_.Exception.Message) (Presenton marchera quand meme)." }
+        }
+        $pret = (Lancer $dockerExe @("info") 60).code -eq 0
+        if (-not $pret) {
+            $appli = Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"
+            if (Test-Path $appli) { Start-Process -FilePath $appli }
+            Dire "  demarrage de Docker Desktop : au premier lancement, accepte ses conditions dans sa fenetre (jusqu'a 5 minutes)"
+            for ($i = 0; $i -lt 60 -and -not $pret; $i++) { Start-Sleep -Seconds 5; $pret = (Lancer $dockerExe @("info") 30).code -eq 0 }
+        }
+        if ($pret) {
+            $profils = @()
+            if (Test-Path (Join-Path $globe "package.json")) { $profils = @("--profile", "oeil") }
+            Dire "  telechargement et preparation des conteneurs (plusieurs Go : 5 a 20 minutes)"
+            $argsBoite = @("compose", "--project-directory", $boite, "-f", (Join-Path $boite "docker-compose.yml"), "--env-file", $ENVF) + $profils + @("up", "-d", "--build")
+            $r = Lancer $dockerExe $argsBoite 3600 -Points
+            if ($r.code -eq 0) {
+                $quoi = if ($profils) { "Presenton (http://127.0.0.1:5001) et le globe (http://127.0.0.1:4173)" } else { "Presenton (http://127.0.0.1:5001)" }
+                # ARCHI_DOCKER=oui seulement maintenant : sinon Archi proposerait des outils qui ne tournent pas
+                ReglerEnv "ARCHI_DOCKER" "oui" -Forcer
+                Noter "Boite a outils prete : $quoi. Archi la relance a chaque demarrage."
+            } else {
+                $detail = ($r.erreur -split "`r?`n" | Where-Object { $_.Trim() } | Select-Object -Last 1)
+                Souci "Boite a outils : les conteneurs n'ont pas demarre (relance installation.bat et reponds oui a la boite ; detail : $detail)"
+            }
+        } else {
+            Souci "Docker n'est pas encore pret (Windows demande souvent un redemarrage pour WSL) : redemarre le PC, ouvre Docker Desktop une fois, puis relance installation.bat et reponds oui a la boite a outils."
+        }
+    } catch { Souci "Boite a outils : $($_.Exception.Message)" }
+}
+
+# ---------------------------------------------------------------- 13. le raccourci et le bilan
 Titre "Bilan"
 if (-not $SansRaccourci) { try {
     $bureau = [Environment]::GetFolderPath("Desktop")

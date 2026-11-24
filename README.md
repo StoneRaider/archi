@@ -17,15 +17,18 @@ Ni la photo ni la conversation ne passent par un service d'IA en ligne.
 
 ## L'essayer : 3 gestes, aucun compte à créer
 
-Il faut Windows 10 ou 11, une carte graphique de 16 Go (le modèle en prend environ 7) et environ 15 Go de place libre.
+Il faut Windows 10 ou 11, une carte graphique de 16 Go (le modèle et son contexte de 32k en prennent environ 13,5 ;
+en dessous, Archi marche mais lentement) et environ 15 Go de place libre (23 Go avec la boîte à outils).
 
-1. **Télécharge `Archi-1.1.zip`** sur la page [Releases](../../releases/latest). **Avant de l'extraire** : clic droit
+1. **Télécharge `Archi-1.2.zip`** sur la page [Releases](../../releases/latest). **Avant de l'extraire** : clic droit
    sur le ZIP › Propriétés › coche « Débloquer » › OK. Puis extrais-le (clic droit › « Extraire tout »).
    Windows SmartScreen bloque sinon `installation.bat`, parce qu'il vient d'Internet et n'est pas signé par un
    éditeur payant ; s'il affiche quand même « Windows a protégé votre ordinateur » : « Informations complémentaires »,
    puis « Exécuter quand même ». Tout le code est lisible dans ce dépôt.
-2. **Double-clique sur `installation.bat`.** Il demande ton prénom et si tu veux aussi Telegram, puis installe
-   tout, tout seul, en 15 à 40 minutes selon ta connexion.
+2. **Double-clique sur `installation.bat`.** Il demande ton prénom, si tu veux aussi Telegram et la boîte à outils
+   (Docker : présentations PowerPoint et globe de l'Œil), puis installe tout, tout seul, en 15 à 40 minutes selon ta
+   connexion (compte 20 minutes de plus pour la boîte). Si LM Studio s'ouvre et propose un autre modèle, refuse :
+   l'installateur télécharge Qwythos 9B tout seul.
 3. **Parle à Archi.** À la fin, sa page d'accueil s'ouvre dans ton navigateur : écris-lui
    « Quels outils as-tu ? » ou « Rappelle-moi dans 2 minutes de boire un verre d'eau ».
 
@@ -44,8 +47,9 @@ Les fois suivantes, le raccourci **Archi** du Bureau suffit.
 | Mémoire | le château d'exemple (des fiches Markdown) et les outils maison | `chateau\` |
 | Réglages | le fichier `.env`, avec deux clés aléatoires créées sur ton PC | à la racine, jamais affiché |
 | Agent | les identifiants et les 10 workflows, importés puis activés dans n8n | `donnees\n8n\` |
+| Boîte à outils (si tu dis oui) | Docker Desktop (par `winget`), Presenton (présentations), SearXNG et le globe de l'Œil | conteneurs Docker, `boite_outils\` |
 
-- **Rien n'est installé pour tout Windows**, sauf LM Studio. Ni le PATH ni un Node.js ou un Python déjà présents
+- **Rien n'est installé pour tout Windows**, sauf LM Studio (et Docker Desktop si tu prends la boîte à outils). Ni le PATH ni un Node.js ou un Python déjà présents
   ne sont touchés. Pour désinstaller, supprime le dossier `Archi` de ton dossier personnel.
 - **Aucune télémétrie** : celle de n8n est coupée dans le `.env`.
 - Un seul modèle fait tout (raisonner, écrire, décrire les photos) : il reste chargé, rien n'attend un chargement.

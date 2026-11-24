@@ -2,7 +2,7 @@
 
 ## Le plus simple (Windows 10 ou 11) : `installation.bat`
 
-1. Télécharge `Archi-1.1.zip` (page Releases du dépôt) et extrais-le.
+1. Télécharge `Archi-1.2.zip` (page Releases du dépôt) et extrais-le.
 2. Double-clique sur `installation.bat`. Il installe tout dans `%USERPROFILE%\Archi` (15 à 40 minutes).
 3. La page d'accueil s'ouvre : parle à Archi. Pour le téléphone, scanne le QR code de cette page.
 
@@ -12,19 +12,21 @@ l'installateur, à régler un souci, ou à installer Archi à la main (Linux, ma
 ### Ce que l'installateur pose, étape par étape
 | Étape | Ce qu'il fait | Si ça coince |
 |---|---|---|
-| 1. Ton PC | lit la carte graphique, la mémoire vidéo et la place libre | sous 8 Go de mémoire vidéo, Archi marche mais lentement |
+| 1. Ton PC | lit la carte graphique, la mémoire vidéo et la place libre | sous 16 Go de mémoire vidéo, le cerveau déborde sur le processeur : Archi marche mais lentement (contexte réduit à 24k entre 12 et 16 Go) |
 | 3. Fichiers | copie le dépôt dans `%USERPROFILE%\Archi` | relance avec `-Destination C:\Archi` si ton nom de session a des accents |
 | 4. Python | `uv` (empreinte vérifiée) télécharge un Python 3.12 privé, puis les modules des outils et du serveur | pare-feu : autorise `github.com` et `pypi.org` |
 | 5. Node.js et n8n | Node.js 22 (zip officiel), puis `npm install n8n@1.123.92` dans `programmes\n8n` | c'est l'étape la plus longue (3 à 10 minutes) |
 | 6. Tunnel et ffmpeg | `cloudflared.exe` et ffmpeg, en privé | sans tunnel, le PC marche, pas le téléphone |
 | 7. Château | copie `chateau_exemple\` dans `chateau\` (jamais par-dessus un château existant) et les outils | |
 | 8. `.env` | crée le fichier, deux clés aléatoires, les premiers ports libres | tes valeurs déjà remplies sont gardées |
-| 9. Cerveau | LM Studio par `winget` s'il manque, puis `lms get` des deux modèles | pas de `winget` : installe LM Studio depuis lmstudio.ai, ouvre-le une fois, relance |
+| 9. Cerveau | LM Studio par `winget` s'il manque, puis `lms get` du modèle | pas de `winget` : installe LM Studio depuis lmstudio.ai, ouvre-le une fois, relance |
 | 10. Voix | whisper.cpp et son modèle (l'oreille, empreintes vérifiées), Pocket TTS (empreinte vérifiée) et le modèle de voix qu'il télécharge lui-même | sans la voix, Archi marche par écrit ; `-SansVoix` la saute |
 | 11. n8n | crée les identifiants, importe les 10 workflows, active le principal | `installation.txt` dit lequel a échoué |
+| 12. Boîte à outils (facultative) | Docker Desktop par `winget`, le globe de l'Œil (gods-eye-view 0.3.0, empreinte vérifiée), puis `docker compose up` : Presenton, SearXNG, le globe | Windows demande souvent un redémarrage pour WSL : redémarre, ouvre Docker Desktop une fois, relance `installation.bat` |
 
 Options utiles (`installation.bat -Option`) : `-Destination <dossier>`, `-Oui` (aucune question),
-`-SansCerveau` (ne touche pas à LM Studio), `-SansModeles`, `-SansVoix`, `-SansLancer`.
+`-SansCerveau` (ne touche pas à LM Studio), `-SansModeles`, `-SansVoix`, `-SansLancer`,
+`-AvecBoite` / `-SansBoite` (la boîte à outils Docker, sans poser la question).
 
 ### Les fichiers à connaître, une fois installé
 | Fichier ou dossier | Rôle |
@@ -45,7 +47,8 @@ Chaque section du `.env` est commentée. Après un changement, relance Archi.
 - **Prises Shelly** : copie `chateau\outils\prises_shelly\prises.exemple.json` en `prises.json` et mets-y les
   adresses IP de tes prises. Sans ce fichier, l'outil répond qu'il ne connaît aucune prise.
 - **Caméras, imprimante 3D, musique, Œil** : sections 6 à 9 du `.env`.
-- **Boîte Docker** (globe de l'Œil, SearXNG, Presenton) : `ARCHI_DOCKER=oui` dans le `.env`, avec Docker installé.
+- **Boîte Docker** (globe de l'Œil, SearXNG, Presenton) : posée par l'installateur si tu dis oui (`ARCHI_DOCKER=oui`
+  dans le `.env`). Sans elle, Archi ne propose pas l'outil de présentation.
 - **Adresse fixe pour le téléphone** : mets l'adresse HTTPS de ton tunnel dans `WEBHOOK_URL` (avec le `/` final).
   Ton tunnel doit viser **la porte du téléphone** (`ARCHI_PORTE_PORT`, 5681 par défaut), jamais n8n :
   `ngrok http 5681` ou `tailscale funnel 5681`.

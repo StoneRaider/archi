@@ -438,8 +438,9 @@ test('page d accueil : le micro ne peut pas s ouvrir deux fois, et il est toujou
 
 test('etat : « agent pret » seulement quand le workflow est active, pas des que n8n repond', async () => {
   // un faux n8n : en bonne sante tout de suite, mais son webhook n'est enregistre qu'apres « activation »
-  let active = false;
+  let active = false, sondes = 0;
   const n8n = http.createServer((req, res) => {
+    if (req.url !== '/healthz') sondes++;
     if (req.url === '/healthz') { res.writeHead(200); return res.end('{"status":"ok"}'); }
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ code: 404, message: active
@@ -461,6 +462,9 @@ test('etat : « agent pret » seulement quand le workflow est active, pas des qu
     assert.equal((await etat()).n8n, false, 'n8n repond, mais le workflow n est pas encore active : un message se perdrait');
     active = true;
     assert.equal((await etat()).n8n, true);
+    const avant = sondes;
+    assert.equal((await etat()).n8n, true);
+    assert.equal(sondes, avant, 'une fois le workflow vu actif, on ne sonde plus son webhook (sinon n8n remplit sa fenetre d avertissements)');
     const page = fs.readFileSync(path.join(__dirname, '..', 'accueil.html'), 'utf8');
     assert.ok(page.includes("if (!pret) { note('souci', 'Archi finit de démarrer"), 'la page n envoie rien tant que ce n est pas pret');
   } finally {

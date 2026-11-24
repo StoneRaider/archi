@@ -199,15 +199,27 @@ if ($env:ARCHI_VOIX -ne "non" -and $voixExe) {
 }
 
 # ---------------------------------------------------------------- la boite Docker (oeil, SearXNG, Presenton) : seulement si demandee
-if ($env:ARCHI_DOCKER -eq "oui" -and (Get-Command docker -ErrorAction SilentlyContinue)) {
-    Dire "Boite Docker (oeil, SearXNG, Presenton)..."
-    Push-Location (Join-Path $racine "boite_outils")
+# docker.exe : dans le PATH, sinon a sa place habituelle (juste apres l'installation, le PATH n'est pas encore a jour)
+$dockerExe = $null
+if ($env:ARCHI_DOCKER -eq "oui") {
+    $c = Get-Command docker -ErrorAction SilentlyContinue
+    if ($c) { $dockerExe = $c.Source }
+    elseif (Test-Path (Join-Path $env:ProgramFiles "Docker\Docker\resources\bin\docker.exe")) { $dockerExe = Join-Path $env:ProgramFiles "Docker\Docker\resources\bin\docker.exe" }
+    else { Dire "  ! ARCHI_DOCKER=oui mais Docker est introuvable : les presentations et le globe ne marcheront pas (relance installation.bat)." "Yellow" }
+}
+if ($dockerExe) {
     # services facultatifs : le globe seulement si son code est la, le tunnel seulement s'il a un jeton
     $profils = @()
     if (Test-Path (Join-Path $racine "boite_outils\gods-eye-view\package.json")) { $profils += "--profile", "oeil" }
     if ($env:TUNNEL_TOKEN -and $profils.Count -gt 0) { $profils += "--profile", "tunnel" }   # le tunnel a besoin de la porte (profil oeil)
-    try { docker compose --env-file $ENVF @profils up -d --build } catch { Dire "Docker : $($_.Exception.Message)" "Yellow" }
-    Pop-Location
+    # en arriere-plan : si Docker Desktop n'est pas encore demarre, Archi n'attend pas (compte rendu : boite_outils\demarrage.txt)
+    try {
+        $argsBoite = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", (Citer (Join-Path $racine "boite_outils\demarrer_boite.ps1")),
+            "-Docker", (Citer $dockerExe), "-EnvFichier", (Citer $ENVF))
+        if ($profils.Count) { $argsBoite += "-Profils"; $argsBoite += ($profils -join ",") }
+        Start-Process -FilePath "powershell" -ArgumentList $argsBoite -WindowStyle Hidden | Out-Null
+        Dire "  Boite Docker (oeil, SearXNG, Presenton) : demarrage en arriere-plan (compte rendu : boite_outils\demarrage.txt)"
+    } catch { Dire "  ! Boite Docker : $($_.Exception.Message)" "Yellow" }
 }
 
 # ---------------------------------------------------------------- le serveur mails et agenda
