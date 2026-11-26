@@ -78,6 +78,14 @@ SECRETS = re.compile(r"mot\s+de\s+passe|password|passe\s*:|code\s+(pin|secret|de
 TELEPHONE = re.compile(r"(\+\d[\d .-]{7,})|(\b0\d([ .-]?\d\d){4}\b)")
 ADRESSE = re.compile(r"\b\d{1,4}(\s?(bis|ter))?,?\s+(rue|avenue|av\.|boulevard|bd|chemin|impasse|allee|place|route|quai|cours)\b", re.I)
 PREMIERE_PERSONNE = re.compile(r"(^|[^a-z])(je|j|me|m|moi|mon|ma|mes|nous|notre|nos|on)([^a-z]|$)")
+# ce qu'un fait retenu TOUT SEUL ne doit pas etre (tri de 50 faits reels par leur auteur, 26/11/2026) ; lu sur le texte plat
+SUR_LE_MESSAGE = re.compile(r"\b(est|sont) (une personne |un proche )?mentionnee?s?\b|\bmentionnee?s? (dans|par)\b|"
+                            r"\bdans (le|ce|son) message\b|\bparle (le )?francais\.?$")
+DU_MOMENT = re.compile(r"\ben train d|\bposition (geographique|gps)\b|\b(est|sont) (bien )?connectee?s?\b|"
+                       r"\bva (lancer|mettre|jouer|ecouter)\b|\bse demande (si\b|s'|comment\b|quel|pourquoi\b|ou\b)|"
+                       r"\b(a|vers) l'instant\b|\bjouee?s? sur youtube\b|\bpour etre jouee?s?\b|"
+                       r"\bphotos?\b[^.]*\b(envoyee?s?|mises?|reprises?)\b|\b(envoye|repris|mis)\b[^.]*\bphotos?\b")
+VAGUE = re.compile(r"\bquelque chose\b")
 
 CONSIGNE = """Reasoning: low
 Tu es le greffier de la mémoire d'un assistant personnel. On te donne UN message écrit par l'utilisateur{prenom}.
@@ -565,6 +573,16 @@ def refus(piece, sujet, fait, message):
             return "ne vient pas du message"
         if piece not in FICHE_UNIQUE_DEFAUT and not any(m in plat(message) for m in re.split(r"[^a-z0-9]+", plat(sujet)) if len(m) >= 3):
             return "sujet absent du message"
+        # un fait retenu tout seul : pas un fait sur le message lui-meme, pas un moment qui passe, pas du flou
+        f = plat(fait)
+        prenom = plat(os.environ.get("ARCHI_UTILISATEUR") or "").strip()
+        appele = r"\best appelee? par (l'utilisat(eur|rice)|lui|elle%s)\b" % ("|" + re.escape(prenom) if prenom else "")
+        if SUR_LE_MESSAGE.search(f) or re.search(appele, f):
+            return "parle du message, pas d'un fait"
+        if DU_MOMENT.search(f):
+            return "fait du moment"
+        if VAGUE.search(f):
+            return "trop vague"
     return None
 
 

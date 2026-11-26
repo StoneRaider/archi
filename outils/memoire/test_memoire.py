@@ -276,5 +276,36 @@ for phrase in ["Non, c'est faux.", "Tu te trompes complètement", "tu ne sais pa
 for phrase in ["Merci beaucoup", "Super, c'est parfait", "Rappelle-moi demain à 9 h", "Quelle heure est-il ?", "Nonante euros"]:
     verif("pas une correction : " + phrase, not M.corrige(phrase))
 
+# un fait retenu tout seul : ni un fait sur le message, ni un moment qui passe, ni du flou (tri de 50 vrais faits, 26/11/2026)
+os.environ["ARCHI_UTILISATEUR"] = "Camille"
+for piece, sujet, fait in [("personnes", "père", "Le père de Camille est mentionné dans le message."),
+                           ("personnes", "Léa", "Léa est une personne mentionnée par Camille."),
+                           ("personnes", "Guillaume", "Guillaume est appelé par Camille."),
+                           ("moi", "moi", "Camille parle français."),
+                           ("moi", "moi", "Camille est en train d'utiliser l'application du téléphone."),
+                           ("lieux", "chalet", "Camille n'est plus à la position géographique du chalet."),
+                           ("preferences", "moi", "Le téléphone de Camille est connecté."),
+                           ("projets", "playlist", "Camille va lancer la playlist du soir."),
+                           ("projets", "drone", "Camille se demande s'il peut ranger les hélices dans son sac."),
+                           ("preferences", "moi", "Camille souhaite trouver quelque chose du côté de Lyon."),
+                           ("projets", "voilier", "Camille a envoyé deux photos sur le projet voilier."),
+                           ("preferences", "moi", "Camille a choisi une chanson pour être jouée sur YouTube."),
+                           ("projets", "voilier", "Camille peut ouvrir le voilier vers l'instant.")]:
+    verif("fait refuse : " + fait, M.refus(piece, sujet, fait, fait + " " + sujet) is not None)
+for piece, sujet, fait in [("personnes", "Rex", "Rex est le chien de Camille."),
+                           ("preferences", "moi", "Camille aime Prodigy."),
+                           ("moi", "moi", "Camille a redoublé deux fois pendant sa scolarité."),
+                           ("moi", "moi", "Camille parle couramment l'espagnol."),
+                           ("preferences", "moi", "Camille veut que l'assistant mette la musique en pause quand elle parle et la relance après."),
+                           ("projets", "voiture", "La voiture de Camille doit aller au garage car son système hybride est en panne."),
+                           ("moi", "moi", "Camille a deux boîtes mail : Gmail et Outlook."),
+                           ("personnes", "Léa", "Léa est la sœur de Camille ; elle est vétérinaire à Lyon."),
+                           ("moi", "moi", "Camille mentionne que son frère est pompier."),
+                           ("moi", "moi", "Camille se demande souvent ce qu'elle fera après ses études de droit."),
+                           ("lieux", "Lyon", "Camille n'est plus à Lyon : elle habite à Annecy depuis octobre."),
+                           ("personnes", "Lulu", "Lulu est appelée par ses amis « la fusée »."),
+                           ("projets", "voilier", "Camille a pour projet de restaurer un voilier à La Rochelle.")]:
+    verif("fait garde : " + fait, M.refus(piece, sujet, fait, fait + " " + sujet) is None, M.refus(piece, sujet, fait, fait + " " + sujet))
+
 print(f"{ok} OK, {ko} ECHEC")
 sys.exit(1 if ko else 0)
